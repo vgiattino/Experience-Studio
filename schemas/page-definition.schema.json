@@ -1,0 +1,17 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Opus Experience Studio Page Definition",
+  "type": "object",
+  "properties": {
+    "id": {"type": "string"},
+    "name": {"type": "string"},
+    "description": {"type": "string"},
+    "layout": {"type": "object"},
+    "components": {"type": "array"},
+    "dataBindings": {"type": "array"},
+    "navigation": {"type": "array"},
+    "security": {"type": "object"},
+    "version": {"type": "string"}
+  },
+  "required": ["id", "name", "components"]
+}
