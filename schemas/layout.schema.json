@@ -1,0 +1,303 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.opus.gresham.com/experience-studio/v1/layout.schema.json",
+  "title": "Layout Model",
+  "description": "The structural tree of a page. Layout nodes describe arrangement and reference component instances by id; they never contain component configuration. That separation is deliberate: it keeps JSON Patch paths into a component stable when siblings are reordered, and it maps directly onto two-stage AI generation, where stage one emits this tree and stage two fills the components it references.",
+
+  "$defs": {
+
+    "layoutNode": {
+      "oneOf": [
+        { "$ref": "#/$defs/containerNode" },
+        { "$ref": "#/$defs/widgetNode" },
+        { "$ref": "#/$defs/spacerNode" }
+      ]
+    },
+
+    "widgetNode": {
+      "description": "A leaf that renders one component instance. Holds placement, not configuration.",
+      "type": "object",
+      "properties": {
+        "kind": { "const": "widget" },
+        "id": { "$ref": "common.schema.json#/$defs/identifier" },
+        "component": {
+          "description": "Id of an entry in the page's components map.",
+          "$ref": "common.schema.json#/$defs/localRef"
+        },
+        "placement": { "$ref": "common.schema.json#/$defs/gridPlacement" },
+        "visible": { "$ref": "common.schema.json#/$defs/condition" }
+      },
+      "required": ["kind", "id", "component"],
+      "additionalProperties": false
+    },
+
+    "spacerNode": {
+      "type": "object",
+      "properties": {
+        "kind": { "const": "spacer" },
+        "id": { "$ref": "common.schema.json#/$defs/identifier" },
+        "placement": { "$ref": "common.schema.json#/$defs/gridPlacement" }
+      },
+      "required": ["kind", "id"],
+      "additionalProperties": false
+    },
+
+    "containerNode": {
+      "type": "object",
+      "properties": {
+        "kind": { "const": "container" },
+        "id": { "$ref": "common.schema.json#/$defs/identifier" },
+        "container": { "$ref": "#/$defs/container" },
+        "placement": { "$ref": "common.schema.json#/$defs/gridPlacement" },
+        "visible": { "$ref": "common.schema.json#/$defs/condition" },
+        "security": { "$ref": "security.schema.json#/$defs/elementSecurity" }
+      },
+      "required": ["kind", "id", "container"],
+      "additionalProperties": false
+    },
+
+    "container": {
+      "discriminator": { "propertyName": "type" },
+      "oneOf": [
+        { "$ref": "#/$defs/gridContainer" },
+        { "$ref": "#/$defs/stackContainer" },
+        { "$ref": "#/$defs/panelContainer" },
+        { "$ref": "#/$defs/tabsContainer" },
+        { "$ref": "#/$defs/splitContainer" },
+        { "$ref": "#/$defs/drawerContainer" },
+        { "$ref": "#/$defs/repeaterContainer" }
+      ]
+    },
+
+    "gridContainer": {
+      "description": "12-column responsive grid. The default page root.",
+      "type": "object",
+      "properties": {
+        "type": { "const": "grid" },
+        "columns": { "type": "integer", "enum": [12], "default": 12 },
+        "gap": { "type": "string", "enum": ["none", "sm", "md", "lg"], "default": "md" },
+        "children": { "$ref": "#/$defs/children" }
+      },
+      "required": ["type", "children"],
+      "additionalProperties": false
+    },
+
+    "stackContainer": {
+      "description": "One-dimensional row or column. Direction may vary by breakpoint, which is how a KPI row becomes a stacked list on a phone.",
+      "type": "object",
+      "properties": {
+        "type": { "const": "stack" },
+        "direction": { "type": "string", "enum": ["row", "column"], "default": "row" },
+        "directionByBreakpoint": {
+          "type": "object",
+          "propertyNames": { "$ref": "common.schema.json#/$defs/breakpoint" },
+          "additionalProperties": { "type": "string", "enum": ["row", "column"] }
+        },
+        "wrap": { "type": "boolean", "default": true },
+        "gap": { "type": "string", "enum": ["none", "sm", "md", "lg"], "default": "md" },
+        "align": { "type": "string", "enum": ["start", "center", "end", "stretch"] },
+        "justify": { "type": "string", "enum": ["start", "center", "end", "spaceBetween"] },
+        "children": { "$ref": "#/$defs/children" }
+      },
+      "required": ["type", "children"],
+      "additionalProperties": false
+    },
+
+    "panelContainer": {
+      "type": "object",
+      "properties": {
+        "type": { "const": "panel" },
+        "title": { "$ref": "common.schema.json#/$defs/i18nString" },
+        "subtitle": { "$ref": "common.schema.json#/$defs/i18nString" },
+        "collapsible": { "type": "boolean", "default": false },
+        "collapsedByDefault": { "type": "boolean", "default": false },
+        "variant": { "type": "string", "enum": ["plain", "bordered", "raised"], "default": "bordered" },
+        "headerActions": {
+          "type": "array",
+          "items": { "$ref": "common.schema.json#/$defs/localRef" },
+          "maxItems": 8
+        },
+        "children": { "$ref": "#/$defs/children" }
+      },
+      "required": ["type", "children"],
+      "additionalProperties": false
+    },
+
+    "splitContainer": {
+      "description": "Two resizable regions. The master-detail primitive: an exception list beside the selected exception.",
+      "type": "object",
+      "properties": {
+        "type": { "const": "split" },
+        "orientation": { "type": "string", "enum": ["horizontal", "vertical"], "default": "horizontal" },
+        "initialRatio": { "type": "number", "minimum": 0.1, "maximum": 0.9, "default": 0.5 },
+        "collapseBelow": {
+          "description": "Breakpoint at or below which the split stacks instead.",
+          "$ref": "common.schema.json#/$defs/breakpoint"
+        },
+        "primary": { "$ref": "#/$defs/children" },
+        "secondary": { "$ref": "#/$defs/children" }
+      },
+      "required": ["type", "primary", "secondary"],
+      "additionalProperties": false
+    },
+
+    "drawerContainer": {
+      "type": "object",
+      "properties": {
+        "type": { "const": "drawer" },
+        "title": { "$ref": "common.schema.json#/$defs/i18nString" },
+        "side": { "type": "string", "enum": ["start", "end", "bottom"], "default": "end" },
+        "size": { "type": "string", "enum": ["sm", "md", "lg", "full"], "default": "md" },
+        "openWhen": {
+          "description": "Condition controlling visibility — typically a selection channel becoming non-empty, so selecting a row opens the detail drawer with no imperative code.",
+          "$ref": "common.schema.json#/$defs/condition"
+        },
+        "dismissAction": { "$ref": "common.schema.json#/$defs/localRef" },
+        "children": { "$ref": "#/$defs/children" }
+      },
+      "required": ["type", "children"],
+      "additionalProperties": false
+    },
+
+    "tabsContainer": {
+      "description": "Tabbed region. Two source modes cover the two distinct real requirements: a fixed set whose members appear conditionally (asset-class tabs on a security, present only when the security is of that class), and a set generated from data (one tab per related party). Both are needed; neither substitutes for the other.",
+      "type": "object",
+      "properties": {
+        "type": { "const": "tabs" },
+        "variant": { "type": "string", "enum": ["underline", "pill", "enclosed"], "default": "underline" },
+        "position": { "type": "string", "enum": ["top", "start"], "default": "top" },
+        "overflow": {
+          "description": "Behaviour when tabs exceed available width. 'menu' collapses the remainder into an overflow menu.",
+          "type": "string",
+          "enum": ["scroll", "menu", "wrap"],
+          "default": "menu"
+        },
+        "selectedTabChannel": {
+          "description": "Filter channel holding the active tab id. Declaring it makes tab selection deep-linkable and readable by expressions elsewhere on the page.",
+          "$ref": "common.schema.json#/$defs/identifier"
+        },
+        "deferContent": {
+          "description": "Do not instantiate or query a tab's content until it is first activated. Default true: a detail page with eight tabs must not issue eight queries to show one.",
+          "type": "boolean",
+          "default": true
+        },
+        "keepAliveOnSwitch": {
+          "description": "Retain a tab's state after switching away, so returning to it does not re-query or lose scroll position.",
+          "type": "boolean",
+          "default": true
+        },
+        "source": { "$ref": "#/$defs/tabSource" }
+      },
+      "required": ["type", "source"],
+      "additionalProperties": false
+    },
+
+    "tabSource": {
+      "discriminator": { "propertyName": "mode" },
+      "oneOf": [
+        {
+          "description": "Declared tabs. Each may carry a visibility condition and its own security, giving conditional tabs without any data-driven machinery.",
+          "type": "object",
+          "properties": {
+            "mode": { "const": "static" },
+            "tabs": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 32,
+              "items": { "$ref": "#/$defs/staticTab" }
+            }
+          },
+          "required": ["mode", "tabs"],
+          "additionalProperties": false
+        },
+        {
+          "description": "Tabs generated from the rows of a data source. The template is instantiated once per row, with that row available to expressions and to data source parameters as $tab.row.",
+          "type": "object",
+          "properties": {
+            "mode": { "const": "dataDriven" },
+            "source": { "$ref": "common.schema.json#/$defs/localRef" },
+            "idField": { "$ref": "common.schema.json#/$defs/identifier" },
+            "labelField": { "$ref": "common.schema.json#/$defs/identifier" },
+            "iconField": { "$ref": "common.schema.json#/$defs/identifier" },
+            "badgeField": {
+              "description": "Numeric field rendered as a count badge on the tab — an exception count per rule, for instance.",
+              "$ref": "common.schema.json#/$defs/identifier"
+            },
+            "orderField": { "$ref": "common.schema.json#/$defs/identifier" },
+            "maxTabs": {
+              "description": "Cap on generated tabs. Exceeding it collapses the remainder into an overflow menu rather than truncating silently.",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 12
+            },
+            "emptyBehaviour": {
+              "type": "string",
+              "enum": ["hideContainer", "showEmptyState"],
+              "default": "showEmptyState"
+            },
+            "template": {
+              "description": "Layout instantiated per tab. Components it references are shared definitions; each instance receives its own $tab scope, so one component definition serves every generated tab.",
+              "$ref": "#/$defs/children"
+            },
+            "pinnedTabs": {
+              "description": "Static tabs rendered before the generated ones — typically an overview tab preceding one tab per related item.",
+              "type": "array",
+              "items": { "$ref": "#/$defs/staticTab" },
+              "maxItems": 8
+            }
+          },
+          "required": ["mode", "source", "idField", "labelField", "template"],
+          "additionalProperties": false
+        }
+      ]
+    },
+
+    "staticTab": {
+      "type": "object",
+      "properties": {
+        "id": { "$ref": "common.schema.json#/$defs/identifier" },
+        "label": { "$ref": "common.schema.json#/$defs/i18nString" },
+        "icon": { "type": "string", "maxLength": 64 },
+        "badge": {
+          "description": "Count or status shown on the tab, resolved at runtime.",
+          "$ref": "common.schema.json#/$defs/computableValue"
+        },
+        "visible": {
+          "description": "Condition controlling whether this tab exists for the current context. The mechanism behind asset-class-specific tabs: a bond tab whose condition tests the security's asset class.",
+          "$ref": "common.schema.json#/$defs/condition"
+        },
+        "security": { "$ref": "security.schema.json#/$defs/elementSecurity" },
+        "deepLinkId": {
+          "description": "Stable identifier used in the URL, so a tab can be linked to directly and remains linkable if the label changes.",
+          "$ref": "common.schema.json#/$defs/identifier"
+        },
+        "content": { "$ref": "#/$defs/children" }
+      },
+      "required": ["id", "label", "content"],
+      "additionalProperties": false
+    },
+
+    "repeaterContainer": {
+      "description": "Repeats a layout template once per row of a data source — a card per portfolio, a section per rule category. The non-tabbed counterpart of dataDriven tabs.",
+      "type": "object",
+      "properties": {
+        "type": { "const": "repeater" },
+        "source": { "$ref": "common.schema.json#/$defs/localRef" },
+        "keyField": { "$ref": "common.schema.json#/$defs/identifier" },
+        "maxItems": { "type": "integer", "minimum": 1, "maximum": 200, "default": 50 },
+        "emptyBehaviour": { "type": "string", "enum": ["hideContainer", "showEmptyState"], "default": "showEmptyState" },
+        "itemPlacement": { "$ref": "common.schema.json#/$defs/gridPlacement" },
+        "template": { "$ref": "#/$defs/children" }
+      },
+      "required": ["type", "source", "keyField", "template"],
+      "additionalProperties": false
+    },
+
+    "children": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/layoutNode" },
+      "maxItems": 100
+    }
+  }
+}

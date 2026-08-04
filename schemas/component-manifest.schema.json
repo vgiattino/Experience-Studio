@@ -1,0 +1,255 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.opus.gresham.com/experience-studio/v1/component-manifest.schema.json",
+  "title": "Component Manifest",
+  "description": "The machine-readable contract for one renderable component. This artifact has four consumers and is authoritative for all of them: the renderer instantiates against it, the validator checks component config against it, the Studio generates its inspector from it, and the generation service uses its reduced projection as the vocabulary of what the AI may emit. Because it is generated from and checked against the implementation, contract drift is a build failure rather than a runtime surprise.",
+  "type": "object",
+
+  "properties": {
+    "schemaVersion": { "$ref": "common.schema.json#/$defs/majorMinor" },
+    "type": { "$ref": "common.schema.json#/$defs/componentTypeRef" },
+    "version": {
+      "description": "Contract version. Additive change (new optional property or slot) bumps minor. Removing or retyping a property is a major bump, requiring either a definition migration or parallel registration of both versions — stored definitions reference a component version, so a contract change can never silently alter a live page.",
+      "$ref": "common.schema.json#/$defs/semver"
+    },
+    "name": { "$ref": "common.schema.json#/$defs/i18nString" },
+    "category": {
+      "description": "Tier in the component system. 'business' components must be compositions of lower tiers rather than bespoke implementations; permitting them to reach for raw data and raw DOM forks the library into two incompatible halves.",
+      "type": "string",
+      "enum": ["layout", "data", "analytics", "business", "input"]
+    },
+    "description": { "type": "string", "maxLength": 2048 },
+    "icon": { "type": "string", "maxLength": 64 },
+
+    "generation": {
+      "description": "The reduced projection sent to the model. Full property schemas for the whole library would exhaust the context budget and describe far more than the model needs to choose well; the model generates against this view and the validator checks against the real schema, which is what makes the reduction safe.",
+      "type": "object",
+      "properties": {
+        "purpose": { "type": "string", "maxLength": 512 },
+        "whenToUse": { "type": "string", "maxLength": 1024 },
+        "whenNotToUse": { "type": "string", "maxLength": 1024 },
+        "keyProperties": {
+          "description": "Properties that materially change output. Everything else is left to defaults during generation.",
+          "type": "array",
+          "items": { "$ref": "common.schema.json#/$defs/memberName" },
+          "maxItems": 20
+        },
+        "exampleConfig": { "type": "object" },
+        "eligible": {
+          "description": "False excludes the component from AI generation while leaving it available for hand authoring — used for components that are correct but hard to configure well without human judgement.",
+          "type": "boolean",
+          "default": true
+        }
+      },
+      "required": ["purpose", "whenToUse"],
+      "additionalProperties": false
+    },
+
+    "properties": {
+      "description": "JSON Schema for a component instance's config object. Authoritative — a component's TypeScript input type is generated from this, so implementation and manifest cannot diverge.",
+      "type": "object"
+    },
+
+    "dataRequirement": {
+      "type": "object",
+      "properties": {
+        "shape": {
+          "description": "'none' for layout and static content; 'scalar' for a single value (KPI); 'series' for dimension plus measures (chart); 'tabular' for rows of attributes (grid); 'tree' and 'graph' for hierarchical and networked data.",
+          "type": "string",
+          "enum": ["none", "scalar", "series", "tabular", "tree", "graph"]
+        },
+        "roles": {
+          "description": "Binding roles this component accepts. The validator cross-checks a component instance's bindings against this list and against the referenced data source's aliases.",
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "type": "object",
+            "properties": {
+              "role": { "$ref": "common.schema.json#/$defs/memberName" },
+              "label": { "$ref": "common.schema.json#/$defs/i18nString" },
+              "required": { "type": "boolean", "default": false },
+              "repeated": {
+                "description": "True accepts an array of bindings — grid columns, chart series.",
+                "type": "boolean",
+                "default": false
+              },
+              "accepts": {
+                "description": "Field kinds valid for this role. A measure bound to a role that accepts only dimensions is a binding-validation failure.",
+                "type": "array",
+                "items": { "type": "string", "enum": ["attribute", "measure", "dimension", "key", "any"] },
+                "minItems": 1
+              },
+              "dataTypes": {
+                "description": "Permitted attribute data types. Omitted means any.",
+                "type": "array",
+                "items": { "$ref": "common.schema.json#/$defs/dataType" }
+              }
+            },
+            "required": ["role", "accepts"],
+            "additionalProperties": false
+          }
+        },
+        "maxRows": {
+          "description": "Rows above which this component is not a sensible presentation. Used by design-time cost validation to warn that a chart is being asked to plot ten thousand points.",
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": ["shape"],
+      "additionalProperties": false
+    },
+
+    "slots": {
+      "description": "Named child regions, for layout and composite components.",
+      "type": "object",
+      "propertyNames": { "$ref": "common.schema.json#/$defs/memberName" },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "label": { "$ref": "common.schema.json#/$defs/i18nString" },
+          "minChildren": { "type": "integer", "minimum": 0 },
+          "maxChildren": { "type": "integer", "minimum": 1 },
+          "allowedCategories": {
+            "type": "array",
+            "items": { "type": "string", "enum": ["layout", "data", "analytics", "business", "input"] }
+          },
+          "allowedTypes": {
+            "type": "array",
+            "items": { "$ref": "common.schema.json#/$defs/componentTypeRef" },
+            "maxItems": 64
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+
+    "events": {
+      "description": "Interactions the component emits. A page definition maps these to actions; the component itself never navigates or mutates. Payload fields are what an action's parameter mapping may reference.",
+      "type": "object",
+      "propertyNames": { "$ref": "common.schema.json#/$defs/memberName" },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "label": { "$ref": "common.schema.json#/$defs/i18nString" },
+          "description": { "type": "string", "maxLength": 512 },
+          "payload": {
+            "type": "object",
+            "propertyNames": { "$ref": "common.schema.json#/$defs/memberName" },
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "dataType": { "$ref": "common.schema.json#/$defs/dataType" },
+                "description": { "type": "string", "maxLength": 256 }
+              },
+              "additionalProperties": false
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+
+    "states": {
+      "description": "Which of the six mandated states the component implements natively; the rest fall back to the shared state shell. Mandating all six at the component tier is what makes a generated page complete by construction — there is no moment when a developer notices a missing empty state, because no developer authored the page.",
+      "type": "array",
+      "items": { "type": "string", "enum": ["ready", "loading", "empty", "partial", "error", "denied"] },
+      "uniqueItems": true
+    },
+
+    "breakpoints": {
+      "description": "Behaviour per breakpoint. Resolved against container width, so the component behaves correctly in a drawer or split pane, not only at a given viewport size.",
+      "type": "object",
+      "propertyNames": { "$ref": "common.schema.json#/$defs/breakpoint" },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "supported": { "type": "boolean", "default": true },
+          "minColSpan": { "type": "integer", "minimum": 1, "maximum": 12 },
+          "behaviour": {
+            "type": "string",
+            "enum": ["full", "condensed", "stacked", "scrollable", "summaryOnly", "hidden"]
+          },
+          "note": { "type": "string", "maxLength": 256 }
+        },
+        "additionalProperties": false
+      }
+    },
+
+    "accessibility": {
+      "type": "object",
+      "properties": {
+        "wcagLevel": { "type": "string", "enum": ["AA", "AAA", "pending"] },
+        "keyboardContract": { "type": "string", "maxLength": 2048 },
+        "requiredLabels": {
+          "description": "Config properties that must be populated for the component to be accessible. Accessibility validation rejects a definition that omits them, which is how generated content stays conformant without a human reviewing every page.",
+          "type": "array",
+          "items": { "$ref": "common.schema.json#/$defs/memberName" },
+          "maxItems": 16
+        },
+        "colourIndependent": {
+          "description": "True when meaning is never conveyed by colour alone.",
+          "type": "boolean"
+        },
+        "notes": { "type": "string", "maxLength": 1024 }
+      },
+      "required": ["wcagLevel"],
+      "additionalProperties": false
+    },
+
+    "capabilities": {
+      "description": "Platform capabilities the component needs. A component requiring 'export' is unavailable to a user whose role lacks it — checked against platform authorization, never against data entitlement.",
+      "type": "array",
+      "items": { "type": "string", "maxLength": 64 },
+      "maxItems": 16
+    },
+
+    "performance": {
+      "type": "object",
+      "properties": {
+        "renderBudgetMs": { "type": "integer", "minimum": 1 },
+        "virtualized": { "type": "boolean" },
+        "skeleton": {
+          "description": "Skeleton dimensions, so deferred regions reserve space and do not cause layout shift when they hydrate.",
+          "type": "object",
+          "properties": {
+            "minHeight": { "type": "string", "pattern": "^[0-9]+(px|rem)$" },
+            "shape": { "type": "string", "enum": ["block", "tile", "table", "chart", "list", "text"] }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "lifecycle": {
+      "type": "object",
+      "properties": {
+        "stability": { "type": "string", "enum": ["experimental", "stable", "deprecated"] },
+        "since": { "$ref": "common.schema.json#/$defs/semver" },
+        "deprecatedIn": { "$ref": "common.schema.json#/$defs/semver" },
+        "replacedBy": { "$ref": "common.schema.json#/$defs/componentTypeRef" },
+        "migrationNote": { "type": "string", "maxLength": 1024 }
+      },
+      "required": ["stability"],
+      "additionalProperties": false
+    },
+
+    "bundle": {
+      "description": "Registry metadata. The registry file mapping type to a lazy import is generated from these entries — a component without a manifest is not registerable, and a manifest without an implementation fails the build.",
+      "type": "object",
+      "properties": {
+        "libraryPath": { "type": "string", "maxLength": 256 },
+        "exportName": { "type": "string", "maxLength": 128 }
+      },
+      "required": ["libraryPath", "exportName"],
+      "additionalProperties": false
+    }
+  },
+
+  "required": [
+    "schemaVersion", "type", "version", "name", "category",
+    "generation", "properties", "dataRequirement", "states",
+    "accessibility", "lifecycle", "bundle"
+  ],
+  "additionalProperties": false
+}

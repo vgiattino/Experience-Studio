@@ -1,0 +1,193 @@
+{
+  "schemaVersion": "1.0",
+  "id": "securities.operations",
+  "name": "Securities Operations",
+  "description": "Operational experience for the securities master: processing health, exception remediation, and security detail.",
+  "icon": "securities",
+  "kind": "application",
+  "workspaceId": "ops-securities",
+
+  "pages": {
+    "security-master-operations": { "$pageRef": "security-master-dashboard.page.json" },
+    "security-detail": { "$pageRef": "security-detail.page.json" },
+    "processing-detail": { "$pageRef": "processing-detail.page.json" },
+    "security-search": { "$pageRef": "security-search.page.json" }
+  },
+
+  "navigation": {
+    "mode": "sidebar",
+    "homePage": "security-master-operations",
+    "showSearch": {
+      "enabled": true,
+      "entity": "securities.security",
+      "placeholder": "Search by name, ISIN or SEDOL"
+    },
+    "items": [
+      {
+        "kind": "page",
+        "id": "nav-operations",
+        "label": "Operations",
+        "icon": "dashboard",
+        "page": "security-master-operations"
+      },
+      {
+        "kind": "group",
+        "id": "nav-securities",
+        "label": "Securities",
+        "icon": "securities",
+        "children": [
+          { "kind": "page", "id": "nav-search", "label": "Search", "icon": "search", "page": "security-search" }
+        ]
+      },
+      {
+        "kind": "page",
+        "id": "nav-processing",
+        "label": "Processing",
+        "icon": "pipeline",
+        "page": "processing-detail",
+        "badge": { "source": "nav-late-count", "field": "late-count", "emphasis": "warning" }
+      },
+      { "kind": "divider", "id": "nav-div-1" },
+      {
+        "kind": "external",
+        "id": "nav-help",
+        "label": "Operations Runbook",
+        "icon": "book",
+        "urlTemplate": "https://intranet.example.com/runbooks/securities-ops"
+      }
+    ],
+    "drilldownTargets": {
+      "securities.security": { "page": "security-detail", "openIn": "self" },
+      "dq.exception": { "page": "security-detail", "tab": "exceptions", "openIn": "drawer" },
+      "processing.file-load": { "page": "processing-detail", "openIn": "self" }
+    }
+  },
+
+  "parameters": {
+    "as-of": {
+      "label": "As Of",
+      "dataType": "date",
+      "default": { "$expr": "today()" },
+      "required": true,
+      "exposedInShell": true,
+      "persist": "session"
+    },
+    "base-currency": {
+      "label": "Base Currency",
+      "dataType": "string",
+      "default": "GBP",
+      "boundToAttribute": "securities.security.currency",
+      "exposedInShell": true,
+      "persist": "user"
+    }
+  },
+
+  "dataSources": {
+    "nav-late-count": {
+      "id": "nav-late-count",
+      "name": "Late File Count for Navigation Badge",
+      "entity": "processing.file-load",
+      "kind": "aggregate",
+      "select": {
+        "measures": [{ "measure": "late-file-count", "aggregation": "count", "alias": "late-count" }]
+      },
+      "filter": {
+        "all": [
+          { "target": "business-date", "operator": "eq", "value": { "$param": "as-of" } },
+          { "target": "load-status", "operator": "eq", "value": "LATE" }
+        ]
+      },
+      "refresh": { "mode": "interval", "intervalSeconds": 300 },
+      "loadPolicy": "eager",
+      "expectedCostClass": "low"
+    }
+  },
+
+  "actions": {
+    "reset-context": {
+      "id": "reset-context",
+      "kind": "setParameter",
+      "label": "Reset to Today",
+      "parameter": "as-of",
+      "value": { "$expr": "today()" },
+      "updateUrl": true
+    }
+  },
+
+  "security": {
+    "intendedAudience": "Securities operations team and data stewards.",
+    "requiredRoles": ["viewer", "author"],
+    "requiredCapabilities": ["experience.view"],
+    "workspaceScope": "tenant",
+    "deniedDataPolicy": "showDeniedState",
+    "exportPolicy": {
+      "allowed": true,
+      "formats": ["csv", "xlsx"],
+      "maxRows": 50000,
+      "requiresReason": true,
+      "watermark": true
+    },
+    "auditProfile": "standard",
+    "sharingPolicy": {
+      "allowCopy": true,
+      "allowTemplate": true,
+      "allowCrossTenantExemplar": false
+    }
+  },
+
+  "presentation": {
+    "themeRef": "opus.default",
+    "density": "comfortable",
+    "showShellHeader": true
+  },
+
+  "localization": {
+    "defaultLocale": "en-GB",
+    "supportedLocales": ["en-GB", "en-US", "de-DE"],
+    "stringTableRef": "securities.operations.strings"
+  },
+
+  "environments": ["dev", "uat", "production"],
+
+  "version": {
+    "schemaVersion": "1.0",
+    "artifactVersion": 22,
+    "lifecycleState": "published",
+    "immutable": true,
+    "pins": { "catalogVersion": 7, "registryVersion": "3.2.0" },
+    "lineage": { "basedOnVersion": 21, "supersedes": 21 },
+    "provenance": {
+      "origin": "human",
+      "actorId": "ops-lead@demo-tenant",
+      "createdAt": "2026-08-03T14:10:00Z",
+      "editSummary": {
+        "patchOperationCount": 3,
+        "humanPatchOperations": 3,
+        "aiPatchOperations": 0,
+        "summary": "Added the processing navigation badge and the runbook link."
+      }
+    },
+    "validation": {
+      "status": "valid",
+      "stagesPassed": ["structural", "component", "semantic", "binding", "entitlement", "cost", "layout", "accessibility"],
+      "validatedAt": "2026-08-03T14:12:00Z"
+    },
+    "governance": {
+      "submittedBy": "ops-lead@demo-tenant",
+      "submittedAt": "2026-08-03T14:13:00Z",
+      "approvedBy": ["platform-reviewer@demo-tenant"],
+      "approvedAt": "2026-08-03T14:19:00Z",
+      "publishedBy": "platform-reviewer@demo-tenant",
+      "publishedAt": "2026-08-03T14:22:00Z",
+      "publishedEnvironments": ["uat", "production"]
+    },
+    "audit": {
+      "createdBy": "ops-lead@demo-tenant",
+      "createdAt": "2026-07-30T08:00:00Z",
+      "modifiedBy": "ops-lead@demo-tenant",
+      "modifiedAt": "2026-08-03T14:11:00Z"
+    }
+  },
+
+  "tags": ["operations", "securities"]
+}

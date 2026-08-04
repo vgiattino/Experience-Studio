@@ -1,0 +1,285 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.opus.gresham.com/experience-studio/v1/common.schema.json",
+  "title": "Common Definitions",
+  "description": "Shared primitives for all Opus Experience Studio metadata artifacts. Every other schema references this file. No standalone artifact conforms to it directly.",
+
+  "$defs": {
+
+    "identifier": {
+      "description": "Stable local identifier. Lower-case, hyphen or dot separated. Used as object map keys so that JSON Patch paths remain stable when siblings are added, removed or reordered.",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$",
+      "minLength": 1,
+      "maxLength": 128
+    },
+
+    "memberName": {
+      "description": "Name of a member of a component contract — an event, a binding role, a slot, a config property. camelCase, because these names map directly onto component inputs and outputs in code. Deliberately a different primitive from 'identifier': authored and catalog ids are kebab-case and belong to the metadata domain, whereas member names belong to the component contract domain. One pattern for both would force an unnatural casing on one side or silently permit inconsistency on both.",
+      "type": "string",
+      "pattern": "^[a-z][a-zA-Z0-9]*$",
+      "minLength": 1,
+      "maxLength": 64
+    },
+
+    "qualifiedRef": {
+      "description": "Dotted reference into the semantic catalog. Conventions: entity = '<domain>.<entity>'; attribute = '<domain>.<entity>.<attribute>'; measure = '<domain>.<entity>.<measure>'; relationship = '<domain>.<entity>.<relationship>'. Existence and arity are checked by semantic validation against the pinned catalog version, not by this schema.",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*(?:\\.[a-z][a-z0-9-]*)+$",
+      "maxLength": 256
+    },
+
+    "localRef": {
+      "description": "Reference to an identifier declared elsewhere in the same artifact (a data source, component, action, parameter or filter channel).",
+      "$ref": "#/$defs/identifier"
+    },
+
+    "componentTypeRef": {
+      "description": "Component type from the component registry, e.g. 'analytics.kpi-card'. Deliberately an open string rather than a closed enum: the registry grows continuously, and a closed enum would make every new component a breaking schema change.",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*\\.[a-z][a-z0-9-]*$",
+      "maxLength": 128
+    },
+
+    "semver": {
+      "type": "string",
+      "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-[0-9A-Za-z-.]+)?$"
+    },
+
+    "majorMinor": {
+      "description": "Schema version as MAJOR.MINOR. Patch is not meaningful for a contract.",
+      "type": "string",
+      "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)$"
+    },
+
+    "i18nString": {
+      "description": "Human-visible text. A plain string is permitted for authoring convenience; the object form separates translatable content from the definition body so a published experience can be localized without editing content.",
+      "oneOf": [
+        { "type": "string", "maxLength": 2048 },
+        {
+          "type": "object",
+          "properties": {
+            "key": { "type": "string", "maxLength": 256 },
+            "default": { "type": "string", "maxLength": 2048 },
+            "context": { "type": "string", "maxLength": 512 }
+          },
+          "required": ["key", "default"],
+          "additionalProperties": false
+        }
+      ]
+    },
+
+    "expression": {
+      "description": "Restricted expression in the Experience Studio expression grammar. Pure, side-effect free, non-Turing-complete, evaluated in a sandbox against a declared scope. See schemas/expression-grammar.md.",
+      "type": "object",
+      "properties": {
+        "$expr": { "type": "string", "minLength": 1, "maxLength": 2048 }
+      },
+      "required": ["$expr"],
+      "additionalProperties": false
+    },
+
+    "computableValue": {
+      "description": "A value that may be a literal or resolved from page state at runtime. The wrapper forms other than $expr are deliberately distinct so the renderer can derive the data dependency graph statically without parsing any expression; $expr dependencies are reported by the expression compiler.",
+      "oneOf": [
+        { "type": ["string", "number", "boolean", "null"] },
+        { "type": "array", "items": { "type": ["string", "number", "boolean", "null"] }, "maxItems": 1000 },
+        { "$ref": "#/$defs/expression" },
+        {
+          "type": "object",
+          "description": "Value of a page parameter.",
+          "properties": { "$param": { "$ref": "#/$defs/identifier" } },
+          "required": ["$param"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "Current value of a shared filter channel.",
+          "properties": { "$filter": { "$ref": "#/$defs/identifier" } },
+          "required": ["$filter"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "Current value of a selection channel (e.g. the row selected in a grid).",
+          "properties": { "$selection": { "$ref": "#/$defs/identifier" } },
+          "required": ["$selection"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "Value from the ambient scope: $user.*, $tenant.*, $tab.*, $row.*, $now. Never a source of authorization — see security.schema.json.",
+          "properties": { "$context": { "type": "string", "maxLength": 256 } },
+          "required": ["$context"],
+          "additionalProperties": false
+        }
+      ]
+    },
+
+    "condition": {
+      "description": "Boolean-valued expression used for visibility, enablement and conditional formatting. Absent means unconditionally true.",
+      "$ref": "#/$defs/expression"
+    },
+
+    "breakpoint": {
+      "description": "Named breakpoint. Resolved against the container's width using container queries, not the viewport, so a component behaves correctly wherever it is placed.",
+      "type": "string",
+      "enum": ["xs", "sm", "md", "lg", "xl"]
+    },
+
+    "dataType": {
+      "description": "Closed set. Adding a member is a breaking change for existing validators, so this set is intentionally small and general; domain meaning belongs in semanticType.",
+      "type": "string",
+      "enum": [
+        "string", "integer", "decimal", "boolean",
+        "date", "datetime", "time",
+        "amount", "percentage", "enum", "identifier", "json"
+      ]
+    },
+
+    "sensitivity": {
+      "description": "Classification driving AI egress policy, publication warnings and export policy. Ordered from least to most restricted.",
+      "type": "string",
+      "enum": ["public", "internal", "confidential", "restricted", "pii"]
+    },
+
+    "formatSpec": {
+      "description": "Display formatting. Locale, currency and timezone are resolved from runtime context; only overrides appear here.",
+      "type": "object",
+      "properties": {
+        "style": {
+          "type": "string",
+          "enum": ["number", "integer", "decimal", "currency", "percent", "date", "datetime", "time", "duration", "text", "code", "boolean"]
+        },
+        "decimals": { "type": "integer", "minimum": 0, "maximum": 12 },
+        "thousandsSeparator": { "type": "boolean" },
+        "currencyCode": { "type": "string", "pattern": "^[A-Z]{3}$" },
+        "currencyFrom": {
+          "description": "Field or attribute supplying the currency code per row, for multi-currency data.",
+          "type": "string",
+          "maxLength": 128
+        },
+        "datePattern": { "type": "string", "maxLength": 64 },
+        "timezone": { "type": "string", "maxLength": 64 },
+        "nullDisplay": { "type": "string", "maxLength": 32 },
+        "prefix": { "type": "string", "maxLength": 16 },
+        "suffix": { "type": "string", "maxLength": 16 },
+        "abbreviate": {
+          "description": "Compact large numbers (1.2M). Appropriate for KPI tiles, not for tabular financial figures.",
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "conditionalFormat": {
+      "description": "Semantic emphasis applied when a condition holds. Names a semantic token rather than a colour, so themes and contrast requirements stay under the design system's control.",
+      "type": "object",
+      "properties": {
+        "when": { "$ref": "#/$defs/condition" },
+        "emphasis": {
+          "type": "string",
+          "enum": ["neutral", "positive", "warning", "negative", "info", "muted"]
+        },
+        "icon": { "type": "string", "maxLength": 64 },
+        "label": { "$ref": "#/$defs/i18nString" }
+      },
+      "required": ["when", "emphasis"],
+      "additionalProperties": false
+    },
+
+    "threshold": {
+      "description": "Named band for KPIs, gauges and heat maps.",
+      "type": "object",
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "label": { "$ref": "#/$defs/i18nString" },
+        "from": { "type": ["number", "null"] },
+        "to": { "type": ["number", "null"] },
+        "emphasis": {
+          "type": "string",
+          "enum": ["neutral", "positive", "warning", "negative", "info", "muted"]
+        }
+      },
+      "required": ["id", "emphasis"],
+      "additionalProperties": false
+    },
+
+    "gridPlacement": {
+      "description": "Placement within a 12-column responsive grid, with per-breakpoint overrides. Responsive behaviour is stored in the artifact rather than left to CSS accident, which is what makes 'responsive by default' a property of generated output.",
+      "type": "object",
+      "properties": {
+        "colStart": { "type": "integer", "minimum": 1, "maximum": 12 },
+        "colSpan": { "type": "integer", "minimum": 1, "maximum": 12 },
+        "rowSpan": { "type": "integer", "minimum": 1, "maximum": 24 },
+        "order": { "type": "integer", "minimum": 0, "maximum": 999 },
+        "minHeight": { "type": "string", "pattern": "^[0-9]+(px|rem|vh)$" },
+        "breakpoints": {
+          "type": "object",
+          "propertyNames": { "$ref": "#/$defs/breakpoint" },
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "colStart": { "type": "integer", "minimum": 1, "maximum": 12 },
+              "colSpan": { "type": "integer", "minimum": 1, "maximum": 12 },
+              "rowSpan": { "type": "integer", "minimum": 1, "maximum": 24 },
+              "order": { "type": "integer", "minimum": 0, "maximum": 999 },
+              "hidden": { "type": "boolean" }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "effectiveDating": {
+      "description": "EDM data is commonly effective-dated and often bitemporal. asOf selects the business effective date; knownAs selects the knowledge date (what was known at that point). Omitting both means current.",
+      "type": "object",
+      "properties": {
+        "asOf": { "$ref": "#/$defs/computableValue" },
+        "knownAs": { "$ref": "#/$defs/computableValue" }
+      },
+      "additionalProperties": false
+    },
+
+    "auditStamp": {
+      "type": "object",
+      "properties": {
+        "createdBy": { "type": "string", "maxLength": 256 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "modifiedBy": { "type": "string", "maxLength": 256 },
+        "modifiedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["createdBy", "createdAt"],
+      "additionalProperties": false
+    },
+
+    "tags": {
+      "type": "array",
+      "items": { "type": "string", "maxLength": 64 },
+      "maxItems": 32,
+      "uniqueItems": true
+    },
+
+    "aiHints": {
+      "description": "Guidance consumed by the generation service, not shown to users. Present on catalog and registry artifacts so grounding quality is a curated property rather than an emergent one.",
+      "type": "object",
+      "properties": {
+        "whenToUse": { "type": "string", "maxLength": 1024 },
+        "whenNotToUse": { "type": "string", "maxLength": 1024 },
+        "exampleQuestions": {
+          "type": "array",
+          "items": { "type": "string", "maxLength": 512 },
+          "maxItems": 20
+        },
+        "preferOver": {
+          "type": "array",
+          "items": { "type": "string", "maxLength": 128 },
+          "maxItems": 20
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

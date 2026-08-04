@@ -1,0 +1,231 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.opus.gresham.com/experience-studio/v1/navigation.schema.json",
+  "title": "Navigation Model",
+  "description": "Navigation at two levels. Experience navigation is the shell: the tree of pages a user moves between. Page navigation is local: breadcrumbs, related links, and the return path. Tabs are not here — a tab is a layout container, because it partitions one page rather than moving between pages, and conflating the two is a common modelling error that makes deep-linking and deferred loading much harder.\n\nDrill-down is modelled as a resolvable graph rather than as hard-wired links, so a page author (or the AI) can express 'drill into this security' without knowing the page graph.",
+
+  "$defs": {
+
+    "experienceNavigation": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["sidebar", "topbar", "sidebarCollapsed", "none"],
+          "default": "sidebar"
+        },
+        "items": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/navItem" },
+          "maxItems": 200
+        },
+        "homePage": {
+          "description": "Landing page when the experience is opened without a specific page.",
+          "$ref": "common.schema.json#/$defs/identifier"
+        },
+        "showSearch": {
+          "description": "Global search affordance in the shell, targeting the search experience for a chosen entity.",
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean", "default": false },
+            "entity": { "$ref": "common.schema.json#/$defs/qualifiedRef" },
+            "placeholder": { "$ref": "common.schema.json#/$defs/i18nString" }
+          },
+          "additionalProperties": false
+        },
+        "drilldownTargets": {
+          "description": "Entity to page mapping resolving drilldown actions within this experience, overriding the catalog entity's defaultDetailExperience. Keeping resolution in one place means a target can be re-pointed once instead of edited in every page that drills there.",
+          "type": "object",
+          "propertyNames": { "$ref": "common.schema.json#/$defs/qualifiedRef" },
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "page": { "$ref": "common.schema.json#/$defs/identifier" },
+              "tab": { "$ref": "common.schema.json#/$defs/identifier" },
+              "openIn": { "type": "string", "enum": ["self", "newTab", "drawer", "modal"], "default": "self" }
+            },
+            "required": ["page"],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": ["items"],
+      "additionalProperties": false
+    },
+
+    "navItem": {
+      "discriminator": { "propertyName": "kind" },
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": { "const": "page" },
+            "id": { "$ref": "common.schema.json#/$defs/identifier" },
+            "label": { "$ref": "common.schema.json#/$defs/i18nString" },
+            "icon": { "type": "string", "maxLength": 64 },
+            "page": { "$ref": "common.schema.json#/$defs/identifier" },
+            "params": {
+              "type": "object",
+              "propertyNames": { "$ref": "common.schema.json#/$defs/identifier" },
+              "additionalProperties": { "$ref": "common.schema.json#/$defs/computableValue" }
+            },
+            "badge": {
+              "description": "Live count beside the item — outstanding exceptions, tasks awaiting approval. Bound to a data source declared on the experience.",
+              "type": "object",
+              "properties": {
+                "source": { "$ref": "common.schema.json#/$defs/localRef" },
+                "field": { "$ref": "common.schema.json#/$defs/identifier" },
+                "emphasis": { "type": "string", "enum": ["neutral", "positive", "warning", "negative", "info"] }
+              },
+              "required": ["source", "field"],
+              "additionalProperties": false
+            },
+            "visible": { "$ref": "common.schema.json#/$defs/condition" },
+            "security": { "$ref": "security.schema.json#/$defs/elementSecurity" }
+          },
+          "required": ["kind", "id", "label", "page"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": { "const": "group" },
+            "id": { "$ref": "common.schema.json#/$defs/identifier" },
+            "label": { "$ref": "common.schema.json#/$defs/i18nString" },
+            "icon": { "type": "string", "maxLength": 64 },
+            "collapsedByDefault": { "type": "boolean", "default": false },
+            "children": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/navItem" },
+              "minItems": 1,
+              "maxItems": 100
+            },
+            "visible": { "$ref": "common.schema.json#/$defs/condition" },
+            "security": { "$ref": "security.schema.json#/$defs/elementSecurity" }
+          },
+          "required": ["kind", "id", "label", "children"],
+          "additionalProperties": false
+        },
+        {
+          "description": "Link to a page in a different experience. Cross-experience links are explicit so the platform can validate that the target exists and is published in the same environment.",
+          "type": "object",
+          "properties": {
+            "kind": { "const": "experienceLink" },
+            "id": { "$ref": "common.schema.json#/$defs/identifier" },
+            "label": { "$ref": "common.schema.json#/$defs/i18nString" },
+            "icon": { "type": "string", "maxLength": 64 },
+            "experience": { "type": "string", "maxLength": 256 },
+            "page": { "$ref": "common.schema.json#/$defs/identifier" },
+            "params": {
+              "type": "object",
+              "propertyNames": { "$ref": "common.schema.json#/$defs/identifier" },
+              "additionalProperties": { "$ref": "common.schema.json#/$defs/computableValue" }
+            },
+            "visible": { "$ref": "common.schema.json#/$defs/condition" },
+            "security": { "$ref": "security.schema.json#/$defs/elementSecurity" }
+          },
+          "required": ["kind", "id", "label", "experience", "page"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": { "const": "external" },
+            "id": { "$ref": "common.schema.json#/$defs/identifier" },
+            "label": { "$ref": "common.schema.json#/$defs/i18nString" },
+            "icon": { "type": "string", "maxLength": 64 },
+            "urlTemplate": { "type": "string", "maxLength": 1024 },
+            "visible": { "$ref": "common.schema.json#/$defs/condition" },
+            "security": { "$ref": "security.schema.json#/$defs/elementSecurity" }
+          },
+          "required": ["kind", "id", "label", "urlTemplate"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": { "const": "divider" },
+            "id": { "$ref": "common.schema.json#/$defs/identifier" },
+            "label": { "$ref": "common.schema.json#/$defs/i18nString" }
+          },
+          "required": ["kind", "id"],
+          "additionalProperties": false
+        }
+      ]
+    },
+
+    "pageNavigation": {
+      "description": "Navigation local to one page.",
+      "type": "object",
+      "properties": {
+        "breadcrumbs": {
+          "type": "object",
+          "properties": {
+            "mode": {
+              "description": "'auto' derives the trail from the navigation tree and the arrival path; 'explicit' uses the declared items. Auto is preferred — a generated page gets a correct trail without the generator reasoning about the page graph.",
+              "type": "string",
+              "enum": ["auto", "explicit", "none"],
+              "default": "auto"
+            },
+            "items": {
+              "type": "array",
+              "maxItems": 8,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "label": { "$ref": "common.schema.json#/$defs/i18nString" },
+                  "page": { "$ref": "common.schema.json#/$defs/identifier" },
+                  "params": {
+                    "type": "object",
+                    "propertyNames": { "$ref": "common.schema.json#/$defs/identifier" },
+                    "additionalProperties": { "$ref": "common.schema.json#/$defs/computableValue" }
+                  }
+                },
+                "required": ["label"],
+                "additionalProperties": false
+              }
+            },
+            "titleFrom": {
+              "description": "Value supplying the final crumb, normally the record's label — 'Securities / Search / VOD.L' rather than a static page name.",
+              "$ref": "common.schema.json#/$defs/computableValue"
+            }
+          },
+          "additionalProperties": false
+        },
+
+        "backBehaviour": {
+          "description": "'history' returns to the previous view; 'declaredParent' returns to the breadcrumb parent, which is the predictable choice when a page is reachable by several routes.",
+          "type": "string",
+          "enum": ["history", "declaredParent", "none"],
+          "default": "history"
+        },
+
+        "relatedLinks": {
+          "description": "Contextual links out of this page, resolved for the current record. Generated from catalog relationships where possible, so a detail page offers its real neighbours without an author enumerating them.",
+          "type": "array",
+          "maxItems": 16,
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "$ref": "common.schema.json#/$defs/identifier" },
+              "label": { "$ref": "common.schema.json#/$defs/i18nString" },
+              "action": { "$ref": "common.schema.json#/$defs/localRef" },
+              "visible": { "$ref": "common.schema.json#/$defs/condition" },
+              "security": { "$ref": "security.schema.json#/$defs/elementSecurity" }
+            },
+            "required": ["id", "label", "action"],
+            "additionalProperties": false
+          }
+        },
+
+        "pageActions": {
+          "description": "Actions offered in the page header — export, refresh, open a related workspace.",
+          "type": "array",
+          "items": { "$ref": "common.schema.json#/$defs/localRef" },
+          "maxItems": 12
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

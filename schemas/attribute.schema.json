@@ -1,0 +1,204 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.opus.gresham.com/experience-studio/v1/attribute.schema.json",
+  "title": "Attribute and Measure Model",
+  "description": "Attributes and measures of a semantic catalog entity. Attributes describe things; measures quantify them. Separating the two is what lets the generation service choose correctly between a dimension and a value without guessing.",
+
+  "$defs": {
+
+    "attribute": {
+      "type": "object",
+      "properties": {
+        "id": { "$ref": "common.schema.json#/$defs/identifier" },
+        "businessName": {
+          "description": "Name a business user would recognise. This — not the physical column name — is what appears in the Studio, in generated titles, and in the AI's grounding context.",
+          "$ref": "common.schema.json#/$defs/i18nString"
+        },
+        "synonyms": {
+          "description": "Alternative names used by the business. Materially improves lexical retrieval for domain vocabulary ('ISIN', 'ticker', 'RIC') where embedding similarity is weak.",
+          "type": "array",
+          "items": { "type": "string", "maxLength": 128 },
+          "maxItems": 32
+        },
+        "description": { "type": "string", "maxLength": 2048 },
+
+        "dataType": { "$ref": "common.schema.json#/$defs/dataType" },
+        "semanticType": {
+          "description": "Domain meaning layered over dataType. Drives default formatting, validation, and component selection (an ISIN renders as a code and links to a security; a currency amount right-aligns and carries a currency).",
+          "type": "string",
+          "enum": [
+            "none", "isin", "cusip", "sedol", "ric", "ticker", "figi", "lei",
+            "currencyCode", "countryCode", "exchangeCode", "assetClass",
+            "accountId", "portfolioId", "counterpartyId", "securityId",
+            "emailAddress", "personName", "organizationName",
+            "quantity", "price", "rate", "notional", "marketValue",
+            "statusCode", "severityCode", "ruleCode", "fileName", "url"
+          ],
+          "default": "none"
+        },
+
+        "unit": { "type": "string", "maxLength": 32 },
+        "currencyCode": {
+          "description": "Fixed currency for this attribute, when it is not per-row.",
+          "type": "string",
+          "pattern": "^[A-Z]{3}$"
+        },
+        "currencyFromAttribute": {
+          "description": "Attribute in the same entity supplying the currency per row. Required for correct display of multi-currency amounts; omitting it is a common cause of silently wrong figures.",
+          "$ref": "common.schema.json#/$defs/identifier"
+        },
+        "precision": { "type": "integer", "minimum": 1, "maximum": 38 },
+        "scale": { "type": "integer", "minimum": 0, "maximum": 20 },
+        "format": { "$ref": "common.schema.json#/$defs/formatSpec" },
+
+        "enumValues": {
+          "description": "Permitted values for dataType 'enum'. Included in AI grounding when the set is small, so generated filters use real values rather than plausible-looking invented ones.",
+          "type": "array",
+          "maxItems": 500,
+          "items": {
+            "type": "object",
+            "properties": {
+              "value": { "type": "string", "maxLength": 128 },
+              "label": { "$ref": "common.schema.json#/$defs/i18nString" },
+              "emphasis": {
+                "type": "string",
+                "enum": ["neutral", "positive", "warning", "negative", "info", "muted"]
+              },
+              "order": { "type": "integer" }
+            },
+            "required": ["value", "label"],
+            "additionalProperties": false
+          }
+        },
+
+        "nullable": { "type": "boolean", "default": true },
+        "multiValued": { "type": "boolean", "default": false },
+
+        "filterable": { "type": "boolean", "default": true },
+        "groupable": {
+          "description": "May be used as a dimension. False for high-cardinality identifiers, which would otherwise produce an unusable grouping.",
+          "type": "boolean",
+          "default": true
+        },
+        "sortable": { "type": "boolean", "default": true },
+        "searchable": {
+          "description": "Included in free-text search over this entity.",
+          "type": "boolean",
+          "default": false
+        },
+
+        "sensitivity": { "$ref": "common.schema.json#/$defs/sensitivity" },
+        "columnEntitlement": {
+          "description": "EDM entitlement key governing visibility of this attribute. Resolved by the Data Gateway against the caller. Declared here so the catalog can be projected per user: an attribute the caller may not see is removed from the surface entirely, in the Studio and in AI retrieval alike.",
+          "type": "string",
+          "maxLength": 256
+        },
+        "maskingPolicy": {
+          "description": "Behaviour when the caller lacks the column entitlement. 'deny' removes the field; 'mask' returns a redacted value; 'partial' returns a truncated form (e.g. last four characters).",
+          "type": "string",
+          "enum": ["deny", "mask", "partial"],
+          "default": "deny"
+        },
+
+        "physical": {
+          "description": "SERVER ONLY. Mapping to the physical EDM object. Never present in the catalog projection served to clients or to the generation service, and never present in any page definition — that separation is what makes environment promotion a rebinding rather than a content edit.",
+          "type": "object",
+          "properties": {
+            "ref": { "type": "string", "maxLength": 512 },
+            "sourceDataType": { "type": "string", "maxLength": 64 },
+            "transform": { "type": "string", "maxLength": 512 }
+          },
+          "required": ["ref"],
+          "additionalProperties": false
+        },
+
+        "deprecated": { "type": "boolean", "default": false },
+        "deprecationNote": { "type": "string", "maxLength": 512 },
+        "aiHints": { "$ref": "common.schema.json#/$defs/aiHints" }
+      },
+      "required": ["id", "businessName", "dataType"],
+      "additionalProperties": false
+    },
+
+    "measure": {
+      "description": "A quantity that can be aggregated. Modelled separately from attributes because the decisions an author or the AI must make about it are different: which aggregation, over which dimensions, and which direction is good.",
+      "type": "object",
+      "properties": {
+        "id": { "$ref": "common.schema.json#/$defs/identifier" },
+        "businessName": { "$ref": "common.schema.json#/$defs/i18nString" },
+        "synonyms": {
+          "type": "array",
+          "items": { "type": "string", "maxLength": 128 },
+          "maxItems": 32
+        },
+        "description": { "type": "string", "maxLength": 2048 },
+
+        "valueType": {
+          "type": "string",
+          "enum": ["integer", "decimal", "amount", "percentage", "duration", "ratio"]
+        },
+        "unit": { "type": "string", "maxLength": 32 },
+        "currencyCode": { "type": "string", "pattern": "^[A-Z]{3}$" },
+        "format": { "$ref": "common.schema.json#/$defs/formatSpec" },
+
+        "allowedAggregations": {
+          "description": "Aggregations that are meaningful for this measure. Enforced by binding validation, which prevents a class of confidently-wrong generated output such as summing a rate or averaging a count of distinct items.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["sum", "avg", "min", "max", "count", "countDistinct", "median", "p90", "p95", "p99", "stddev", "first", "last", "none"]
+          },
+          "minItems": 1,
+          "maxItems": 12,
+          "uniqueItems": true
+        },
+        "defaultAggregation": {
+          "type": "string",
+          "enum": ["sum", "avg", "min", "max", "count", "countDistinct", "median", "p90", "p95", "p99", "stddev", "first", "last", "none"]
+        },
+
+        "expression": {
+          "description": "Logical derivation over attributes and other measures of the same entity, in catalog expression syntax. Evaluated by the Data Gateway. Never physical SQL.",
+          "type": "string",
+          "maxLength": 2048
+        },
+
+        "groupableBy": {
+          "description": "Dimensions this measure may legitimately be sliced by. Empty means any groupable attribute of the entity or a traversable relationship. Constraining it prevents nonsensical breakdowns.",
+          "type": "array",
+          "items": { "$ref": "common.schema.json#/$defs/qualifiedRef" },
+          "maxItems": 64
+        },
+
+        "higherIsBetter": {
+          "description": "Direction of goodness. Consumed by KPI, trend and gauge components to choose emphasis without the author or the AI having to reason about it — a late file count rising is negative, a match rate rising is positive.",
+          "type": "boolean"
+        },
+        "defaultThresholds": {
+          "type": "array",
+          "items": { "$ref": "common.schema.json#/$defs/threshold" },
+          "maxItems": 8
+        },
+        "targetValue": { "type": "number" },
+
+        "sensitivity": { "$ref": "common.schema.json#/$defs/sensitivity" },
+        "columnEntitlement": { "type": "string", "maxLength": 256 },
+
+        "physical": {
+          "description": "SERVER ONLY. See attribute.physical.",
+          "type": "object",
+          "properties": {
+            "ref": { "type": "string", "maxLength": 512 },
+            "transform": { "type": "string", "maxLength": 512 }
+          },
+          "additionalProperties": false
+        },
+
+        "deprecated": { "type": "boolean", "default": false },
+        "aiHints": { "$ref": "common.schema.json#/$defs/aiHints" }
+      },
+      "required": ["id", "businessName", "valueType", "allowedAggregations", "defaultAggregation"],
+      "additionalProperties": false
+    }
+  }
+}

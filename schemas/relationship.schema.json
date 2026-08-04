@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.opus.gresham.com/experience-studio/v1/relationship.schema.json",
+  "title": "Relationship Model",
+  "description": "A traversable link between two catalog entities. Relationships are what make the platform's two hardest capabilities possible: graph expansion during AI retrieval (a user says 'security', the retriever also offers pricing and related parties), and declarative data traversal without the author writing a join.",
+
+  "$defs": {
+
+    "relationship": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "description": "Qualified id owned by the 'from' entity, e.g. 'securities.security.related-parties'.",
+          "$ref": "common.schema.json#/$defs/qualifiedRef"
+        },
+        "businessName": {
+          "description": "How the link reads to a business user — 'Related Parties', 'Latest Price', 'Raised By'. Used verbatim in generated tab titles and section headings.",
+          "$ref": "common.schema.json#/$defs/i18nString"
+        },
+        "description": { "type": "string", "maxLength": 2048 },
+
+        "from": { "$ref": "common.schema.json#/$defs/qualifiedRef" },
+        "to": { "$ref": "common.schema.json#/$defs/qualifiedRef" },
+
+        "cardinality": {
+          "type": "string",
+          "enum": ["one-to-one", "one-to-many", "many-to-one", "many-to-many"]
+        },
+        "inverseId": {
+          "description": "The relationship representing the same link in the opposite direction. Required for graph expansion to traverse without duplicating edges.",
+          "$ref": "common.schema.json#/$defs/qualifiedRef"
+        },
+
+        "keyMapping": {
+          "description": "Logical attribute pairs joining the two entities. Attribute ids, never physical columns.",
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "items": {
+            "type": "object",
+            "properties": {
+              "fromAttribute": { "$ref": "common.schema.json#/$defs/identifier" },
+              "toAttribute": { "$ref": "common.schema.json#/$defs/identifier" }
+            },
+            "required": ["fromAttribute", "toAttribute"],
+            "additionalProperties": false
+          }
+        },
+        "throughEntity": {
+          "description": "Associative entity for many-to-many links, whose own attributes may carry meaning (a holding's quantity, an override's reason).",
+          "$ref": "common.schema.json#/$defs/qualifiedRef"
+        },
+
+        "joinSemantics": {
+          "description": "'inner' drops rows with no match; 'left' preserves them. Wrong here, a dashboard silently under-reports — so it is a catalog decision made once by a steward rather than a per-page choice.",
+          "type": "string",
+          "enum": ["inner", "left"],
+          "default": "left"
+        },
+
+        "temporalSemantics": {
+          "description": "How the link resolves over time for effective-dated entities. 'latest' takes the most recent related instance (latest price); 'asOfParent' matches the parent's effective date; 'all' returns the full history.",
+          "type": "string",
+          "enum": ["none", "latest", "asOfParent", "all"],
+          "default": "none"
+        },
+
+        "navigable": {
+          "description": "False blocks traversal in data sources — used where a link exists conceptually but querying it is prohibitively expensive.",
+          "type": "boolean",
+          "default": true
+        },
+        "traversalCost": {
+          "description": "Bounds graph expansion during AI retrieval and traversal depth in data sources, so a highly-connected entity cannot pull in the whole catalog or the whole database.",
+          "type": "string",
+          "enum": ["low", "medium", "high", "veryHigh"],
+          "default": "medium"
+        },
+        "maxTraversalDepth": { "type": "integer", "minimum": 1, "maximum": 5, "default": 2 },
+
+        "expectedFanout": {
+          "description": "Typical number of related instances per parent. Informs whether the AI should generate a tab, an inline list, or a count.",
+          "type": "integer",
+          "minimum": 0
+        },
+
+        "sensitivity": { "$ref": "common.schema.json#/$defs/sensitivity" },
+        "relationshipEntitlement": {
+          "description": "Optional entitlement key gating traversal itself, for cases where the existence of a link is sensitive even when both entities are visible.",
+          "type": "string",
+          "maxLength": 256
+        },
+
+        "deprecated": { "type": "boolean", "default": false },
+        "aiHints": { "$ref": "common.schema.json#/$defs/aiHints" }
+      },
+      "required": ["id", "businessName", "from", "to", "cardinality", "keyMapping"],
+      "additionalProperties": false
+    }
+  }
+}

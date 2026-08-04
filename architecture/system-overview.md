@@ -24,6 +24,8 @@ The platform's centre of gravity is therefore the **definition** — the artifac
 | [`runtime-architecture.md`](./runtime-architecture.md) | How a JSON definition becomes a running application |
 | [`security-architecture.md`](./security-architecture.md) | Roles, permissions, entitlement enforcement, tenant isolation, threat model |
 | [`ai-generation-architecture.md`](./ai-generation-architecture.md) | Superseded by `ai-architecture.md` |
+| [`../schemas/README.md`](../schemas/README.md) | The core metadata model: ten models, JSON schemas, worked examples |
+| [`../schemas/expression-grammar.md`](../schemas/expression-grammar.md) | Expression language specification |
 
 ---
 

@@ -1,0 +1,503 @@
+{
+  "schemaVersion": "1.0",
+  "id": "security-detail",
+  "name": "Security Detail",
+  "description": "Single security overview with asset-class-specific and data-driven tabs.",
+  "kind": "detail",
+  "route": "securities/:security-id",
+
+  "parameters": {
+    "security-id": {
+      "label": "Security",
+      "dataType": "identifier",
+      "required": true,
+      "scope": "page",
+      "syncToUrl": true,
+      "boundToEntity": "securities.security",
+      "boundToAttribute": "securities.security.security-id"
+    },
+    "as-of": {
+      "label": "As Of",
+      "dataType": "date",
+      "scope": "experience",
+      "syncToUrl": true,
+      "default": { "$expr": "today()" }
+    }
+  },
+
+  "filters": {
+    "active-tab": {
+      "label": "Active Tab",
+      "dataType": "string",
+      "syncToUrl": true,
+      "clearable": false
+    }
+  },
+
+  "selections": {
+    "focused-party": {
+      "label": "Focused Party",
+      "mode": "single",
+      "entity": "parties.party",
+      "keyFields": ["party-id"]
+    }
+  },
+
+  "dataSources": {
+    "security-header": {
+      "id": "security-header",
+      "name": "Security Header",
+      "entity": "securities.security",
+      "kind": "single",
+      "select": {
+        "attributes": [
+          { "attribute": "security-id", "alias": "security-id" },
+          { "attribute": "name", "alias": "name" },
+          { "attribute": "isin", "alias": "isin" },
+          { "attribute": "sedol", "alias": "sedol" },
+          { "attribute": "asset-class", "alias": "asset-class" },
+          { "attribute": "currency", "alias": "currency" },
+          { "attribute": "status", "alias": "status" },
+          { "attribute": "maturity-date", "alias": "maturity-date" },
+          { "attribute": "coupon-rate", "alias": "coupon-rate" }
+        ],
+        "key": { "security-id": { "$param": "security-id" } }
+      },
+      "effectiveDating": { "asOf": { "$param": "as-of" } },
+      "loadPolicy": "eager"
+    },
+
+    "related-parties": {
+      "id": "related-parties",
+      "name": "Related Parties",
+      "entity": "securities.security",
+      "kind": "list",
+      "select": {
+        "attributes": [
+          { "attribute": "party.party-id", "alias": "party-id" },
+          { "attribute": "party.legal-name", "alias": "party-name" },
+          { "attribute": "party.party-role", "alias": "party-role" },
+          { "attribute": "party.country", "alias": "country" },
+          { "attribute": "party.lei", "alias": "lei" }
+        ]
+      },
+      "traversals": [
+        { "relationship": "securities.security.related-parties", "alias": "party", "required": true, "limit": 20 }
+      ],
+      "filter": {
+        "all": [{ "target": "security-id", "operator": "eq", "value": { "$param": "security-id" } }]
+      },
+      "sort": [{ "field": "party-role", "direction": "asc" }],
+      "effectiveDating": { "asOf": { "$param": "as-of" } },
+      "loadPolicy": "eager"
+    },
+
+    "party-holdings": {
+      "id": "party-holdings",
+      "name": "Securities Issued by Focused Party",
+      "description": "Resolved once per generated tab: the $context reference to $tab.row is evaluated in that tab instance's scope.",
+      "entity": "parties.party",
+      "kind": "list",
+      "select": {
+        "attributes": [
+          { "attribute": "security.security-id", "alias": "security-id" },
+          { "attribute": "security.name", "alias": "security-name" },
+          { "attribute": "security.asset-class", "alias": "asset-class" },
+          { "attribute": "security.status", "alias": "status" }
+        ]
+      },
+      "traversals": [
+        { "relationship": "parties.party.securities", "alias": "security", "required": true, "limit": 100 }
+      ],
+      "filter": {
+        "all": [{ "target": "party-id", "operator": "eq", "value": { "$context": "$tab.row.party-id" } }]
+      },
+      "paging": { "mode": "offset", "pageSize": 25, "maxRows": 500 },
+      "loadPolicy": "deferred"
+    },
+
+    "security-exceptions": {
+      "id": "security-exceptions",
+      "name": "Exceptions for this Security",
+      "entity": "dq.exception",
+      "kind": "list",
+      "select": {
+        "attributes": [
+          { "attribute": "exception-id", "alias": "exception-id" },
+          { "attribute": "rule-name", "alias": "rule" },
+          { "attribute": "severity", "alias": "severity" },
+          { "attribute": "exception-status", "alias": "status" },
+          { "attribute": "detected-at", "alias": "detected" }
+        ]
+      },
+      "filter": {
+        "all": [{ "target": "security-id", "operator": "eq", "value": { "$param": "security-id" } }]
+      },
+      "sort": [{ "field": "detected", "direction": "desc" }],
+      "paging": { "mode": "offset", "pageSize": 25, "maxRows": 1000 },
+      "loadPolicy": "deferred"
+    },
+
+    "exception-summary": {
+      "id": "exception-summary",
+      "name": "Exception Count for this Security",
+      "entity": "dq.exception",
+      "kind": "aggregate",
+      "select": {
+        "measures": [{ "measure": "exception-count", "aggregation": "count", "alias": "open-count" }]
+      },
+      "filter": {
+        "all": [
+          { "target": "security-id", "operator": "eq", "value": { "$param": "security-id" } },
+          { "target": "exception-status", "operator": "in", "value": ["OPEN", "IN_PROGRESS"] }
+        ]
+      },
+      "loadPolicy": "eager"
+    }
+  },
+
+  "components": {
+    "header-summary": {
+      "id": "header-summary",
+      "type": "business.security-overview",
+      "typeVersion": "1.1.0",
+      "title": "Security",
+      "dataSource": "security-header",
+      "config": { "showIdentifiers": true, "showStatusBadge": true },
+      "bindings": {
+        "primaryLabel": { "field": "name" },
+        "secondaryLabel": { "field": "isin", "renderAs": "code" },
+        "attributes": [
+          { "field": "sedol", "label": "SEDOL", "renderAs": "code" },
+          { "field": "asset-class", "label": "Asset Class", "renderAs": "badge" },
+          { "field": "currency", "label": "Currency" },
+          { "field": "status", "label": "Status", "renderAs": "badge" }
+        ]
+      }
+    },
+
+    "overview-facts": {
+      "id": "overview-facts",
+      "type": "data.property-list",
+      "typeVersion": "1.0.0",
+      "title": "Key Details",
+      "dataSource": "security-header",
+      "config": { "columns": 2 },
+      "bindings": {
+        "properties": [
+          { "field": "isin", "label": "ISIN", "renderAs": "code" },
+          { "field": "sedol", "label": "SEDOL", "renderAs": "code" },
+          { "field": "asset-class", "label": "Asset Class" },
+          { "field": "currency", "label": "Trading Currency" },
+          { "field": "status", "label": "Status", "renderAs": "badge" }
+        ]
+      }
+    },
+
+    "bond-terms": {
+      "id": "bond-terms",
+      "type": "data.property-list",
+      "typeVersion": "1.0.0",
+      "title": "Bond Terms",
+      "dataSource": "security-header",
+      "config": { "columns": 2 },
+      "bindings": {
+        "properties": [
+          { "field": "maturity-date", "label": "Maturity Date", "format": { "style": "date" } },
+          {
+            "field": "coupon-rate",
+            "label": "Coupon Rate",
+            "format": { "style": "percent", "decimals": 3 },
+            "emptyValue": "Not supplied"
+          }
+        ]
+      }
+    },
+
+    "parties-grid": {
+      "id": "parties-grid",
+      "type": "data.grid",
+      "typeVersion": "3.0.0",
+      "title": "Related Parties",
+      "dataSource": "related-parties",
+      "config": { "selectionMode": "single", "density": "compact" },
+      "bindings": {
+        "columns": [
+          { "field": "party-name", "label": "Legal Name", "width": "fit", "renderAs": "link", "action": "drill-to-party" },
+          { "field": "party-role", "label": "Role", "width": "140px", "renderAs": "badge" },
+          { "field": "country", "label": "Country", "width": "110px" },
+          { "field": "lei", "label": "LEI", "width": "200px", "renderAs": "code" },
+          { "field": "party-id", "hidden": true }
+        ]
+      },
+      "writesTo": { "selections": ["focused-party"] },
+      "eventActions": { "selectionChanged": "set-focused-party" },
+      "stateOverrides": {
+        "empty": { "title": "No related parties", "message": "No issuer or guarantor is recorded for this security." }
+      }
+    },
+
+    "party-securities-grid": {
+      "id": "party-securities-grid",
+      "type": "data.grid",
+      "typeVersion": "3.0.0",
+      "title": "Other Securities",
+      "dataSource": "party-holdings",
+      "config": { "density": "compact" },
+      "bindings": {
+        "columns": [
+          { "field": "security-name", "label": "Security", "width": "fit", "renderAs": "link", "action": "drill-to-security" },
+          { "field": "asset-class", "label": "Asset Class", "width": "140px" },
+          { "field": "status", "label": "Status", "width": "130px", "renderAs": "badge" },
+          { "field": "security-id", "hidden": true }
+        ]
+      }
+    },
+
+    "exceptions-grid": {
+      "id": "exceptions-grid",
+      "type": "data.grid",
+      "typeVersion": "3.0.0",
+      "title": "Data Quality Exceptions",
+      "dataSource": "security-exceptions",
+      "config": { "density": "compact" },
+      "bindings": {
+        "columns": [
+          { "field": "rule", "label": "Rule", "width": "fit" },
+          {
+            "field": "severity",
+            "label": "Severity",
+            "width": "110px",
+            "renderAs": "badge",
+            "conditionalFormats": [{ "when": { "$expr": "$row.severity == 'HIGH'" }, "emphasis": "negative" }]
+          },
+          { "field": "status", "label": "Status", "width": "130px", "renderAs": "badge" },
+          { "field": "detected", "label": "Detected", "width": "160px", "format": { "style": "datetime" } },
+          { "field": "exception-id", "hidden": true }
+        ]
+      },
+      "eventActions": { "rowActivated": "drill-to-exception" },
+      "stateOverrides": {
+        "empty": { "title": "No exceptions", "message": "This security has no recorded data quality exceptions.", "icon": "check-circle" },
+        "denied": { "title": "Not available to you", "message": "Your entitlements do not include data quality exceptions." }
+      }
+    }
+  },
+
+  "layout": {
+    "kind": "container",
+    "id": "root",
+    "container": {
+      "type": "grid",
+      "gap": "md",
+      "children": [
+        {
+          "kind": "widget",
+          "id": "w-header",
+          "component": "header-summary",
+          "placement": { "colStart": 1, "colSpan": 12 }
+        },
+        {
+          "kind": "container",
+          "id": "main-tabs",
+          "placement": { "colStart": 1, "colSpan": 12 },
+          "container": {
+            "type": "tabs",
+            "variant": "underline",
+            "overflow": "menu",
+            "selectedTabChannel": "active-tab",
+            "deferContent": true,
+            "keepAliveOnSwitch": true,
+            "source": {
+              "mode": "static",
+              "tabs": [
+                {
+                  "id": "overview",
+                  "label": "Overview",
+                  "deepLinkId": "overview",
+                  "content": [
+                    { "kind": "widget", "id": "t-overview-facts", "component": "overview-facts", "placement": { "colSpan": 12 } }
+                  ]
+                },
+                {
+                  "id": "bond-terms",
+                  "label": "Bond Terms",
+                  "deepLinkId": "bond-terms",
+                  "visible": { "$expr": "$data.security-header.asset-class == 'BOND'" },
+                  "content": [
+                    { "kind": "widget", "id": "t-bond-terms", "component": "bond-terms", "placement": { "colSpan": 12 } }
+                  ]
+                },
+                {
+                  "id": "parties",
+                  "label": "Related Parties",
+                  "deepLinkId": "parties",
+                  "content": [
+                    { "kind": "widget", "id": "t-parties-grid", "component": "parties-grid", "placement": { "colSpan": 12, "minHeight": "300px" } },
+                    {
+                      "kind": "container",
+                      "id": "party-tabs",
+                      "placement": { "colSpan": 12 },
+                      "container": {
+                        "type": "tabs",
+                        "variant": "pill",
+                        "overflow": "menu",
+                        "deferContent": true,
+                        "source": {
+                          "mode": "dataDriven",
+                          "source": "related-parties",
+                          "idField": "party-id",
+                          "labelField": "party-name",
+                          "orderField": "party-role",
+                          "maxTabs": 8,
+                          "emptyBehaviour": "hideContainer",
+                          "template": [
+                            {
+                              "kind": "widget",
+                              "id": "pt-securities",
+                              "component": "party-securities-grid",
+                              "placement": { "colSpan": 12, "minHeight": "260px" }
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "id": "exceptions",
+                  "label": "Data Quality",
+                  "deepLinkId": "exceptions",
+                  "badge": { "$expr": "$data.exception-summary.open-count" },
+                  "security": { "requiredCapabilities": ["dataQuality.view"], "deniedBehaviour": "hide" },
+                  "content": [
+                    { "kind": "widget", "id": "t-exceptions", "component": "exceptions-grid", "placement": { "colSpan": 12, "minHeight": "320px" } }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  },
+
+  "actions": {
+    "drill-to-party": {
+      "id": "drill-to-party",
+      "kind": "drilldown",
+      "label": "Open Party",
+      "entity": "parties.party",
+      "key": { "party-id": { "$context": "$event.party-id" } },
+      "openIn": "self"
+    },
+    "drill-to-security": {
+      "id": "drill-to-security",
+      "kind": "drilldown",
+      "label": "Open Security",
+      "entity": "securities.security",
+      "key": { "security-id": { "$context": "$event.security-id" } },
+      "carryContext": true
+    },
+    "drill-to-exception": {
+      "id": "drill-to-exception",
+      "kind": "drilldown",
+      "label": "Open Exception",
+      "entity": "dq.exception",
+      "key": { "exception-id": { "$context": "$event.exception-id" } },
+      "openIn": "drawer"
+    },
+    "set-focused-party": {
+      "id": "set-focused-party",
+      "kind": "setSelection",
+      "channel": "focused-party",
+      "value": { "$context": "$event.party-id" }
+    },
+    "back-to-dashboard": {
+      "id": "back-to-dashboard",
+      "kind": "navigate",
+      "label": "Back to Operations",
+      "target": { "page": "security-master-operations" },
+      "carryContext": true
+    }
+  },
+
+  "navigation": {
+    "breadcrumbs": {
+      "mode": "auto",
+      "titleFrom": { "$expr": "$data.security-header.name" }
+    },
+    "backBehaviour": "declaredParent",
+    "relatedLinks": [
+      { "id": "link-dashboard", "label": "Operations Dashboard", "action": "back-to-dashboard" }
+    ]
+  },
+
+  "security": {
+    "intendedAudience": "Securities operations analysts and data stewards.",
+    "requiredCapabilities": ["experience.view"],
+    "workspaceScope": "tenant",
+    "deniedDataPolicy": "showDeniedState",
+    "sensitivityDeclaration": {
+      "maxSensitivity": "confidential",
+      "contributingRefs": ["dq.exception.detail"],
+      "computedAt": "2026-08-03T11:02:00Z",
+      "computedFromCatalogVersion": 7
+    },
+    "exportPolicy": { "allowed": false }
+  },
+
+  "presentation": {
+    "themeRef": "opus.default",
+    "maxWidth": "contained",
+    "showPageHeader": true,
+    "headerSummary": "header-summary"
+  },
+
+  "performance": { "renderBudgetMs": 2000, "maxEagerDataSources": 4 },
+
+  "version": {
+    "schemaVersion": "1.0",
+    "artifactVersion": 6,
+    "lifecycleState": "published",
+    "immutable": true,
+    "pins": { "catalogVersion": 7, "registryVersion": "3.2.0" },
+    "provenance": {
+      "origin": "ai",
+      "actorId": "analyst@demo-tenant",
+      "createdAt": "2026-08-02T15:12:00Z",
+      "generation": {
+        "prompt": "Build a security overview page with asset-specific tabs, related parties, pricing, and data quality history.",
+        "intentClass": "create",
+        "promptTemplateVersion": "1.3.0",
+        "modelId": "generation-model",
+        "modelVersion": "2026-06-01",
+        "temperature": 0.2,
+        "retrievedConcepts": [
+          "securities.security",
+          "securities.security.related-parties",
+          "parties.party",
+          "dq.exception",
+          "securities.security.exceptions"
+        ],
+        "exemplarTemplateIds": ["platform.entity-detail-tabbed"],
+        "validationAttempts": 1,
+        "fallbackUsed": false,
+        "correlationId": "gen-91b4de07"
+      }
+    },
+    "validation": {
+      "status": "valid",
+      "stagesPassed": ["structural", "component", "semantic", "binding", "entitlement", "cost", "layout", "accessibility"],
+      "validatedAt": "2026-08-02T15:14:00Z"
+    },
+    "governance": {
+      "publishedBy": "ops-lead@demo-tenant",
+      "publishedAt": "2026-08-02T17:00:00Z",
+      "publishedEnvironments": ["uat", "production"]
+    },
+    "audit": { "createdBy": "analyst@demo-tenant", "createdAt": "2026-08-02T15:12:00Z" }
+  },
+
+  "tags": ["securities", "detail"]
+}

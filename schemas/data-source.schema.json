@@ -1,0 +1,370 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.opus.gresham.com/experience-studio/v1/data-source.schema.json",
+  "title": "Data Source Model",
+  "description": "A declarative, logical query against the semantic catalog. Data sources are page-scoped and named; components bind to them rather than issuing queries themselves. Three properties are deliberate: no physical object is ever named, no query language is ever embedded, and every reference to page state uses an analysable wrapper so the renderer can derive the invalidation graph without executing anything.",
+
+  "$defs": {
+
+    "dataSource": {
+      "type": "object",
+      "properties": {
+        "id": { "$ref": "common.schema.json#/$defs/identifier" },
+        "name": { "$ref": "common.schema.json#/$defs/i18nString" },
+        "description": { "type": "string", "maxLength": 1024 },
+
+        "entity": {
+          "description": "Root catalog entity this source reads from.",
+          "$ref": "common.schema.json#/$defs/qualifiedRef"
+        },
+        "kind": {
+          "type": "string",
+          "enum": ["aggregate", "list", "single", "search", "graph"]
+        },
+
+        "select": { "$ref": "#/$defs/select" },
+        "filter": { "$ref": "#/$defs/filterNode" },
+        "traversals": {
+          "description": "Related data reached through catalog relationships. The author declares the relationship; the gateway resolves the join. Depth and breadth are bounded by the relationship's traversalCost and maxTraversalDepth.",
+          "type": "array",
+          "maxItems": 8,
+          "items": { "$ref": "#/$defs/traversal" }
+        },
+
+        "sort": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {
+            "type": "object",
+            "properties": {
+              "field": {
+                "description": "Alias declared in select, not a catalog reference — so sorting survives a change of underlying attribute.",
+                "$ref": "common.schema.json#/$defs/identifier"
+              },
+              "direction": { "type": "string", "enum": ["asc", "desc"], "default": "asc" },
+              "nulls": { "type": "string", "enum": ["first", "last"] }
+            },
+            "required": ["field"],
+            "additionalProperties": false
+          }
+        },
+
+        "paging": {
+          "type": "object",
+          "properties": {
+            "mode": { "type": "string", "enum": ["none", "offset", "cursor"], "default": "none" },
+            "pageSize": { "type": "integer", "minimum": 1, "maximum": 1000 },
+            "maxRows": {
+              "description": "Hard ceiling for this source. The gateway clamps to the tenant limit regardless of what is declared here.",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100000
+            }
+          },
+          "additionalProperties": false
+        },
+
+        "effectiveDating": { "$ref": "common.schema.json#/$defs/effectiveDating" },
+
+        "parameters": {
+          "description": "Local parameters with defaults, referenced from filters via $param. Lets one data source serve several widgets or dynamic tab instances with different inputs.",
+          "type": "object",
+          "propertyNames": { "$ref": "common.schema.json#/$defs/identifier" },
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "dataType": { "$ref": "common.schema.json#/$defs/dataType" },
+              "default": { "$ref": "common.schema.json#/$defs/computableValue" },
+              "required": { "type": "boolean", "default": false }
+            },
+            "required": ["dataType"],
+            "additionalProperties": false
+          }
+        },
+
+        "refresh": {
+          "type": "object",
+          "properties": {
+            "mode": { "type": "string", "enum": ["onLoad", "interval", "manual", "onAction"], "default": "onLoad" },
+            "intervalSeconds": { "type": "integer", "minimum": 15, "maximum": 86400 },
+            "onActions": {
+              "description": "Actions whose successful completion invalidates this source. The declarative equivalent of 'refresh the grid after the override is saved'.",
+              "type": "array",
+              "items": { "$ref": "common.schema.json#/$defs/localRef" },
+              "maxItems": 16
+            }
+          },
+          "additionalProperties": false
+        },
+
+        "loadPolicy": {
+          "description": "'eager' joins the first batch on page render; 'deferred' waits until its consuming widget becomes visible; 'onDemand' waits for an explicit action. Deferred sources are how a page with hidden tabs avoids querying tabs nobody opens.",
+          "type": "string",
+          "enum": ["eager", "deferred", "onDemand"],
+          "default": "eager"
+        },
+
+        "cacheTtlHintSeconds": {
+          "description": "Author hint only. Authoritative TTL comes from the entity's volatilityTtlSeconds; the gateway clamps this value and may ignore it.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 86400
+        },
+
+        "expectedCostClass": {
+          "description": "Author or generator expectation, compared against the gateway's estimate during cost validation. A mismatch is a design-time warning rather than a runtime surprise.",
+          "type": "string",
+          "enum": ["low", "medium", "high"]
+        }
+      },
+      "required": ["id", "entity", "kind", "select"],
+      "additionalProperties": false,
+
+      "allOf": [
+        {
+          "if": { "properties": { "kind": { "const": "aggregate" } }, "required": ["kind"] },
+          "then": {
+            "properties": { "select": { "required": ["measures"] } }
+          }
+        },
+        {
+          "if": { "properties": { "kind": { "enum": ["list", "single"] } }, "required": ["kind"] },
+          "then": {
+            "properties": { "select": { "required": ["attributes"] } }
+          }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "search" } }, "required": ["kind"] },
+          "then": {
+            "properties": { "select": { "required": ["attributes", "searchTerm"] } }
+          }
+        }
+      ]
+    },
+
+    "select": {
+      "type": "object",
+      "properties": {
+        "attributes": {
+          "type": "array",
+          "maxItems": 200,
+          "items": {
+            "type": "object",
+            "properties": {
+              "attribute": {
+                "description": "Attribute id within the root entity, or a qualified reference through a declared traversal alias.",
+                "type": "string",
+                "maxLength": 256
+              },
+              "alias": {
+                "description": "Field name in the result. Bindings reference this alias, which decouples component configuration from catalog naming.",
+                "$ref": "common.schema.json#/$defs/identifier"
+              },
+              "label": { "$ref": "common.schema.json#/$defs/i18nString" },
+              "format": { "$ref": "common.schema.json#/$defs/formatSpec" }
+            },
+            "required": ["attribute", "alias"],
+            "additionalProperties": false
+          }
+        },
+
+        "measures": {
+          "type": "array",
+          "maxItems": 50,
+          "items": {
+            "type": "object",
+            "properties": {
+              "measure": { "type": "string", "maxLength": 256 },
+              "aggregation": {
+                "description": "Must be present in the measure's allowedAggregations. Binding validation rejects anything else, which is what prevents confidently-wrong output such as summing a rate.",
+                "type": "string",
+                "enum": ["sum", "avg", "min", "max", "count", "countDistinct", "median", "p90", "p95", "p99", "stddev", "first", "last", "none"]
+              },
+              "alias": { "$ref": "common.schema.json#/$defs/identifier" },
+              "label": { "$ref": "common.schema.json#/$defs/i18nString" },
+              "format": { "$ref": "common.schema.json#/$defs/formatSpec" },
+              "filter": {
+                "description": "Filter applied to this measure only, for side-by-side comparisons such as this period against last.",
+                "$ref": "#/$defs/filterNode"
+              }
+            },
+            "required": ["measure", "alias"],
+            "additionalProperties": false
+          }
+        },
+
+        "dimensions": {
+          "type": "array",
+          "maxItems": 10,
+          "items": {
+            "type": "object",
+            "properties": {
+              "attribute": { "type": "string", "maxLength": 256 },
+              "alias": { "$ref": "common.schema.json#/$defs/identifier" },
+              "label": { "$ref": "common.schema.json#/$defs/i18nString" },
+              "granularity": {
+                "description": "Time bucketing for date and datetime dimensions.",
+                "type": "string",
+                "enum": ["day", "week", "month", "quarter", "year", "hour", "minute"]
+              },
+              "limit": {
+                "description": "Top-N by the first measure, with the remainder optionally collapsed. Prevents a high-cardinality dimension producing an unreadable chart.",
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 1000
+              },
+              "includeOther": { "type": "boolean", "default": false }
+            },
+            "required": ["attribute", "alias"],
+            "additionalProperties": false
+          }
+        },
+
+        "key": {
+          "description": "For kind 'single': values identifying the instance, keyed by the entity's primary key attribute ids. Typically bound to page parameters supplied by a drill-down.",
+          "type": "object",
+          "propertyNames": { "$ref": "common.schema.json#/$defs/identifier" },
+          "additionalProperties": { "$ref": "common.schema.json#/$defs/computableValue" }
+        },
+
+        "searchTerm": {
+          "description": "For kind 'search': the free-text term, normally bound to a parameter or filter channel.",
+          "$ref": "common.schema.json#/$defs/computableValue"
+        },
+        "searchFields": {
+          "description": "Attributes to search. Defaults to all attributes marked searchable on the entity.",
+          "type": "array",
+          "items": { "$ref": "common.schema.json#/$defs/identifier" },
+          "maxItems": 32
+        },
+
+        "totals": {
+          "description": "Grand totals or subtotals alongside detail rows, for grids that need a footer.",
+          "type": "object",
+          "properties": {
+            "grand": { "type": "boolean", "default": false },
+            "byDimension": {
+              "type": "array",
+              "items": { "$ref": "common.schema.json#/$defs/identifier" },
+              "maxItems": 4
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false,
+      "minProperties": 1
+    },
+
+    "traversal": {
+      "type": "object",
+      "properties": {
+        "relationship": { "$ref": "common.schema.json#/$defs/qualifiedRef" },
+        "alias": {
+          "description": "Prefix for referencing the related entity's attributes in select, e.g. 'issuer.name'.",
+          "$ref": "common.schema.json#/$defs/identifier"
+        },
+        "filter": { "$ref": "#/$defs/filterNode" },
+        "required": {
+          "description": "True narrows the result to rows having a match, overriding the relationship's default joinSemantics.",
+          "type": "boolean"
+        },
+        "limit": { "type": "integer", "minimum": 1, "maximum": 1000 },
+        "sort": {
+          "type": "array",
+          "maxItems": 4,
+          "items": {
+            "type": "object",
+            "properties": {
+              "attribute": { "$ref": "common.schema.json#/$defs/identifier" },
+              "direction": { "type": "string", "enum": ["asc", "desc"] }
+            },
+            "required": ["attribute"],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": ["relationship", "alias"],
+      "additionalProperties": false
+    },
+
+    "filterNode": {
+      "description": "Recursive filter tree. Client-supplied filters can only ever narrow a result: row entitlement predicates are injected server-side by the gateway and cannot be widened, overridden or removed from here.",
+      "oneOf": [
+        { "$ref": "#/$defs/filterClause" },
+        {
+          "type": "object",
+          "properties": {
+            "all": { "type": "array", "items": { "$ref": "#/$defs/filterNode" }, "minItems": 1, "maxItems": 32 }
+          },
+          "required": ["all"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "any": { "type": "array", "items": { "$ref": "#/$defs/filterNode" }, "minItems": 1, "maxItems": 32 }
+          },
+          "required": ["any"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": { "not": { "$ref": "#/$defs/filterNode" } },
+          "required": ["not"],
+          "additionalProperties": false
+        }
+      ]
+    },
+
+    "filterClause": {
+      "type": "object",
+      "properties": {
+        "target": {
+          "description": "Attribute or measure being filtered: an attribute id on the root entity, or 'alias.attribute' through a traversal.",
+          "type": "string",
+          "maxLength": 256
+        },
+        "operator": {
+          "type": "string",
+          "enum": [
+            "eq", "ne", "in", "notIn",
+            "gt", "gte", "lt", "lte", "between",
+            "contains", "startsWith", "endsWith",
+            "isNull", "isNotNull",
+            "inLast", "inNext", "onOrAfterToday", "beforeToday"
+          ]
+        },
+        "value": { "$ref": "common.schema.json#/$defs/computableValue" },
+        "unit": {
+          "description": "Time unit for relative operators inLast and inNext.",
+          "type": "string",
+          "enum": ["minute", "hour", "day", "week", "month", "quarter", "year", "businessDay"]
+        },
+        "skipWhenEmpty": {
+          "description": "Drop this clause when its value resolves to null or an empty array. Essential for filter-channel binding: an unset filter must mean 'no constraint', not 'match nothing'. Defaulting to true removes the single most common source of empty dashboards.",
+          "type": "boolean",
+          "default": true
+        },
+        "caseSensitive": { "type": "boolean", "default": false }
+      },
+      "required": ["target", "operator"],
+      "additionalProperties": false,
+
+      "allOf": [
+        {
+          "if": {
+            "properties": { "operator": { "enum": ["isNull", "isNotNull", "onOrAfterToday", "beforeToday"] } },
+            "required": ["operator"]
+          },
+          "then": { "not": { "required": ["value"] } },
+          "else": { "required": ["value"] }
+        },
+        {
+          "if": { "properties": { "operator": { "enum": ["inLast", "inNext"] } }, "required": ["operator"] },
+          "then": { "required": ["unit"] }
+        }
+      ]
+    }
+  }
+}

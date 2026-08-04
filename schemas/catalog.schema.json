@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.opus.gresham.com/experience-studio/v1/catalog.schema.json",
+  "title": "Semantic Catalog Version",
+  "description": "An immutable published snapshot of the governed business vocabulary over EDM. Page definitions pin the exact catalog version they were authored against, so a later catalog change can never silently alter the meaning of a live page.",
+  "type": "object",
+
+  "properties": {
+    "schemaVersion": { "$ref": "common.schema.json#/$defs/majorMinor" },
+    "catalogVersion": {
+      "description": "Monotonic version of this catalog snapshot. Referenced by every artifact authored against it.",
+      "type": "integer",
+      "minimum": 1
+    },
+    "tenantId": {
+      "description": "Owning tenant. Catalogs are never shared across tenants — a client's data model is commercially sensitive in itself.",
+      "type": "string",
+      "maxLength": 128
+    },
+    "name": { "$ref": "common.schema.json#/$defs/i18nString" },
+    "description": { "type": "string", "maxLength": 4096 },
+
+    "lifecycleState": {
+      "type": "string",
+      "enum": ["draft", "published", "deprecated"]
+    },
+
+    "entities": {
+      "type": "object",
+      "propertyNames": { "$ref": "common.schema.json#/$defs/qualifiedRef" },
+      "additionalProperties": { "$ref": "entity.schema.json#/$defs/entity" },
+      "minProperties": 1
+    },
+    "relationships": {
+      "type": "object",
+      "propertyNames": { "$ref": "common.schema.json#/$defs/qualifiedRef" },
+      "additionalProperties": { "$ref": "relationship.schema.json#/$defs/relationship" }
+    },
+
+    "curatedDataSources": {
+      "description": "Steward-authored data sources published as reusable starting points. Both a convenience for authors and a strong signal to the generation service about the intended way to query an entity.",
+      "type": "object",
+      "propertyNames": { "$ref": "common.schema.json#/$defs/identifier" },
+      "additionalProperties": { "$ref": "data-source.schema.json#/$defs/dataSource" }
+    },
+
+    "domains": {
+      "description": "Display grouping for the catalog browser and for retrieval scoping.",
+      "type": "object",
+      "propertyNames": { "type": "string", "maxLength": 64 },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "businessName": { "$ref": "common.schema.json#/$defs/i18nString" },
+          "description": { "type": "string", "maxLength": 2048 },
+          "order": { "type": "integer" }
+        },
+        "required": ["businessName"],
+        "additionalProperties": false
+      }
+    },
+
+    "drift": {
+      "description": "Result of the most recent comparison against live EDM metadata. Recorded on the snapshot because undetected catalog drift is the most insidious failure mode in this architecture: grounding degrades invisibly and presents as unreliable AI.",
+      "type": "object",
+      "properties": {
+        "lastCheckedAt": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["clean", "warnings", "errors", "unknown"] },
+        "findings": {
+          "type": "array",
+          "maxItems": 1000,
+          "items": {
+            "type": "object",
+            "properties": {
+              "ref": { "$ref": "common.schema.json#/$defs/qualifiedRef" },
+              "kind": {
+                "type": "string",
+                "enum": ["missingPhysical", "typeChanged", "nullabilityChanged", "newPhysicalUnmapped", "cardinalityChanged"]
+              },
+              "detail": { "type": "string", "maxLength": 1024 },
+              "severity": { "type": "string", "enum": ["info", "warning", "error"] }
+            },
+            "required": ["ref", "kind", "severity"],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": ["status"],
+      "additionalProperties": false
+    },
+
+    "audit": { "$ref": "common.schema.json#/$defs/auditStamp" }
+  },
+
+  "required": ["schemaVersion", "catalogVersion", "tenantId", "lifecycleState", "entities"],
+  "additionalProperties": false
+}

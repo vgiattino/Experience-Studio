@@ -1,0 +1,138 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.opus.gresham.com/experience-studio/v1/component-instance.schema.json",
+  "title": "Component Instance Model",
+  "description": "One configured use of a registered component within a page. Validation is two-level and cannot be otherwise: this schema checks structure, and the platform validator then checks the 'config' object against the properties schema of the manifest resolved from (type, typeVersion) at the page's pinned registry version. A static schema alone cannot express that, which is why the manifest is a runtime artifact rather than documentation.",
+
+  "$defs": {
+
+    "componentInstance": {
+      "type": "object",
+      "properties": {
+        "id": { "$ref": "common.schema.json#/$defs/identifier" },
+        "type": { "$ref": "common.schema.json#/$defs/componentTypeRef" },
+        "typeVersion": {
+          "description": "Component contract version this instance was authored against. Pinning it is what stops a component change from silently altering a published page.",
+          "$ref": "common.schema.json#/$defs/semver"
+        },
+
+        "title": { "$ref": "common.schema.json#/$defs/i18nString" },
+        "subtitle": { "$ref": "common.schema.json#/$defs/i18nString" },
+        "description": {
+          "description": "Accessible description and hover help. Populated by generation, since a generated widget must explain itself without a human writing help text.",
+          "$ref": "common.schema.json#/$defs/i18nString"
+        },
+
+        "config": {
+          "description": "Component-specific properties, validated against the manifest's properties schema. Closed there, so an invented property is a validation failure rather than a silently ignored field.",
+          "type": "object"
+        },
+
+        "dataSource": {
+          "description": "Default data source for this instance's bindings. A binding may override it, which is how one component combines a value from one source with a comparison from another.",
+          "$ref": "common.schema.json#/$defs/localRef"
+        },
+        "bindings": { "$ref": "binding.schema.json#/$defs/bindingSet" },
+        "encodings": {
+          "description": "Chart encodings, for components whose dataRequirement shape is 'series'. Present instead of, not alongside, positional bindings.",
+          "type": "array",
+          "items": { "$ref": "binding.schema.json#/$defs/encodingBinding" },
+          "maxItems": 16
+        },
+
+        "slots": {
+          "description": "Child layout for layout and composite components, keyed by the slot names the manifest declares.",
+          "type": "object",
+          "propertyNames": { "$ref": "common.schema.json#/$defs/memberName" },
+          "additionalProperties": { "$ref": "layout.schema.json#/$defs/children" }
+        },
+
+        "eventActions": {
+          "description": "Maps component events to page actions. The component emits 'rowActivated'; the page decides that means drill through to the security detail experience. This indirection is what keeps components context-free and interaction AI-generatable.",
+          "type": "object",
+          "propertyNames": { "$ref": "common.schema.json#/$defs/memberName" },
+          "additionalProperties": {
+            "oneOf": [
+              { "$ref": "common.schema.json#/$defs/localRef" },
+              {
+                "type": "array",
+                "items": { "$ref": "common.schema.json#/$defs/localRef" },
+                "minItems": 1,
+                "maxItems": 8
+              }
+            ]
+          }
+        },
+
+        "writesTo": {
+          "description": "Channels this component publishes to. Declared rather than inferred, so the renderer can build the invalidation graph at compile time and so the Studio can show an author what a widget affects.",
+          "type": "object",
+          "properties": {
+            "filters": {
+              "type": "array",
+              "items": { "$ref": "common.schema.json#/$defs/identifier" },
+              "maxItems": 16
+            },
+            "selections": {
+              "type": "array",
+              "items": { "$ref": "common.schema.json#/$defs/identifier" },
+              "maxItems": 16
+            }
+          },
+          "additionalProperties": false
+        },
+
+        "visible": { "$ref": "common.schema.json#/$defs/condition" },
+        "security": { "$ref": "security.schema.json#/$defs/elementSecurity" },
+
+        "stateOverrides": {
+          "description": "Overrides for the six mandated states. Present so a page can say something domain-specific — 'No exceptions outstanding' rather than 'No data' — without a component variant.",
+          "type": "object",
+          "properties": {
+            "empty": { "$ref": "#/$defs/statePresentation" },
+            "error": { "$ref": "#/$defs/statePresentation" },
+            "denied": { "$ref": "#/$defs/statePresentation" },
+            "partial": { "$ref": "#/$defs/statePresentation" },
+            "loading": {
+              "type": "object",
+              "properties": {
+                "skeleton": { "type": "string", "enum": ["block", "tile", "table", "chart", "list", "text"] }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+
+        "deniedBehaviour": {
+          "description": "What to render when the caller lacks entitlement to this component's data. Default 'deniedState' is deliberate: silently hiding a widget makes a page look complete when it is not, and 'not available to you' is honest and legible. Hiding is available where the widget's existence is itself sensitive.",
+          "type": "string",
+          "enum": ["deniedState", "hide", "placeholder"],
+          "default": "deniedState"
+        },
+
+        "notes": {
+          "description": "Author or generator commentary. Not rendered.",
+          "type": "string",
+          "maxLength": 2048
+        }
+      },
+      "required": ["id", "type", "typeVersion"],
+      "additionalProperties": false
+    },
+
+    "statePresentation": {
+      "type": "object",
+      "properties": {
+        "title": { "$ref": "common.schema.json#/$defs/i18nString" },
+        "message": { "$ref": "common.schema.json#/$defs/i18nString" },
+        "icon": { "type": "string", "maxLength": 64 },
+        "action": {
+          "description": "Recovery affordance — retry, clear filters, request access.",
+          "$ref": "common.schema.json#/$defs/localRef"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

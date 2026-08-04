@@ -1,0 +1,589 @@
+{
+  "schemaVersion": "1.0",
+  "id": "security-master-operations",
+  "name": "Security Master Operations",
+  "description": "Today's processing health, exceptions and new securities.",
+  "kind": "dashboard",
+  "route": "operations",
+
+  "parameters": {
+    "as-of": {
+      "label": "As Of",
+      "dataType": "date",
+      "scope": "experience",
+      "syncToUrl": true,
+      "default": { "$expr": "today()" },
+      "description": "Business date the whole dashboard is reported for."
+    }
+  },
+
+  "filters": {
+    "asset-class": {
+      "label": "Asset Class",
+      "dataType": "enum",
+      "multiValued": true,
+      "boundToAttribute": "securities.security.asset-class",
+      "syncToUrl": true,
+      "persist": "user"
+    },
+    "severity": {
+      "label": "Severity",
+      "dataType": "enum",
+      "multiValued": true,
+      "boundToAttribute": "dq.exception.severity",
+      "syncToUrl": true
+    }
+  },
+
+  "selections": {
+    "focused-exception": {
+      "label": "Focused Exception",
+      "mode": "single",
+      "entity": "dq.exception",
+      "keyFields": ["exception-id"],
+      "syncToUrl": false
+    }
+  },
+
+  "dataSources": {
+    "late-files": {
+      "id": "late-files",
+      "name": "Late Files Today",
+      "entity": "processing.file-load",
+      "kind": "aggregate",
+      "select": {
+        "measures": [{ "measure": "late-file-count", "aggregation": "count", "alias": "late-count" }]
+      },
+      "filter": {
+        "all": [
+          { "target": "business-date", "operator": "eq", "value": { "$param": "as-of" } },
+          { "target": "load-status", "operator": "eq", "value": "LATE" }
+        ]
+      },
+      "loadPolicy": "eager",
+      "expectedCostClass": "low"
+    },
+
+    "failed-files": {
+      "id": "failed-files",
+      "name": "Failed Files Today",
+      "entity": "processing.file-load",
+      "kind": "aggregate",
+      "select": {
+        "measures": [{ "measure": "failed-file-count", "aggregation": "count", "alias": "failed-count" }]
+      },
+      "filter": {
+        "all": [
+          { "target": "business-date", "operator": "eq", "value": { "$param": "as-of" } },
+          { "target": "load-status", "operator": "eq", "value": "FAILED" }
+        ]
+      },
+      "loadPolicy": "eager"
+    },
+
+    "new-securities": {
+      "id": "new-securities",
+      "name": "New Securities Today",
+      "entity": "securities.security",
+      "kind": "aggregate",
+      "select": {
+        "measures": [{ "measure": "security-count", "aggregation": "count", "alias": "new-count" }]
+      },
+      "filter": {
+        "all": [
+          { "target": "created-at", "operator": "inLast", "value": 1, "unit": "businessDay" },
+          { "target": "asset-class", "operator": "in", "value": { "$filter": "asset-class" }, "skipWhenEmpty": true }
+        ]
+      },
+      "effectiveDating": { "asOf": { "$param": "as-of" } },
+      "loadPolicy": "eager"
+    },
+
+    "open-exceptions": {
+      "id": "open-exceptions",
+      "name": "Open Exceptions",
+      "entity": "dq.exception",
+      "kind": "aggregate",
+      "select": {
+        "measures": [{ "measure": "exception-count", "aggregation": "count", "alias": "open-count" }]
+      },
+      "filter": {
+        "all": [
+          { "target": "exception-status", "operator": "in", "value": ["OPEN", "IN_PROGRESS"] },
+          { "target": "severity", "operator": "in", "value": { "$filter": "severity" }, "skipWhenEmpty": true }
+        ]
+      },
+      "loadPolicy": "eager"
+    },
+
+    "exceptions-by-severity": {
+      "id": "exceptions-by-severity",
+      "name": "Open Exceptions by Severity and Day",
+      "entity": "dq.exception",
+      "kind": "aggregate",
+      "select": {
+        "measures": [{ "measure": "exception-count", "aggregation": "count", "alias": "exception-count" }],
+        "dimensions": [
+          { "attribute": "detected-at", "alias": "day", "granularity": "day", "label": "Detected" },
+          { "attribute": "severity", "alias": "severity", "label": "Severity" }
+        ]
+      },
+      "filter": {
+        "all": [
+          { "target": "exception-status", "operator": "in", "value": ["OPEN", "IN_PROGRESS"] },
+          { "target": "detected-at", "operator": "inLast", "value": 14, "unit": "day" },
+          { "target": "severity", "operator": "in", "value": { "$filter": "severity" }, "skipWhenEmpty": true }
+        ]
+      },
+      "sort": [{ "field": "day", "direction": "asc" }],
+      "loadPolicy": "eager"
+    },
+
+    "exception-queue": {
+      "id": "exception-queue",
+      "name": "Exception Queue",
+      "entity": "dq.exception",
+      "kind": "list",
+      "select": {
+        "attributes": [
+          { "attribute": "exception-id", "alias": "exception-id" },
+          { "attribute": "security-id", "alias": "security-id" },
+          { "attribute": "issuer.legal-name", "alias": "security-name", "label": "Security" },
+          { "attribute": "rule-name", "alias": "rule" },
+          { "attribute": "severity", "alias": "severity" },
+          { "attribute": "exception-status", "alias": "status" },
+          { "attribute": "detected-at", "alias": "detected" },
+          { "attribute": "assigned-to", "alias": "assignee" }
+        ]
+      },
+      "traversals": [
+        { "relationship": "dq.exception.security", "alias": "issuer" }
+      ],
+      "filter": {
+        "all": [
+          { "target": "exception-status", "operator": "in", "value": ["OPEN", "IN_PROGRESS"] },
+          { "target": "severity", "operator": "in", "value": { "$filter": "severity" }, "skipWhenEmpty": true },
+          { "target": "issuer.asset-class", "operator": "in", "value": { "$filter": "asset-class" }, "skipWhenEmpty": true }
+        ]
+      },
+      "sort": [
+        { "field": "severity", "direction": "asc" },
+        { "field": "detected", "direction": "desc" }
+      ],
+      "paging": { "mode": "cursor", "pageSize": 50, "maxRows": 5000 },
+      "loadPolicy": "eager",
+      "refresh": { "mode": "interval", "intervalSeconds": 120 }
+    }
+  },
+
+  "components": {
+    "filter-bar": {
+      "id": "filter-bar",
+      "type": "data.filter-bar",
+      "typeVersion": "1.2.0",
+      "title": "Filters",
+      "config": { "layout": "inline", "showClearAll": true },
+      "writesTo": { "filters": ["asset-class", "severity"] },
+      "eventActions": { "cleared": "clear-all-filters" }
+    },
+
+    "kpi-late-files": {
+      "id": "kpi-late-files",
+      "type": "analytics.kpi-card",
+      "typeVersion": "1.4.0",
+      "title": "Late Files",
+      "description": "Inbound files past their expected time and not yet complete.",
+      "dataSource": "late-files",
+      "config": { "size": "md", "showThresholdBand": true, "showTrendArrow": false },
+      "bindings": {
+        "value": { "field": "late-count", "format": { "style": "integer" } }
+      },
+      "eventActions": { "activated": "go-to-processing" }
+    },
+
+    "kpi-failed-files": {
+      "id": "kpi-failed-files",
+      "type": "analytics.kpi-card",
+      "typeVersion": "1.4.0",
+      "title": "Failed Files",
+      "description": "Inbound files that failed processing today.",
+      "dataSource": "failed-files",
+      "config": { "size": "md", "showThresholdBand": true },
+      "bindings": { "value": { "field": "failed-count", "format": { "style": "integer" } } },
+      "eventActions": { "activated": "go-to-processing" }
+    },
+
+    "kpi-new-securities": {
+      "id": "kpi-new-securities",
+      "type": "analytics.kpi-card",
+      "typeVersion": "1.4.0",
+      "title": "New Securities",
+      "description": "Securities added on the selected business date.",
+      "dataSource": "new-securities",
+      "config": { "size": "md" },
+      "bindings": { "value": { "field": "new-count", "format": { "style": "integer" } } }
+    },
+
+    "kpi-open-exceptions": {
+      "id": "kpi-open-exceptions",
+      "type": "analytics.kpi-card",
+      "typeVersion": "1.4.0",
+      "title": "Open Exceptions",
+      "description": "Data quality exceptions awaiting resolution.",
+      "dataSource": "open-exceptions",
+      "config": { "size": "md", "showThresholdBand": true },
+      "bindings": { "value": { "field": "open-count", "format": { "style": "integer" } } },
+      "eventActions": { "activated": "focus-exception-queue" }
+    },
+
+    "exception-trend": {
+      "id": "exception-trend",
+      "type": "analytics.chart",
+      "typeVersion": "2.1.0",
+      "title": "Open Exceptions — Last 14 Days",
+      "description": "Daily count of open exceptions, split by severity.",
+      "dataSource": "exceptions-by-severity",
+      "config": {
+        "mark": "bar",
+        "stacking": "stacked",
+        "legend": { "position": "bottom" },
+        "emptyMessageKey": "chart.noExceptions"
+      },
+      "encodings": [
+        {
+          "channel": "x",
+          "binding": { "field": "day", "label": "Detected" },
+          "scale": { "type": "time" },
+          "axis": { "title": "Date", "gridlines": false }
+        },
+        {
+          "channel": "y",
+          "binding": { "field": "exception-count", "label": "Exceptions", "format": { "style": "integer" } },
+          "scale": { "type": "linear", "zero": true },
+          "axis": { "title": "Open Exceptions" }
+        },
+        {
+          "channel": "series",
+          "binding": { "field": "severity", "label": "Severity" }
+        }
+      ],
+      "eventActions": { "segmentActivated": "filter-by-severity" }
+    },
+
+    "exception-grid": {
+      "id": "exception-grid",
+      "type": "data.grid",
+      "typeVersion": "3.0.0",
+      "title": "Exception Queue",
+      "description": "Open and in-progress data quality exceptions.",
+      "dataSource": "exception-queue",
+      "config": {
+        "selectionMode": "single",
+        "density": "compact",
+        "showColumnMenu": true,
+        "virtualized": true
+      },
+      "bindings": {
+        "columns": [
+          { "field": "security-id", "label": "Security ID", "width": "140px", "renderAs": "link", "action": "drill-to-security" },
+          { "field": "security-name", "label": "Security", "width": "fit" },
+          { "field": "rule", "label": "Rule", "width": "200px" },
+          {
+            "field": "severity",
+            "label": "Severity",
+            "width": "110px",
+            "renderAs": "badge",
+            "conditionalFormats": [
+              { "when": { "$expr": "$row.severity == 'HIGH'" }, "emphasis": "negative" },
+              { "when": { "$expr": "$row.severity == 'MEDIUM'" }, "emphasis": "warning" }
+            ]
+          },
+          { "field": "status", "label": "Status", "width": "130px", "renderAs": "badge" },
+          { "field": "detected", "label": "Detected", "width": "160px", "format": { "style": "datetime" } },
+          { "field": "assignee", "label": "Assigned To", "width": "160px", "emptyValue": "Unassigned" },
+          { "field": "exception-id", "hidden": true }
+        ]
+      },
+      "writesTo": { "selections": ["focused-exception"] },
+      "eventActions": {
+        "rowActivated": "drill-to-exception",
+        "selectionChanged": "set-focused-exception"
+      },
+      "stateOverrides": {
+        "empty": {
+          "title": "No outstanding exceptions",
+          "message": "Nothing requires attention for the selected filters.",
+          "icon": "check-circle"
+        },
+        "denied": {
+          "title": "Exception data not available to you",
+          "message": "Your entitlements do not include data quality exceptions. Contact your administrator if you need access.",
+          "icon": "lock"
+        }
+      },
+      "deniedBehaviour": "deniedState"
+    }
+  },
+
+  "layout": {
+    "kind": "container",
+    "id": "root",
+    "container": {
+      "type": "grid",
+      "gap": "md",
+      "children": [
+        {
+          "kind": "widget",
+          "id": "w-filters",
+          "component": "filter-bar",
+          "placement": { "colStart": 1, "colSpan": 12 }
+        },
+        {
+          "kind": "container",
+          "id": "kpi-row",
+          "container": {
+            "type": "stack",
+            "direction": "row",
+            "gap": "md",
+            "wrap": true,
+            "directionByBreakpoint": { "xs": "column", "sm": "column" },
+            "children": [
+              { "kind": "widget", "id": "w-kpi-late", "component": "kpi-late-files", "placement": { "colSpan": 3, "breakpoints": { "md": { "colSpan": 6 }, "xs": { "colSpan": 12 } } } },
+              { "kind": "widget", "id": "w-kpi-failed", "component": "kpi-failed-files", "placement": { "colSpan": 3, "breakpoints": { "md": { "colSpan": 6 }, "xs": { "colSpan": 12 } } } },
+              { "kind": "widget", "id": "w-kpi-new", "component": "kpi-new-securities", "placement": { "colSpan": 3, "breakpoints": { "md": { "colSpan": 6 }, "xs": { "colSpan": 12 } } } },
+              { "kind": "widget", "id": "w-kpi-open", "component": "kpi-open-exceptions", "placement": { "colSpan": 3, "breakpoints": { "md": { "colSpan": 6 }, "xs": { "colSpan": 12 } } } }
+            ]
+          },
+          "placement": { "colStart": 1, "colSpan": 12 }
+        },
+        {
+          "kind": "container",
+          "id": "trend-panel",
+          "container": {
+            "type": "panel",
+            "title": "Exception Trend",
+            "variant": "bordered",
+            "children": [
+              { "kind": "widget", "id": "w-trend", "component": "exception-trend", "placement": { "colSpan": 12, "minHeight": "320px" } }
+            ]
+          },
+          "placement": { "colStart": 1, "colSpan": 12, "breakpoints": { "xl": { "colSpan": 5 } } }
+        },
+        {
+          "kind": "container",
+          "id": "queue-panel",
+          "container": {
+            "type": "panel",
+            "title": "Exception Queue",
+            "variant": "bordered",
+            "headerActions": ["export-exceptions", "refresh-queue"],
+            "children": [
+              { "kind": "widget", "id": "w-queue", "component": "exception-grid", "placement": { "colSpan": 12, "minHeight": "420px" } }
+            ]
+          },
+          "placement": { "colStart": 1, "colSpan": 12, "breakpoints": { "xl": { "colSpan": 7 } } }
+        }
+      ]
+    }
+  },
+
+  "actions": {
+    "drill-to-security": {
+      "id": "drill-to-security",
+      "kind": "drilldown",
+      "label": "Open Security",
+      "entity": "securities.security",
+      "key": { "security-id": { "$context": "$event.security-id" } },
+      "carryContext": true,
+      "openIn": "self"
+    },
+    "drill-to-exception": {
+      "id": "drill-to-exception",
+      "kind": "drilldown",
+      "label": "Open Exception",
+      "entity": "dq.exception",
+      "key": { "exception-id": { "$context": "$event.exception-id" } },
+      "openIn": "drawer"
+    },
+    "filter-by-severity": {
+      "id": "filter-by-severity",
+      "kind": "setFilter",
+      "label": "Filter by Severity",
+      "channel": "severity",
+      "value": { "$context": "$event.series" },
+      "mode": "toggle"
+    },
+    "set-focused-exception": {
+      "id": "set-focused-exception",
+      "kind": "setSelection",
+      "channel": "focused-exception",
+      "value": { "$context": "$event.exception-id" }
+    },
+    "clear-all-filters": {
+      "id": "clear-all-filters",
+      "kind": "clearFilters",
+      "label": "Clear Filters"
+    },
+    "focus-exception-queue": {
+      "id": "focus-exception-queue",
+      "kind": "setFilter",
+      "label": "Show Open Exceptions",
+      "channel": "severity",
+      "value": ["HIGH", "MEDIUM", "LOW"],
+      "mode": "replace"
+    },
+    "go-to-processing": {
+      "id": "go-to-processing",
+      "kind": "navigate",
+      "label": "Processing Detail",
+      "target": { "page": "processing-detail" },
+      "params": { "as-of": { "$param": "as-of" } },
+      "carryContext": true
+    },
+    "refresh-queue": {
+      "id": "refresh-queue",
+      "kind": "refresh",
+      "label": "Refresh",
+      "icon": "refresh",
+      "dataSources": ["exception-queue", "open-exceptions"]
+    },
+    "export-exceptions": {
+      "id": "export-exceptions",
+      "kind": "export",
+      "label": "Export",
+      "icon": "download",
+      "dataSource": "exception-queue",
+      "scope": "all",
+      "format": "xlsx",
+      "includeMetadata": true,
+      "auditProfile": "elevated",
+      "security": { "requiredCapabilities": ["export.data"] },
+      "confirm": {
+        "message": "Export the current exception queue? The export will carry your entitlements and be recorded in the audit trail.",
+        "requiresReason": true
+      }
+    }
+  },
+
+  "navigation": {
+    "breadcrumbs": { "mode": "auto" },
+    "pageActions": ["export-exceptions", "refresh-queue"]
+  },
+
+  "security": {
+    "intendedAudience": "Securities operations analysts and data stewards.",
+    "requiredCapabilities": ["experience.view"],
+    "workspaceScope": "tenant",
+    "deniedDataPolicy": "showDeniedState",
+    "sensitivityDeclaration": {
+      "maxSensitivity": "pii",
+      "contributingRefs": ["dq.exception.assigned-to", "dq.exception.detail"],
+      "computedAt": "2026-08-03T11:02:00Z",
+      "computedFromCatalogVersion": 7
+    },
+    "exportPolicy": {
+      "allowed": true,
+      "formats": ["csv", "xlsx"],
+      "maxRows": 50000,
+      "requiresReason": true,
+      "watermark": true
+    },
+    "auditProfile": "standard"
+  },
+
+  "presentation": {
+    "themeRef": "opus.default",
+    "density": "comfortable",
+    "maxWidth": "full",
+    "showPageHeader": true
+  },
+
+  "localization": {
+    "defaultLocale": "en-GB",
+    "supportedLocales": ["en-GB", "en-US", "de-DE"],
+    "stringTableRef": "securities.operations.strings"
+  },
+
+  "performance": {
+    "renderBudgetMs": 2500,
+    "maxEagerDataSources": 8,
+    "autoRefreshSeconds": 300
+  },
+
+  "version": {
+    "schemaVersion": "1.0",
+    "artifactVersion": 14,
+    "lifecycleState": "published",
+    "immutable": true,
+    "pins": { "catalogVersion": 7, "registryVersion": "3.2.0" },
+    "lineage": { "basedOnVersion": 13, "supersedes": 13 },
+    "provenance": {
+      "origin": "aiRefined",
+      "actorId": "analyst@demo-tenant",
+      "createdAt": "2026-08-03T10:41:00Z",
+      "generation": {
+        "prompt": "Create a Security Master operational dashboard showing today's processing status, late files, failed files, new securities, and data quality issues.",
+        "intentClass": "create",
+        "promptTemplateVersion": "1.3.0",
+        "modelId": "generation-model",
+        "modelVersion": "2026-06-01",
+        "temperature": 0.2,
+        "retrievedConcepts": [
+          "processing.file-load",
+          "processing.file-load.late-file-count",
+          "processing.file-load.failed-file-count",
+          "securities.security",
+          "securities.security.security-count",
+          "dq.exception",
+          "dq.exception.exception-count"
+        ],
+        "exemplarTemplateIds": ["platform.ops-dashboard-4kpi-trend-queue"],
+        "validationAttempts": 2,
+        "repairedStages": ["binding"],
+        "fallbackUsed": false,
+        "tokensIn": 14820,
+        "tokensOut": 3960,
+        "costEstimate": 0.42,
+        "durationMs": 18400,
+        "correlationId": "gen-7f3c9a12"
+      },
+      "editSummary": {
+        "patchOperationCount": 11,
+        "humanPatchOperations": 9,
+        "aiPatchOperations": 2,
+        "summary": "Author renamed two KPI titles, added the export action, widened the queue panel at xl, and requested a stacked bar instead of a line via follow-up prompt."
+      }
+    },
+    "validation": {
+      "status": "validWithWarnings",
+      "stagesPassed": ["structural", "component", "semantic", "binding", "entitlement", "cost", "layout", "accessibility"],
+      "warnings": [
+        {
+          "stage": "cost",
+          "path": "/dataSources/exception-queue",
+          "code": "highRowCeiling",
+          "message": "maxRows of 5000 with a 120s refresh interval is close to the tenant page cost budget."
+        }
+      ],
+      "validatedAt": "2026-08-03T11:02:00Z"
+    },
+    "governance": {
+      "submittedBy": "analyst@demo-tenant",
+      "submittedAt": "2026-08-03T11:05:00Z",
+      "approvedBy": ["ops-lead@demo-tenant"],
+      "approvedAt": "2026-08-03T14:20:00Z",
+      "approvalNote": "Reviewed sensitivity declaration; assignee column is masked for non-entitled users.",
+      "publishedBy": "ops-lead@demo-tenant",
+      "publishedAt": "2026-08-03T14:22:00Z",
+      "publishedEnvironments": ["uat", "production"]
+    },
+    "audit": {
+      "createdBy": "analyst@demo-tenant",
+      "createdAt": "2026-08-03T10:41:00Z",
+      "modifiedBy": "analyst@demo-tenant",
+      "modifiedAt": "2026-08-03T11:01:00Z"
+    }
+  },
+
+  "tags": ["operations", "securities", "data-quality"]
+}

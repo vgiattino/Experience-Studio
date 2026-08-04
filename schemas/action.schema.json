@@ -1,0 +1,373 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.opus.gresham.com/experience-studio/v1/action.schema.json",
+  "title": "Action Model",
+  "description": "A named, declarative behaviour a page can perform. Actions are the platform's only mechanism for anything to happen: components emit events, pages map events to actions, and the runtime executes them. Keeping behaviour declarative is what makes interaction generatable by the AI and analysable by the renderer — interaction expressed in component code would be permanently outside both.\n\nThis model also carries the forward seam for write-back (v2) and workflow (v3). Those kinds are defined here, deliberately, so that adding them later is additive rather than a breaking change to a schema that thousands of stored definitions conform to. They are marked reserved and rejected by the v1 platform validator.",
+
+  "$defs": {
+
+    "action": {
+      "allOf": [
+        { "$ref": "#/$defs/actionCommon" },
+        { "$ref": "#/$defs/actionKind" }
+      ],
+      "unevaluatedProperties": false
+    },
+
+    "actionCommon": {
+      "type": "object",
+      "properties": {
+        "id": { "$ref": "common.schema.json#/$defs/identifier" },
+        "label": { "$ref": "common.schema.json#/$defs/i18nString" },
+        "description": { "$ref": "common.schema.json#/$defs/i18nString" },
+        "icon": { "type": "string", "maxLength": 64 },
+        "emphasis": {
+          "type": "string",
+          "enum": ["primary", "secondary", "tertiary", "destructive"],
+          "default": "secondary"
+        },
+        "enabled": { "$ref": "common.schema.json#/$defs/condition" },
+        "visible": { "$ref": "common.schema.json#/$defs/condition" },
+        "security": { "$ref": "security.schema.json#/$defs/elementSecurity" },
+        "confirm": {
+          "description": "Confirmation prompt shown before execution. Required by validation for any action with side effects.",
+          "type": "object",
+          "properties": {
+            "title": { "$ref": "common.schema.json#/$defs/i18nString" },
+            "message": { "$ref": "common.schema.json#/$defs/i18nString" },
+            "confirmLabel": { "$ref": "common.schema.json#/$defs/i18nString" },
+            "requiresReason": {
+              "description": "Prompt for a free-text reason recorded in the audit trail — the norm for data overrides in a governed environment.",
+              "type": "boolean",
+              "default": false
+            }
+          },
+          "required": ["message"],
+          "additionalProperties": false
+        },
+        "auditProfile": {
+          "description": "'elevated' forces an audit record even for read-only actions. Applied to export and to anything that moves data outside the platform.",
+          "type": "string",
+          "enum": ["standard", "elevated"],
+          "default": "standard"
+        },
+        "keyboardShortcut": { "type": "string", "maxLength": 32 }
+      },
+      "required": ["id"]
+    },
+
+    "actionKind": {
+      "discriminator": { "propertyName": "kind" },
+      "oneOf": [
+        { "$ref": "#/$defs/navigateAction" },
+        { "$ref": "#/$defs/drilldownAction" },
+        { "$ref": "#/$defs/setFilterAction" },
+        { "$ref": "#/$defs/clearFiltersAction" },
+        { "$ref": "#/$defs/setParameterAction" },
+        { "$ref": "#/$defs/setSelectionAction" },
+        { "$ref": "#/$defs/refreshAction" },
+        { "$ref": "#/$defs/exportAction" },
+        { "$ref": "#/$defs/openUrlAction" },
+        { "$ref": "#/$defs/openOverlayAction" },
+        { "$ref": "#/$defs/compositeAction" },
+        { "$ref": "#/$defs/invokeAction" },
+        { "$ref": "#/$defs/workflowAction" }
+      ]
+    },
+
+    "navigateAction": {
+      "description": "Move to another page or experience, mapping parameters explicitly.",
+      "type": "object",
+      "properties": {
+        "kind": { "const": "navigate" },
+        "target": {
+          "type": "object",
+          "properties": {
+            "experience": {
+              "description": "Omitted means the current experience.",
+              "type": "string",
+              "maxLength": 256
+            },
+            "page": { "$ref": "common.schema.json#/$defs/identifier" },
+            "tab": {
+              "description": "Deep-link a specific tab of the target page.",
+              "$ref": "common.schema.json#/$defs/identifier"
+            }
+          },
+          "required": ["page"],
+          "additionalProperties": false
+        },
+        "params": {
+          "description": "Target parameter values. Values typically come from the triggering event payload via $context, e.g. { \"securityId\": { \"$context\": \"$event.securityId\" } }.",
+          "type": "object",
+          "propertyNames": { "$ref": "common.schema.json#/$defs/identifier" },
+          "additionalProperties": { "$ref": "common.schema.json#/$defs/computableValue" }
+        },
+        "carryContext": {
+          "description": "Carry experience-scoped parameters through, so an as-of date chosen on a dashboard survives a drill into detail. Without this, every drill-down silently resets shared context.",
+          "type": "boolean",
+          "default": true
+        },
+        "openIn": {
+          "type": "string",
+          "enum": ["self", "newTab", "drawer", "modal"],
+          "default": "self"
+        }
+      },
+      "required": ["kind", "target"]
+    },
+
+    "drilldownAction": {
+      "description": "Navigate into an instance of a catalog entity without naming a target page. The target resolves from the entity's defaultDetailExperience, and key parameters are derived from the entity's primaryKey. This is the generic form: any component bound to an entity can offer drill-down, every page drills to the same place, and the AI does not have to know the page graph to generate a working drill-through.",
+      "type": "object",
+      "properties": {
+        "kind": { "const": "drilldown" },
+        "entity": { "$ref": "common.schema.json#/$defs/qualifiedRef" },
+        "key": {
+          "description": "Primary key values, keyed by the entity's primaryKey attribute ids. Omitted means take them from the triggering event payload by matching names.",
+          "type": "object",
+          "propertyNames": { "$ref": "common.schema.json#/$defs/identifier" },
+          "additionalProperties": { "$ref": "common.schema.json#/$defs/computableValue" }
+        },
+        "targetOverride": {
+          "description": "Explicit target, overriding the entity default. Present as an escape hatch; using it forfeits the consistency the generic form provides.",
+          "type": "object",
+          "properties": {
+            "experience": { "type": "string", "maxLength": 256 },
+            "page": { "$ref": "common.schema.json#/$defs/identifier" },
+            "tab": { "$ref": "common.schema.json#/$defs/identifier" }
+          },
+          "required": ["page"],
+          "additionalProperties": false
+        },
+        "additionalParams": {
+          "type": "object",
+          "propertyNames": { "$ref": "common.schema.json#/$defs/identifier" },
+          "additionalProperties": { "$ref": "common.schema.json#/$defs/computableValue" }
+        },
+        "carryContext": { "type": "boolean", "default": true },
+        "openIn": { "type": "string", "enum": ["self", "newTab", "drawer", "modal"], "default": "self" }
+      },
+      "required": ["kind", "entity"]
+    },
+
+    "setFilterAction": {
+      "description": "Write to a shared filter channel. The declarative form of cross-widget filtering: clicking a chart segment filters the grid beside it.",
+      "type": "object",
+      "properties": {
+        "kind": { "const": "setFilter" },
+        "channel": { "$ref": "common.schema.json#/$defs/identifier" },
+        "value": { "$ref": "common.schema.json#/$defs/computableValue" },
+        "mode": {
+          "type": "string",
+          "enum": ["replace", "add", "remove", "toggle"],
+          "default": "replace"
+        }
+      },
+      "required": ["kind", "channel", "value"]
+    },
+
+    "clearFiltersAction": {
+      "type": "object",
+      "properties": {
+        "kind": { "const": "clearFilters" },
+        "channels": {
+          "description": "Omitted clears every channel on the page.",
+          "type": "array",
+          "items": { "$ref": "common.schema.json#/$defs/identifier" },
+          "maxItems": 32
+        }
+      },
+      "required": ["kind"]
+    },
+
+    "setParameterAction": {
+      "type": "object",
+      "properties": {
+        "kind": { "const": "setParameter" },
+        "parameter": { "$ref": "common.schema.json#/$defs/identifier" },
+        "value": { "$ref": "common.schema.json#/$defs/computableValue" },
+        "updateUrl": {
+          "description": "Reflect the change in the URL so the resulting view is shareable and bookmarkable.",
+          "type": "boolean",
+          "default": true
+        }
+      },
+      "required": ["kind", "parameter", "value"]
+    },
+
+    "setSelectionAction": {
+      "type": "object",
+      "properties": {
+        "kind": { "const": "setSelection" },
+        "channel": { "$ref": "common.schema.json#/$defs/identifier" },
+        "value": { "$ref": "common.schema.json#/$defs/computableValue" },
+        "mode": { "type": "string", "enum": ["replace", "add", "remove", "toggle", "clear"], "default": "replace" }
+      },
+      "required": ["kind", "channel"]
+    },
+
+    "refreshAction": {
+      "type": "object",
+      "properties": {
+        "kind": { "const": "refresh" },
+        "dataSources": {
+          "description": "Omitted refreshes every source on the page.",
+          "type": "array",
+          "items": { "$ref": "common.schema.json#/$defs/localRef" },
+          "maxItems": 32
+        },
+        "bypassCache": { "type": "boolean", "default": false }
+      },
+      "required": ["kind"]
+    },
+
+    "exportAction": {
+      "description": "Export data. Governed as a data egress event: the export carries the exporter's entitlements, is audited, and is subject to tenant export policy. Every other control in the platform applies to data on a screen; a spreadsheet leaves the perimeter entirely.",
+      "type": "object",
+      "properties": {
+        "kind": { "const": "export" },
+        "dataSource": { "$ref": "common.schema.json#/$defs/localRef" },
+        "scope": {
+          "description": "'view' exports what is displayed; 'all' re-queries without paging, subject to the export row limit.",
+          "type": "string",
+          "enum": ["view", "all"],
+          "default": "view"
+        },
+        "format": { "type": "string", "enum": ["csv", "xlsx", "pdf", "json"] },
+        "fileNameTemplate": { "type": "string", "maxLength": 256 },
+        "includeMetadata": {
+          "description": "Stamp the export with as-of date, filters applied, user and timestamp. Strongly recommended: an undated extract of governed data is a compliance liability.",
+          "type": "boolean",
+          "default": true
+        }
+      },
+      "required": ["kind", "dataSource", "format"]
+    },
+
+    "openUrlAction": {
+      "description": "Open an external URL. The template is restricted to declared parameters and cannot be assembled from arbitrary data, which prevents a definition being used to build an exfiltration endpoint.",
+      "type": "object",
+      "properties": {
+        "kind": { "const": "openUrl" },
+        "urlTemplate": { "type": "string", "maxLength": 1024 },
+        "params": {
+          "type": "object",
+          "propertyNames": { "$ref": "common.schema.json#/$defs/identifier" },
+          "additionalProperties": { "$ref": "common.schema.json#/$defs/computableValue" }
+        },
+        "target": { "type": "string", "enum": ["newTab", "self"], "default": "newTab" }
+      },
+      "required": ["kind", "urlTemplate"]
+    },
+
+    "openOverlayAction": {
+      "description": "Open a drawer or modal declared in the page layout, without navigating.",
+      "type": "object",
+      "properties": {
+        "kind": { "const": "openOverlay" },
+        "overlay": { "$ref": "common.schema.json#/$defs/localRef" },
+        "params": {
+          "type": "object",
+          "propertyNames": { "$ref": "common.schema.json#/$defs/identifier" },
+          "additionalProperties": { "$ref": "common.schema.json#/$defs/computableValue" }
+        }
+      },
+      "required": ["kind", "overlay"]
+    },
+
+    "compositeAction": {
+      "description": "Ordered sequence of other actions — set a filter, then refresh, then open a drawer. Sequencing is explicit rather than emergent, so behaviour is predictable and reviewable.",
+      "type": "object",
+      "properties": {
+        "kind": { "const": "composite" },
+        "steps": {
+          "type": "array",
+          "items": { "$ref": "common.schema.json#/$defs/localRef" },
+          "minItems": 1,
+          "maxItems": 16
+        },
+        "onError": { "type": "string", "enum": ["abort", "continue"], "default": "abort" }
+      },
+      "required": ["kind", "steps"]
+    },
+
+    "invokeAction": {
+      "description": "RESERVED — v2 write-back. Invokes a governed platform operation that mutates EDM data: an override, a correction, an approval, a bulk update. Defined now so that the seam exists: adding write-back later becomes a new action kind plus an operation registry, not a breaking change to the action model. The v1 platform validator rejects this kind.",
+      "x-stability": "reserved",
+      "x-availableFrom": "v2",
+      "type": "object",
+      "properties": {
+        "kind": { "const": "invoke" },
+        "operation": {
+          "description": "Operation id from the governed operation registry. Operations are server-defined and entitlement-checked; a definition can only ever reference one, never describe one.",
+          "type": "string",
+          "maxLength": 256
+        },
+        "payload": {
+          "type": "object",
+          "propertyNames": { "$ref": "common.schema.json#/$defs/identifier" },
+          "additionalProperties": { "$ref": "common.schema.json#/$defs/computableValue" }
+        },
+        "targetSelection": {
+          "description": "Selection channel supplying the rows to act on, for bulk operations.",
+          "$ref": "common.schema.json#/$defs/identifier"
+        },
+        "idempotencyKeyFrom": {
+          "description": "Expression producing a stable idempotency key, so a retried invocation cannot double-apply.",
+          "$ref": "common.schema.json#/$defs/expression"
+        },
+        "optimisticConcurrency": {
+          "description": "Field carrying the row version the user saw. Required for safe concurrent editing of governed data.",
+          "$ref": "common.schema.json#/$defs/identifier"
+        },
+        "onSuccess": {
+          "type": "array",
+          "items": { "$ref": "common.schema.json#/$defs/localRef" },
+          "maxItems": 8
+        },
+        "onFailure": {
+          "type": "array",
+          "items": { "$ref": "common.schema.json#/$defs/localRef" },
+          "maxItems": 8
+        }
+      },
+      "required": ["kind", "operation"]
+    },
+
+    "workflowAction": {
+      "description": "RESERVED — v3 workflow. Interacts with a workflow instance: start a process, complete a task, approve, reject, reassign, escalate. Present as a seam only. Workflow is a distinct product surface with its own definition schema — state machines, task assignment, SLAs, escalation, compensation — and is deliberately not modelled here; what is modelled is the point at which a page touches it. The v1 platform validator rejects this kind.",
+      "x-stability": "reserved",
+      "x-availableFrom": "v3",
+      "type": "object",
+      "properties": {
+        "kind": { "const": "workflow" },
+        "operation": {
+          "type": "string",
+          "enum": ["start", "completeTask", "approve", "reject", "reassign", "escalate", "comment", "cancel"]
+        },
+        "processDefinition": {
+          "description": "Workflow definition id, for 'start'.",
+          "type": "string",
+          "maxLength": 256
+        },
+        "taskRef": {
+          "description": "Task instance, for task operations. Normally bound from a selection channel over a task queue.",
+          "$ref": "common.schema.json#/$defs/computableValue"
+        },
+        "payload": {
+          "type": "object",
+          "propertyNames": { "$ref": "common.schema.json#/$defs/identifier" },
+          "additionalProperties": { "$ref": "common.schema.json#/$defs/computableValue" }
+        },
+        "assignTo": { "$ref": "common.schema.json#/$defs/computableValue" },
+        "onSuccess": {
+          "type": "array",
+          "items": { "$ref": "common.schema.json#/$defs/localRef" },
+          "maxItems": 8
+        }
+      },
+      "required": ["kind", "operation"]
+    }
+  }
+}

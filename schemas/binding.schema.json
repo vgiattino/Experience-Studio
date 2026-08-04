@@ -1,0 +1,128 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.opus.gresham.com/experience-studio/v1/binding.schema.json",
+  "title": "Data Binding Model",
+  "description": "Connects a component's declared data role to a field of a named data source. Bindings are the seam between the component contract (which roles exist) and the data model (which fields exist), and they are validated against both — the manifest supplies required roles, the data source supplies available aliases.",
+
+  "$defs": {
+
+    "bindingSet": {
+      "description": "All bindings for one component instance, keyed by the role names its manifest declares. Repeated roles such as grid columns or chart series take an array.",
+      "type": "object",
+      "propertyNames": { "$ref": "common.schema.json#/$defs/memberName" },
+      "additionalProperties": {
+        "oneOf": [
+          { "$ref": "#/$defs/fieldBinding" },
+          {
+            "type": "array",
+            "items": { "$ref": "#/$defs/fieldBinding" },
+            "minItems": 1,
+            "maxItems": 200
+          }
+        ]
+      }
+    },
+
+    "fieldBinding": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "description": "Data source id declared on the page. Omitted when the component instance declares a default dataSource and this binding uses it.",
+          "$ref": "common.schema.json#/$defs/localRef"
+        },
+        "field": {
+          "description": "Alias from the data source's select clause. Referencing the alias rather than the catalog attribute means a steward can re-point an attribute without touching component configuration.",
+          "$ref": "common.schema.json#/$defs/identifier"
+        },
+        "label": {
+          "description": "Display label override. Defaults to the data source field label, which defaults to the catalog business name — so a generated page is correctly labelled without the generator inventing text.",
+          "$ref": "common.schema.json#/$defs/i18nString"
+        },
+        "format": { "$ref": "common.schema.json#/$defs/formatSpec" },
+        "transform": {
+          "description": "Pure display transform over the bound value. Not a substitute for a catalog measure: anything reusable or business-meaningful belongs in the catalog where it can be governed.",
+          "$ref": "common.schema.json#/$defs/expression"
+        },
+        "conditionalFormats": {
+          "type": "array",
+          "items": { "$ref": "common.schema.json#/$defs/conditionalFormat" },
+          "maxItems": 16
+        },
+        "thresholds": {
+          "description": "Overrides the measure's defaultThresholds for this binding only.",
+          "type": "array",
+          "items": { "$ref": "common.schema.json#/$defs/threshold" },
+          "maxItems": 8
+        },
+        "emptyValue": { "$ref": "common.schema.json#/$defs/i18nString" },
+
+        "width": {
+          "description": "Column width hint, for tabular roles.",
+          "type": "string",
+          "pattern": "^([0-9]+(px|rem|%)|auto|fit)$"
+        },
+        "align": { "type": "string", "enum": ["start", "center", "end"] },
+        "sortable": { "type": "boolean" },
+        "filterable": { "type": "boolean" },
+        "groupable": { "type": "boolean" },
+        "pinned": { "type": "string", "enum": ["none", "start", "end"], "default": "none" },
+        "hidden": {
+          "description": "Bound but not displayed. Used to carry a key needed by a drill-down action without showing it.",
+          "type": "boolean",
+          "default": false
+        },
+        "visible": { "$ref": "common.schema.json#/$defs/condition" },
+
+        "action": {
+          "description": "Action invoked when this field is activated — the mechanism that makes an identifier column a drill-down link.",
+          "$ref": "common.schema.json#/$defs/localRef"
+        },
+
+        "renderAs": {
+          "description": "Presentation hint within the bound cell. Constrained to a closed set so a definition cannot smuggle in arbitrary markup, which would be an injection surface.",
+          "type": "string",
+          "enum": ["text", "code", "badge", "link", "icon", "progress", "sparkline", "trafficLight", "checkbox"],
+          "default": "text"
+        }
+      },
+      "required": ["field"],
+      "additionalProperties": false
+    },
+
+    "encodingBinding": {
+      "description": "Chart encoding: maps a data field to a visual channel. Modelling charts as mark plus encodings, rather than as a family of near-duplicate component types, gives the generation service a compositional vocabulary — choose a mark, map fields to channels — instead of a choice among twenty similar components.",
+      "type": "object",
+      "properties": {
+        "channel": {
+          "type": "string",
+          "enum": ["x", "y", "y2", "series", "color", "size", "shape", "tooltip", "detail"]
+        },
+        "binding": { "$ref": "#/$defs/fieldBinding" },
+        "scale": {
+          "type": "object",
+          "properties": {
+            "type": { "type": "string", "enum": ["linear", "log", "time", "ordinal", "band"] },
+            "min": { "type": ["number", "null"] },
+            "max": { "type": ["number", "null"] },
+            "zero": { "type": "boolean" },
+            "reverse": { "type": "boolean" }
+          },
+          "additionalProperties": false
+        },
+        "axis": {
+          "type": "object",
+          "properties": {
+            "title": { "$ref": "common.schema.json#/$defs/i18nString" },
+            "visible": { "type": "boolean", "default": true },
+            "gridlines": { "type": "boolean" },
+            "tickFormat": { "$ref": "common.schema.json#/$defs/formatSpec" },
+            "labelRotation": { "type": "integer", "minimum": -90, "maximum": 90 }
+          },
+          "additionalProperties": false
+        }
+      },
+      "required": ["channel", "binding"],
+      "additionalProperties": false
+    }
+  }
+}

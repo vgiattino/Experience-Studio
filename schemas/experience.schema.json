@@ -1,0 +1,137 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.opus.gresham.com/experience-studio/v1/experience.schema.json",
+  "title": "Experience Definition",
+  "description": "An experience is an application: one or more pages with shared navigation, shared parameters, a drill-down graph and a single governance lifecycle. It is the unit of publication, promotion, approval and audit — pages are versioned as part of it, never independently, because a drill-down target that promotes separately from its source is a broken page waiting to happen.\n\nThe level above the page was missing from the original documentation set, yet every stated journey needs it: 'Security Overview' is a search page plus a detail page plus tabs plus drill-down, not a page.",
+  "type": "object",
+
+  "properties": {
+    "schemaVersion": { "$ref": "common.schema.json#/$defs/majorMinor" },
+
+    "id": {
+      "description": "Tenant-unique experience identifier.",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*(?:\\.[a-z][a-z0-9-]*)*$",
+      "maxLength": 256
+    },
+    "name": { "$ref": "common.schema.json#/$defs/i18nString" },
+    "description": { "$ref": "common.schema.json#/$defs/i18nString" },
+    "icon": { "type": "string", "maxLength": 64 },
+
+    "kind": {
+      "description": "'application' is a multi-page experience with navigation; 'single' is one page with no shell chrome, suitable for embedding; 'process' is workflow-hosted and reserved for v3.",
+      "type": "string",
+      "enum": ["application", "single", "process"],
+      "default": "application"
+    },
+
+    "workspaceId": {
+      "description": "Owning workspace — the sharing primitive and the unit against which governance weight is tiered.",
+      "type": "string",
+      "maxLength": 128
+    },
+
+    "pages": {
+      "description": "Pages keyed by id. Stored inline for small experiences and by reference for large ones; either way they version and promote together.",
+      "type": "object",
+      "propertyNames": { "$ref": "common.schema.json#/$defs/identifier" },
+      "additionalProperties": {
+        "oneOf": [
+          { "$ref": "page-definition.schema.json" },
+          {
+            "description": "Reference to a page stored separately, resolved at load. Used when an experience is large enough that transmitting every page for every render is wasteful.",
+            "type": "object",
+            "properties": {
+              "$pageRef": { "type": "string", "maxLength": 256 }
+            },
+            "required": ["$pageRef"],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "minProperties": 1
+    },
+
+    "navigation": { "$ref": "navigation.schema.json#/$defs/experienceNavigation" },
+
+    "parameters": {
+      "description": "Experience-scoped parameters shared by every page — as-of date, business unit, base currency. Declared once here rather than repeated per page, so a value chosen anywhere is carried consistently.",
+      "type": "object",
+      "propertyNames": { "$ref": "common.schema.json#/$defs/identifier" },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "label": { "$ref": "common.schema.json#/$defs/i18nString" },
+          "dataType": { "$ref": "common.schema.json#/$defs/dataType" },
+          "default": { "$ref": "common.schema.json#/$defs/computableValue" },
+          "required": { "type": "boolean", "default": false },
+          "boundToAttribute": { "$ref": "common.schema.json#/$defs/qualifiedRef" },
+          "exposedInShell": {
+            "description": "Render a control for this parameter in the application shell, so it applies across pages.",
+            "type": "boolean",
+            "default": false
+          },
+          "persist": { "type": "string", "enum": ["none", "session", "user"], "default": "session" }
+        },
+        "required": ["dataType"],
+        "additionalProperties": false
+      }
+    },
+
+    "dataSources": {
+      "description": "Experience-scoped data sources, for shell-level needs such as navigation badge counts and parameter value lists.",
+      "type": "object",
+      "propertyNames": { "$ref": "common.schema.json#/$defs/identifier" },
+      "additionalProperties": { "$ref": "data-source.schema.json#/$defs/dataSource" }
+    },
+
+    "actions": {
+      "description": "Experience-scoped actions available from the shell.",
+      "type": "object",
+      "propertyNames": { "$ref": "common.schema.json#/$defs/identifier" },
+      "additionalProperties": { "$ref": "action.schema.json#/$defs/action" }
+    },
+
+    "security": { "$ref": "security.schema.json#/$defs/artifactSecurity" },
+
+    "presentation": {
+      "type": "object",
+      "properties": {
+        "themeRef": { "type": "string", "maxLength": 128 },
+        "density": { "type": "string", "enum": ["comfortable", "compact"], "default": "comfortable" },
+        "showShellHeader": { "type": "boolean", "default": true },
+        "brandingRef": { "type": "string", "maxLength": 128 }
+      },
+      "additionalProperties": false
+    },
+
+    "localization": {
+      "type": "object",
+      "properties": {
+        "defaultLocale": { "type": "string", "maxLength": 16 },
+        "supportedLocales": {
+          "type": "array",
+          "items": { "type": "string", "maxLength": 16 },
+          "maxItems": 64
+        },
+        "stringTableRef": { "type": "string", "maxLength": 256 }
+      },
+      "additionalProperties": false
+    },
+
+    "environments": {
+      "description": "Environments this experience targets. The definition itself is environment-agnostic — a version promoted from UAT to production is byte-identical, and only the gateway's logical-to-physical binding differs. Listing environments here declares intent, not configuration.",
+      "type": "array",
+      "items": { "type": "string", "maxLength": 64 },
+      "maxItems": 16,
+      "uniqueItems": true
+    },
+
+    "version": { "$ref": "versioning.schema.json#/$defs/versionEnvelope" },
+
+    "tags": { "$ref": "common.schema.json#/$defs/tags" }
+  },
+
+  "required": ["schemaVersion", "id", "name", "pages", "version"],
+  "additionalProperties": false
+}

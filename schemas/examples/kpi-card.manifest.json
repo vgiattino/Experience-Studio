@@ -1,0 +1,117 @@
+{
+  "schemaVersion": "1.0",
+  "type": "analytics.kpi-card",
+  "version": "1.4.0",
+  "name": "KPI Card",
+  "category": "analytics",
+  "description": "Single headline figure with optional comparison, threshold band and trend indicator.",
+  "icon": "kpi",
+
+  "generation": {
+    "purpose": "Show one important number prominently, optionally with how it compares to a previous period and whether it is within acceptable bounds.",
+    "whenToUse": "For a single aggregated value the user needs to read at a glance — counts, totals, rates, ages. Use several side by side to form a KPI row at the top of an operational dashboard.",
+    "whenNotToUse": "Do not use for more than one value, for a breakdown by any dimension, or for a time series. Use analytics.chart for anything with a dimension.",
+    "keyProperties": ["size", "showThresholdBand", "showTrendArrow", "comparisonLabel"],
+    "eligible": true,
+    "exampleConfig": {
+      "size": "md",
+      "showThresholdBand": true,
+      "showTrendArrow": true,
+      "comparisonLabel": "vs. yesterday"
+    }
+  },
+
+  "properties": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "size": { "type": "string", "enum": ["sm", "md", "lg"], "default": "md" },
+      "showThresholdBand": {
+        "description": "Render the measure's threshold bands as emphasis on the value. Requires either the measure's defaultThresholds or a thresholds override on the value binding.",
+        "type": "boolean",
+        "default": false
+      },
+      "showTrendArrow": {
+        "description": "Show direction of change against the comparison binding. Direction of goodness comes from the measure's higherIsBetter, so the component does not need to be told which way is good.",
+        "type": "boolean",
+        "default": false
+      },
+      "comparisonLabel": { "type": "string", "maxLength": 64 },
+      "alignment": { "type": "string", "enum": ["start", "center"], "default": "start" },
+      "showSparkline": { "type": "boolean", "default": false }
+    },
+    "additionalProperties": false
+  },
+
+  "dataRequirement": {
+    "shape": "scalar",
+    "roles": [
+      {
+        "role": "value",
+        "label": "Value",
+        "required": true,
+        "accepts": ["measure"],
+        "dataTypes": ["integer", "decimal", "amount", "percentage"]
+      },
+      {
+        "role": "comparison",
+        "label": "Comparison Value",
+        "accepts": ["measure"],
+        "dataTypes": ["integer", "decimal", "amount", "percentage"]
+      },
+      {
+        "role": "sparklineSeries",
+        "label": "Sparkline Series",
+        "repeated": true,
+        "accepts": ["measure"]
+      }
+    ],
+    "maxRows": 1
+  },
+
+  "events": {
+    "activated": {
+      "label": "Card activated",
+      "description": "Emitted when the user clicks or presses Enter on the card. Typically mapped to a drill-down or a navigate action.",
+      "payload": {
+        "value": { "dataType": "decimal", "description": "The displayed value." }
+      }
+    }
+  },
+
+  "states": ["ready", "loading", "empty", "error", "denied"],
+
+  "breakpoints": {
+    "xs": { "supported": true, "minColSpan": 12, "behaviour": "condensed", "note": "Comparison and sparkline are suppressed below sm." },
+    "sm": { "supported": true, "minColSpan": 6, "behaviour": "condensed" },
+    "md": { "supported": true, "minColSpan": 4, "behaviour": "full" },
+    "lg": { "supported": true, "minColSpan": 3, "behaviour": "full" },
+    "xl": { "supported": true, "minColSpan": 2, "behaviour": "full" }
+  },
+
+  "accessibility": {
+    "wcagLevel": "AA",
+    "keyboardContract": "Focusable when an activation action is bound; Enter and Space activate. Not focusable otherwise, so a static card does not add a meaningless tab stop.",
+    "requiredLabels": ["title"],
+    "colourIndependent": true,
+    "notes": "Threshold state is conveyed by an icon and text as well as emphasis colour. The value is exposed to assistive technology with its formatted text and its unit."
+  },
+
+  "capabilities": [],
+
+  "performance": {
+    "renderBudgetMs": 50,
+    "virtualized": false,
+    "skeleton": { "minHeight": "96px", "shape": "tile" }
+  },
+
+  "lifecycle": {
+    "stability": "stable",
+    "since": "1.0.0"
+  },
+
+  "bundle": {
+    "libraryPath": "@opus/components/analytics/kpi-card",
+    "exportName": "KpiCardComponent"
+  }
+}

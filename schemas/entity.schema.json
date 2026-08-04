@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.opus.gresham.com/experience-studio/v1/entity.schema.json",
+  "title": "Entity Model",
+  "description": "A business concept in the semantic catalog — Security, Price, Party, File Load, Data Quality Exception. The entity is the unit of grounding: it is what a business user names, what the AI retrieves, and what a data source reads from. It deliberately carries no physical data reference.",
+
+  "$defs": {
+
+    "entity": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "description": "Qualified id, '<domain>.<entity>', e.g. 'securities.security'.",
+          "$ref": "common.schema.json#/$defs/qualifiedRef"
+        },
+        "businessName": { "$ref": "common.schema.json#/$defs/i18nString" },
+        "pluralName": { "$ref": "common.schema.json#/$defs/i18nString" },
+        "synonyms": {
+          "type": "array",
+          "items": { "type": "string", "maxLength": 128 },
+          "maxItems": 32
+        },
+        "description": { "type": "string", "maxLength": 4096 },
+        "domain": {
+          "description": "Grouping for navigation and retrieval. Open string: client deployments introduce domains we do not control.",
+          "type": "string",
+          "maxLength": 64
+        },
+
+        "primaryKey": {
+          "description": "Attributes identifying one instance. Used to build drill-down parameters automatically, so an author never wires key passing by hand.",
+          "type": "array",
+          "items": { "$ref": "common.schema.json#/$defs/identifier" },
+          "minItems": 1,
+          "maxItems": 8
+        },
+        "labelAttribute": {
+          "description": "Attribute to display when this entity is referenced generically, e.g. in a tab title or a related-item list.",
+          "$ref": "common.schema.json#/$defs/identifier"
+        },
+        "secondaryLabelAttribute": { "$ref": "common.schema.json#/$defs/identifier" },
+        "iconHint": { "type": "string", "maxLength": 64 },
+
+        "attributes": {
+          "description": "Object map keyed by attribute id, not an array — so JSON Patch paths into an attribute remain stable as the catalog grows.",
+          "type": "object",
+          "propertyNames": { "$ref": "common.schema.json#/$defs/identifier" },
+          "additionalProperties": { "$ref": "attribute.schema.json#/$defs/attribute" },
+          "minProperties": 1
+        },
+        "measures": {
+          "type": "object",
+          "propertyNames": { "$ref": "common.schema.json#/$defs/identifier" },
+          "additionalProperties": { "$ref": "attribute.schema.json#/$defs/measure" }
+        },
+
+        "effectiveDating": {
+          "description": "Whether instances are point-in-time, effective-dated, or bitemporal. Determines which of asOf and knownAs a data source may legitimately set.",
+          "type": "string",
+          "enum": ["none", "effective", "bitemporal"],
+          "default": "none"
+        },
+
+        "logicalDataSourceId": {
+          "description": "Logical handle resolved to a physical target per tenant and environment by the Data Gateway. The presence of a logical id here, and the absence of any physical reference, is what makes an experience promotable between environments byte-identically.",
+          "$ref": "common.schema.json#/$defs/identifier"
+        },
+
+        "rowEntitlementDomain": {
+          "description": "EDM entitlement domain governing which instances the caller may see. Resolved to row predicates by the Data Gateway at request time, from the caller's identity. Never resolved from anything in a page definition.",
+          "type": "string",
+          "maxLength": 256
+        },
+        "sensitivity": { "$ref": "common.schema.json#/$defs/sensitivity" },
+
+        "defaultDetailExperience": {
+          "description": "Experience to open when drilling into an instance of this entity. Declaring it once on the entity makes drill-down generic: any grid or chart bound to this entity can offer drill-down without the page author or the AI choosing a target, and every page drills to the same place.",
+          "type": "string",
+          "maxLength": 256
+        },
+        "defaultSearchExperience": { "type": "string", "maxLength": 256 },
+
+        "cost": {
+          "description": "Coarse cost characteristics used by query planning, the design-time cost guard, and AI layout decisions (a high-cost entity should not be queried by twelve widgets on one page).",
+          "type": "object",
+          "properties": {
+            "class": { "type": "string", "enum": ["low", "medium", "high", "veryHigh"] },
+            "typicalRowCount": { "type": "integer", "minimum": 0 },
+            "volatilityTtlSeconds": {
+              "description": "How long a result may be cached. A property of the data, known to the steward — which is why the gateway, not the client, decides cache TTL.",
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 86400
+            },
+            "requiresFilter": {
+              "description": "True when an unfiltered query is never acceptable — a securities universe of millions of rows. Enforced by cost validation at design time.",
+              "type": "boolean",
+              "default": false
+            }
+          },
+          "additionalProperties": false
+        },
+
+        "deprecated": { "type": "boolean", "default": false },
+        "tags": { "$ref": "common.schema.json#/$defs/tags" },
+        "aiHints": { "$ref": "common.schema.json#/$defs/aiHints" }
+      },
+      "required": ["id", "businessName", "primaryKey", "attributes", "logicalDataSourceId"],
+      "additionalProperties": false
+    }
+  }
+}
