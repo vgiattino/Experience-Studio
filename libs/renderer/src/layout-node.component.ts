@@ -146,6 +146,14 @@ import { WidgetHostComponent } from './widget-host.component';
             }
 
             @case ('tabs') {
+              @if (dataDrivenEmpty() === 'show') {
+                <!-- The generating source returned nothing and the author asked to be told.
+                     This state was computed but never rendered, so the page showed an empty tab
+                     strip with no content and no explanation — the one outcome the empty-behaviour
+                     field exists to prevent, because an empty strip reads as a broken page rather
+                     than as an answer. -->
+                <p class="tabs-empty" role="status">{{ emptyTabsMessage() }}</p>
+              } @else if (dataDrivenEmpty() !== 'hide') {
               <div class="tabs">
                 <div class="tablist" role="tablist" [attr.aria-label]="node().id">
                   @for (tab of visibleTabs(); track tab.id) {
@@ -183,6 +191,7 @@ import { WidgetHostComponent } from './widget-host.component';
                   }
                 }
               </div>
+              }
             }
 
             @default {
@@ -377,6 +386,16 @@ import { WidgetHostComponent } from './widget-host.component';
       gap: var(--opus-gap-md);
     }
 
+    .tabs-empty {
+      margin: 0;
+      padding: var(--opus-space-4);
+      font-size: var(--opus-text-sm);
+      color: var(--opus-text-muted);
+      background: var(--opus-surface);
+      border: 1px dashed var(--opus-border);
+      border-radius: var(--opus-radius-md);
+    }
+
     .unimplemented {
       padding: var(--opus-space-4);
       font-size: var(--opus-text-sm);
@@ -548,6 +567,23 @@ export class LayoutNodeComponent {
    * region silently vanishes reads as a broken page, while `hideContainer` is a legitimate
    * authored choice for a region that is genuinely optional.
    */
+  /**
+   * What to say when a data-driven container found nothing.
+   *
+   * The source's own name, because "no contributing sources returned rows" is a business statement a
+   * steward can act on while "no data" is not. Falling back to the container id would leak an
+   * identifier into the interface, so a generic sentence is preferred over a technical one.
+   */
+  protected readonly emptyTabsMessage = computed(() => {
+    const spec = this.container()?.spec;
+    if (!spec || spec.type !== 'tabs' || spec.source.mode !== 'dataDriven') return '';
+    const source = this.page().definition.dataSources?.[spec.source.source];
+    const name = source?.name ? text(source.name) : '';
+    return name
+      ? `Nothing to show here: ${name.toLowerCase()} returned no rows for this record.`
+      : 'Nothing to show here for this record.';
+  });
+
   protected readonly dataDrivenEmpty = computed(() => {
     const spec = this.container()?.spec;
     if (!spec || spec.type !== 'tabs' || spec.source.mode !== 'dataDriven') return null;

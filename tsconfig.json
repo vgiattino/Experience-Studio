@@ -16,19 +16,60 @@
     "moduleResolution": "bundler",
     "baseUrl": ".",
     "paths": {
-      "@opus/contracts": ["libs/contracts/src/index.ts"],
-      "@opus/platform": ["libs/platform/src/index.ts"],
-      "@opus/design-system": ["libs/design-system/src/index.ts"],
-      "@opus/validator": ["libs/validator/src/index.ts"],
-      "@opus/data-client": ["libs/data-client/src/index.ts"],
-      "@opus/component-registry": ["libs/component-registry/src/index.ts"],
-      "@opus/renderer": ["libs/renderer/src/index.ts"],
-      "@opus/catalog": ["libs/catalog/src/index.ts"],
-      "@opus/generation": ["libs/generation/src/index.ts"],
-      "@opus/studio-core": ["libs/studio-core/src/index.ts"],
-      "@opus/studio-ui": ["libs/studio-ui/src/index.ts"],
-      "@opus/components/*": ["libs/components/*/index.ts"],
-      "@opus/schemas/*": ["schemas/*"]
+      "@opus/contracts": [
+        "libs/contracts/src/index.ts"
+      ],
+      "@opus/platform": [
+        "libs/platform/src/index.ts"
+      ],
+      "@opus/design-system": [
+        "libs/design-system/src/index.ts"
+      ],
+      "@opus/validator": [
+        "libs/validator/src/index.ts"
+      ],
+      "@opus/data-client": [
+        "libs/data-client/src/index.ts"
+      ],
+      "@opus/component-registry": [
+        "libs/component-registry/src/index.ts"
+      ],
+      "@opus/renderer": [
+        "libs/renderer/src/index.ts"
+      ],
+      "@opus/catalog": [
+        "libs/catalog/src/index.ts"
+      ],
+      "@opus/generation": [
+        "libs/generation/src/index.ts"
+      ],
+      "@opus/studio-core": [
+        "libs/studio-core/src/index.ts"
+      ],
+      "@opus/studio-ui": [
+        "libs/studio-ui/src/index.ts"
+      ],
+      "@opus/components/*": [
+        "libs/components/*/index.ts"
+      ],
+      "@opus/schemas/*": [
+        "schemas/*"
+      ],
+      "@opus/experience-model": [
+        "libs/experience-model/src/index.ts"
+      ],
+      "@opus/page-renderer": [
+        "libs/page-renderer/src/index.ts"
+      ],
+      "@opus/component-library": [
+        "libs/component-library/src/index.ts"
+      ],
+      "@opus/ai-service": [
+        "libs/ai-service/src/index.ts"
+      ],
+      "@opus/metadata-service": [
+        "libs/metadata-service/src/index.ts"
+      ]
     }
   },
   "angularCompilerOptions": {
@@ -39,7 +80,11 @@
   },
   "files": [],
   "references": [
-    { "path": "./tsconfig.app.json" },
-    { "path": "./tsconfig.spec.json" }
+    {
+      "path": "./tsconfig.app.json"
+    },
+    {
+      "path": "./tsconfig.spec.json"
+    }
   ]
 }

@@ -75,7 +75,25 @@ export class ActionDispatcherService {
     if (!definition) return;
     const instance = definition.components[componentId];
     const mapped = instance?.eventActions?.[event];
-    if (!mapped) return;
+
+    if (!mapped) {
+      // A FIELD-LEVEL ACTION IS A DECLARATION TOO.
+      //
+      // A binding may name an `action`, which is what turns an id column into a link
+      // (schemas/README.md §4). The component reports the click as one event — `cellActivated` —
+      // carrying `$actionId`, because a component must not know what an action is. Without this
+      // branch the page had to map that event as well, and if it did not, the link rendered,
+      // stopped the row's own handler, and did nothing at all: the worst of the three possible
+      // outcomes, because it looks like a working affordance.
+      //
+      // The mapping still wins where present, so a page can override what a field declared.
+      const fieldAction = payload['$actionId'];
+      if (typeof fieldAction === 'string' && fieldAction) {
+        await this.dispatch(fieldAction, payload);
+      }
+      return;
+    }
+
     const ids = Array.isArray(mapped) ? mapped : [mapped];
     for (const id of ids) await this.dispatch(id, payload);
   }

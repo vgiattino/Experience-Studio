@@ -26,7 +26,7 @@ export interface PhysicalResolver {
   } | undefined;
 }
 
-interface FixtureFile {
+export interface FixtureFile {
   entity: string;
   /** The date the fixture was generated against. */
   dateAnchor: string;
@@ -67,11 +67,18 @@ function rebase(file: FixtureFile): DataRow[] {
   });
 }
 
-const FIXTURES: readonly {
+export interface FixtureDescriptor {
   file: string;
   restrictedAttributes?: Record<string, string>;
   rowCapability?: string;
-}[] = [
+}
+
+/**
+ * WHICH fixtures exist and what entitlements they carry — exported because the server needs the
+ * same list read from disk while the browser needs it fetched over HTTP. One manifest, two
+ * transports: a second list would be a second answer to "what is the demo data and who may see it".
+ */
+export const FIXTURE_MANIFEST: readonly FixtureDescriptor[] = [
   { file: 'file-loads.json', rowCapability: 'edm.processing.read' },
   { file: 'securities.json', rowCapability: 'edm.security.read' },
   {
@@ -109,11 +116,28 @@ export async function loadFixtureTables(
   baseUrl: string,
   resolvePhysical?: PhysicalResolver,
 ): Promise<MockEntityTable[]> {
-  const loaded = await Promise.all(
-    FIXTURES.map(async (fixture) => {
-      const response = await fetch(`${baseUrl}/${fixture.file}`);
-      if (!response.ok) throw new Error(`Could not load fixture ${fixture.file}: ${response.status}`);
-      const data = (await response.json()) as FixtureFile;
+  return buildFixtureTables(async (file) => {
+    const response = await fetch(`${baseUrl}/${file}`);
+    if (!response.ok) throw new Error(`Could not load fixture ${file}: ${response.status}`);
+    return (await response.json()) as FixtureFile;
+  }, resolvePhysical);
+}
+
+/**
+ * The transport-independent half: rebase dates, attach entitlements, attach the physical map.
+ *
+ * Split out so the prototype's Node server can read the same fixtures from disk without a second
+ * copy of the rebasing rule or the entitlement table. The reader is injected rather than the
+ * function taking a path, because this library must not acquire a filesystem dependency — it runs
+ * in a browser.
+ */
+export async function buildFixtureTables(
+  read: (file: string) => Promise<FixtureFile>,
+  resolvePhysical?: PhysicalResolver,
+): Promise<MockEntityTable[]> {
+  return Promise.all(
+    FIXTURE_MANIFEST.map(async (fixture) => {
+      const data = await read(fixture.file);
       const physical = resolvePhysical?.(data.entity);
       return {
         entity: data.entity,
@@ -126,5 +150,4 @@ export async function loadFixtureTables(
       } satisfies MockEntityTable;
     }),
   );
-  return loaded;
 }

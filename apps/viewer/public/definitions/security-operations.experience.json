@@ -1,0 +1,97 @@
+{
+  "schemaVersion": "1.0",
+  "id": "security-operations",
+  "name": "Security Operations",
+  "description": "The sample experience: an operations dashboard that drills into any security's golden record.",
+  "icon": "activity",
+  "kind": "application",
+  "pages": {
+    "operations-dashboard": {
+      "$pageRef": "operations-dashboard.page.json"
+    },
+    "security-overview": {
+      "$pageRef": "security-overview.page.json"
+    }
+  },
+  "navigation": {
+    "mode": "sidebar",
+    "homePage": "operations-dashboard",
+    "items": [
+      {
+        "kind": "page",
+        "id": "nav-operations",
+        "label": "Operations",
+        "icon": "activity",
+        "page": "operations-dashboard"
+      },
+      {
+        "kind": "page",
+        "id": "nav-security",
+        "label": "Security Overview",
+        "icon": "search",
+        "page": "security-overview"
+      }
+    ],
+    "showSearch": {
+      "enabled": true,
+      "entity": "securities.security",
+      "placeholder": "Find a security"
+    },
+    "drilldownTargets": {
+      "securities.security": {
+        "page": "security-overview",
+        "openIn": "self"
+      }
+    }
+  },
+  "parameters": {
+    "as-of": {
+      "label": "As Of",
+      "dataType": "date",
+      "default": {
+        "$expr": "today()"
+      },
+      "required": true,
+      "exposedInShell": true,
+      "persist": "session"
+    }
+  },
+  "security": {
+    "intendedAudience": "Operations analysts and data stewards",
+    "workspaceScope": "workspace",
+    "deniedDataPolicy": "showDeniedState"
+  },
+  "environments": [
+    "dev",
+    "uat",
+    "prod"
+  ],
+  "version": {
+    "schemaVersion": "1.0",
+    "artifactVersion": 1,
+    "lifecycleState": "published",
+    "immutable": true,
+    "pins": {
+      "catalogVersion": 10,
+      "registryVersion": "1.1.0"
+    },
+    "provenance": {
+      "origin": "human",
+      "actorId": "platform@gresham",
+      "createdAt": "2026-08-05T09:00:00Z"
+    },
+    "validation": {
+      "status": "valid",
+      "stagesPassed": [
+        "structural",
+        "component",
+        "binding",
+        "layout"
+      ]
+    }
+  },
+  "tags": [
+    "sample",
+    "operations"
+  ]
+}

@@ -276,28 +276,31 @@ export class GenerationService {
     });
 
     // ── provider
+    //
+    // An installed provider wins. `useProvider` used to be overridden on the first call by the
+    // built-in simulated one, which made the seam the library advertises unusable from outside: the
+    // prototype installs an HTTP provider so the model call happens server-side, and it was being
+    // replaced by the in-browser stand-in before the first prompt.
+    //
+    // The decision inputs are offered to whichever provider is installed, through the port's
+    // optional channel. A real provider does not implement it; a stand-in behind a transport does,
+    // and the orchestrator does not need to know which it is holding.
     const available = registeredTypes();
-    if (!this.simulated) {
-      this.simulated = new SimulatedModelProvider({
-        concepts: intakeResult.concepts,
-        pageIntent: intakeResult.pageIntent,
-        grounding,
-        templateMatch,
-        availableComponents: available,
-        faults: request.faults,
-      });
+    const decisionInputs = {
+      concepts: intakeResult.concepts,
+      pageIntent: intakeResult.pageIntent,
+      grounding,
+      templateMatch,
+      availableComponents: available,
+      faults: request.faults,
+    };
+
+    if (!this.providerRef()) {
+      this.simulated = new SimulatedModelProvider(decisionInputs);
       this.useProvider(this.simulated);
-    } else {
-      this.simulated.update({
-        concepts: intakeResult.concepts,
-        pageIntent: intakeResult.pageIntent,
-        grounding,
-        templateMatch,
-        availableComponents: available,
-        faults: request.faults,
-      });
     }
     const provider = this.providerRef()!;
+    provider.useDecisionInputs?.(decisionInputs);
 
     // ── 4. plan
     t = performance.now();

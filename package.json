@@ -1,29 +1,38 @@
 {
   "name": "opus-experience-studio",
   "version": "0.1.0",
-  "description": "AI-native experience platform for Opus EDM \u2014 Milestone 1 runtime proof of concept",
+  "description": "AI-native experience platform for Opus EDM — Milestone 1 runtime proof of concept",
   "private": true,
   "scripts": {
     "start": "ng serve viewer",
-    "build": "ng build viewer && ng build studio",
+    "build": "ng build viewer && ng build studio && ng build experience-studio",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
     "validate": "node tools/validate-metadata.mjs",
     "verify": "npm run validate && npm run test -- --watch=false && npm run build",
     "studio": "ng serve studio",
     "build:viewer": "ng build viewer",
-    "build:studio": "ng build studio"
+    "build:studio": "ng build studio",
+    "api": "tsx server/index.ts",
+    "app": "ng serve experience-studio",
+    "dev": "concurrently -n api,app -c cyan,magenta \"npm:api\" \"npm:app\"",
+    "build:app": "ng build experience-studio"
   },
   "packageManager": "npm@10.9.7",
   "dependencies": {
+    "@angular/animations": "^21.2.19",
+    "@angular/cdk": "^21.2.14",
     "@angular/common": "^21.2.0",
     "@angular/compiler": "^21.2.0",
     "@angular/core": "^21.2.0",
     "@angular/forms": "^21.2.0",
+    "@angular/material": "^21.2.14",
     "@angular/platform-browser": "^21.2.0",
     "@angular/router": "^21.2.0",
     "ajv": "^8.20.0",
     "ajv-formats": "^3.0.1",
+    "express": "^5.2.1",
+    "material-icons": "^1.13.14",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0"
   },
@@ -31,8 +40,11 @@
     "@angular/build": "^21.2.19",
     "@angular/cli": "^21.2.19",
     "@angular/compiler-cli": "^21.2.0",
+    "@types/node": "^22.20.1",
+    "concurrently": "^9.2.4",
     "jsdom": "^28.0.0",
     "prettier": "^3.8.1",
+    "tsx": "^4.23.8",
     "typescript": "~5.9.2",
     "vitest": "^4.0.8"
   }

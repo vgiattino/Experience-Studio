@@ -61,6 +61,18 @@ export interface ModelProvider {
   /** True when the provider reaches a third party — drives the egress policy and audit. */
   readonly isExternal: boolean;
   complete(request: ModelRequest): Promise<ModelResponse>;
+  /**
+   * OPTIONAL, and only a non-model stand-in implements it.
+   *
+   * A rules engine cannot read a grounding pack out of prose, so the orchestrator offers the same
+   * decision inputs it used to build the prompt. A real provider does not implement this method and
+   * loses nothing by it: `system`, `user` and `responseSchema` are the whole contract.
+   *
+   * It is on the port rather than a cast at the call site so that a provider behind a transport —
+   * the prototype's server-hosted mock — can be handed them too, without the orchestrator knowing
+   * which side of the network the stand-in is on.
+   */
+  useDecisionInputs?(inputs: unknown): void;
 }
 
 /**
@@ -129,6 +141,11 @@ export class PolicyEnforcingProvider implements ModelProvider {
       ...request,
       maxOutputTokens: Math.min(request.maxOutputTokens ?? this.policy.maxOutputTokens, this.policy.maxOutputTokens),
     });
+  }
+
+  /** Forwarded, so wrapping a stand-in in the policy wrapper does not silence it. */
+  useDecisionInputs(inputs: unknown): void {
+    this.inner.useDecisionInputs?.(inputs);
   }
 
   callsMade(): number {

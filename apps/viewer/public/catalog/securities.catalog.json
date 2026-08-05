@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0",
-  "catalogVersion": 9,
+  "catalogVersion": 10,
   "tenantId": "demo-tenant",
   "name": "Securities Operations Catalog",
   "description": "Runtime semantic catalog for the M1 proof of concept. Physical blocks are SERVER ONLY and are stripped from the client projection.",
@@ -496,6 +496,25 @@
         }
       },
       "measures": {
+        "file-load-count": {
+          "id": "file-load-count",
+          "businessName": "Files Processed",
+          "synonyms": [
+            "files processed",
+            "file count",
+            "loads",
+            "feeds received"
+          ],
+          "description": "Count of file loads received for the business date, whatever their outcome.",
+          "valueType": "integer",
+          "allowedAggregations": [
+            "count",
+            "countDistinct"
+          ],
+          "defaultAggregation": "count",
+          "higherIsBetter": true,
+          "sensitivity": "internal"
+        },
         "late-file-count": {
           "id": "late-file-count",
           "businessName": "Late Files",

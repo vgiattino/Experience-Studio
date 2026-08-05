@@ -46,8 +46,16 @@ Delivered:
 | Experience runtime | Shell, page compiler, component framework, JSON loader, five components — [`docs/M1-IMPLEMENTATION.md`](./docs/M1-IMPLEMENTATION.md) |
 | AI page generation | Intent → grounded retrieval → template → plan → validated page JSON → render — [`docs/AI-GENERATION-WORKFLOW.md`](./docs/AI-GENERATION-WORKFLOW.md) |
 | Visual page builder | Drag, drop, inspect, re-layout, preview responsively, save — editing the *same* JSON the runtime interprets — [`docs/VISUAL-BUILDER.md`](./docs/VISUAL-BUILDER.md) |
+| Experience Builder prototype | Prompt → Experience JSON → rendered page, with a Node/REST backend, local JSON storage and a swappable model provider — [`docs/implementation-status.md`](./docs/implementation-status.md) |
 | EDM business templates | Four templates over governed EDM metadata — master dashboard, security overview, party overview, exception workspace — with drill-down between them and tabs generated from data — [`docs/EDM-TEMPLATES.md`](./docs/EDM-TEMPLATES.md) |
 | Metadata model | Twenty JSON Schemas, expression grammar, worked examples — [`schemas/README.md`](./schemas/README.md) |
+
+**And it runs as an application.** `npm run dev` starts an Express backend and an Angular Material
+front end: type a prompt, watch eight pipeline stages report themselves, read the generated JSON,
+see it rendered by the production renderer, save it, and open it at `/x/<experience>`. The model call
+goes through `POST /api/ai/generate` — the one seam a real LLM plugs into — and the Data Gateway now
+runs **server-side**, so entitlements are enforced somewhere other than the tab asking the question.
+See [`docs/implementation-status.md`](./docs/implementation-status.md).
 
 **And the runtime it all rests on is specified, not implied.**
 [`architecture/runtime/`](./architecture/runtime/) is the core runtime specification: what an
@@ -67,9 +75,14 @@ render — see [`architecture/architecture-review.md`](./architecture/architectu
 
 ```bash
 npm install
-npm start        # Viewer  → http://localhost:4200
-npm run studio   # Builder → http://localhost:4300
-npm run verify   # validate metadata, run tests, build both apps
+
+npm run dev      # Experience Builder: API on :4000 + app on :4200   ← start here
+npm run api      # backend only  → http://localhost:4000/api/health
+npm run app      # front end only → http://localhost:4200
+
+npm start        # Viewer (M1 runtime)  → http://localhost:4200
+npm run studio   # Visual builder       → http://localhost:4300
+npm run verify   # validate metadata, run tests, build all three apps
 ```
 
 Useful URL switches, which make the architecture's claims checkable in the running app:
@@ -94,9 +107,11 @@ per-widget states, the query log, and which validation levels ran — and which 
 | [`architecture/runtime/`](./architecture/runtime/) | The core runtime specification: object model, the seven answers, sequence diagrams, degradation contract |
 | [`schemas/`](./schemas/) | The core metadata model — ten models as JSON Schemas, three proposed runtime-core models, the expression grammar, worked examples |
 | [`docs/`](./docs/) | Product vision documents, personas, journeys, requirements, and the implementation records |
-| `apps/viewer/` | Runtime shell, the AI generation panel, and the page definitions, fixtures and catalog both apps serve |
+| `apps/experience-studio/` | The Experience Builder prototype — prompt, generate, preview, save, run |
+| `apps/viewer/` | Runtime shell, the AI generation panel, and the page definitions, fixtures and catalog all apps serve |
 | `apps/studio/` | The visual builder — a second app sharing one renderer |
-| `libs/` | Layered libraries: contracts, platform, design system, components, registry, renderer, data client, validator, catalog, generation, studio-core, studio-ui |
+| `server/` | Node + Express backend: catalog, definition store, model seam, data gateway |
+| `libs/` | Layered libraries: contracts, platform, design system, components, registry, renderer, data client, validator, catalog, generation, studio-core, studio-ui, plus the prototype's experience-model, page-renderer, component-library, ai-service and metadata-service |
 | `tools/` | Metadata validation gate |
 
 Start with [`architecture/system-overview.md`](./architecture/system-overview.md).
@@ -104,7 +119,8 @@ Start with [`architecture/system-overview.md`](./architecture/system-overview.md
 For what was built, what deviated from the design, and what was deliberately left out, read
 [`docs/M1-IMPLEMENTATION.md`](./docs/M1-IMPLEMENTATION.md),
 [`docs/AI-GENERATION-WORKFLOW.md`](./docs/AI-GENERATION-WORKFLOW.md),
-[`docs/VISUAL-BUILDER.md`](./docs/VISUAL-BUILDER.md) and
-[`docs/EDM-TEMPLATES.md`](./docs/EDM-TEMPLATES.md). Each records the defects its milestone
+[`docs/VISUAL-BUILDER.md`](./docs/VISUAL-BUILDER.md),
+[`docs/EDM-TEMPLATES.md`](./docs/EDM-TEMPLATES.md) and
+[`docs/implementation-status.md`](./docs/implementation-status.md). Each records the defects its milestone
 surfaced that document review had not — which is the argument for building the milestones rather
 than only specifying them.

@@ -42,3 +42,8 @@ __screenshots__/
 # System files
 .DS_Store
 Thumbs.db
+
+# The prototype's local definition store: generated state, re-seeded on boot from the shipped
+# definitions. Committing it would put a user's saved drafts in the repository and make the seed
+# ambiguous — the artifacts under apps/viewer/public/definitions are the source of truth.
+server/data/

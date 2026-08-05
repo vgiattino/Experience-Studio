@@ -27,11 +27,34 @@ import type {
 
 import { MockGateway, type MockEntityTable } from './mock-gateway';
 
+/**
+ * Where a batch is actually executed.
+ *
+ * The seam exists because the gateway belongs on a server, and the milestones that came before the
+ * prototype had none — so `MockGateway` ran in the browser out of necessity, not by design. A
+ * transport lets the same client-side caching, batching and cache-keying serve either arrangement:
+ * an in-process mock for the Viewer and the Studio, an HTTP call for the prototype whose backend
+ * holds the logical→physical map and resolves entitlements where they can actually be enforced.
+ *
+ * The client's job is unchanged either way, and it is deliberately small: batch, cache by
+ * (source, params, entitlement scope), and never decide a TTL of its own.
+ */
+export interface GatewayTransport {
+  readonly label: string;
+  queryBatch(
+    request: BatchRequest,
+    sources: Readonly<Record<string, DataSource>>,
+  ): Promise<BatchResponse>;
+}
+
 export interface GatewayConfig {
-  tables: readonly MockEntityTable[];
+  /** Tables for the in-process mock. Ignored when `transport` is supplied. */
+  tables?: readonly MockEntityTable[];
   user: UserContext;
   latencyMs?: number;
   simulate?: 'none' | 'denied' | 'error' | 'empty' | 'slow';
+  /** Execute batches here instead of against an in-process mock. */
+  transport?: GatewayTransport;
 }
 
 interface CacheEntry {
@@ -43,23 +66,31 @@ interface CacheEntry {
 export class GatewayService {
   private readonly telemetry = inject(TelemetryService);
 
-  private gateway: MockGateway | null = null;
+  private gateway: GatewayTransport | null = null;
   private config: GatewayConfig | null = null;
   private readonly cache = new Map<string, CacheEntry>();
 
   readonly configured = signal(false);
   readonly inFlight = signal(0);
+  /** Which transport is serving queries, for the runtime panel. */
+  readonly transportLabel = signal('none');
 
   configure(config: GatewayConfig): void {
     this.config = config;
-    this.gateway = new MockGateway({
-      tables: config.tables,
-      capabilities: config.user.capabilities,
-      entitlementScopeHash: config.user.entitlementScopeHash,
-      latencyMs: config.latencyMs ?? 140,
-      simulate: config.simulate ?? 'none',
-    });
+    if (config.transport) {
+      this.gateway = config.transport;
+    } else {
+      const mock = new MockGateway({
+        tables: config.tables ?? [],
+        capabilities: config.user.capabilities,
+        entitlementScopeHash: config.user.entitlementScopeHash,
+        latencyMs: config.latencyMs ?? 140,
+        simulate: config.simulate ?? 'none',
+      });
+      this.gateway = { label: 'in-process mock', queryBatch: (r, s) => mock.queryBatch(r, s) };
+    }
     this.cache.clear();
+    this.transportLabel.set(this.gateway.label);
     this.configured.set(true);
   }
 

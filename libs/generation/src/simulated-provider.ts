@@ -73,6 +73,11 @@ export class SimulatedModelProvider implements ModelProvider {
     this.attempts.clear();
   }
 
+  /** The port's optional channel (model-provider.ts). Same thing as `update`, named for the port. */
+  useDecisionInputs(inputs: unknown): void {
+    this.update(inputs as SimulationInput);
+  }
+
   async complete(request: ModelRequest): Promise<ModelResponse> {
     const startedAt = performance.now();
     const faults = this.input.faults ?? [];
