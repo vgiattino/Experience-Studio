@@ -109,17 +109,25 @@ dashboard; no TypeScript mentions any of its widgets.
 npm install
 
 # both together (recommended)
-npm run dev            # API on :4000, app on :4200 with /api proxied
+npm run dev            # API on :4000, app on :4400 with /api proxied
 
 # or separately
 npm run api            # Node backend  → http://localhost:4000/api/health
-npm run app            # Angular app   → http://localhost:4200
+npm run app            # Angular app   → http://localhost:4400
+
+# ports are overridable, so nothing has to move if 4000 or 4400 is taken
+PORT=4100 npm run api
+npm run app -- --port 4500
 
 # gates
 npm run validate       # structural validation of every schema and artifact
 npm run test           # 255 unit tests, including the shipped-artifact gate
 npm run verify         # validate + test + build all three apps
 ```
+
+Ports are chosen so the three apps in this workspace can run at once: the Viewer keeps `:4200`, the
+visual builder `:4300`, this app `:4400`, and the API `:4000`. The app's dev server proxies `/api` to
+the backend, so both share an origin and no CORS configuration is involved in development.
 
 First boot seeds the store from the repository's shipped definitions, so the app has experiences to
 open before anything has been generated. The store lives in `server/data/` and is safe to delete —

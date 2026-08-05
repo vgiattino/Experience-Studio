@@ -218,7 +218,8 @@
           },
           "defaultConfiguration": "development",
           "options": {
-            "proxyConfig": "apps/experience-studio/proxy.conf.json"
+            "proxyConfig": "apps/experience-studio/proxy.conf.json",
+            "port": 4400
           }
         },
         "test": {

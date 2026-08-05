@@ -50,8 +50,8 @@ Delivered:
 | EDM business templates | Four templates over governed EDM metadata — master dashboard, security overview, party overview, exception workspace — with drill-down between them and tabs generated from data — [`docs/EDM-TEMPLATES.md`](./docs/EDM-TEMPLATES.md) |
 | Metadata model | Twenty JSON Schemas, expression grammar, worked examples — [`schemas/README.md`](./schemas/README.md) |
 
-**And it runs as an application.** `npm run dev` starts an Express backend and an Angular Material
-front end: type a prompt, watch eight pipeline stages report themselves, read the generated JSON,
+**And it runs as an application.** `npm run dev` starts an Express backend (`:4000`) and an Angular
+Material front end (`:4400`): type a prompt, watch eight pipeline stages report themselves, read the generated JSON,
 see it rendered by the production renderer, save it, and open it at `/x/<experience>`. The model call
 goes through `POST /api/ai/generate` — the one seam a real LLM plugs into — and the Data Gateway now
 runs **server-side**, so entitlements are enforced somewhere other than the tab asking the question.
@@ -76,9 +76,9 @@ render — see [`architecture/architecture-review.md`](./architecture/architectu
 ```bash
 npm install
 
-npm run dev      # Experience Builder: API on :4000 + app on :4200   ← start here
-npm run api      # backend only  → http://localhost:4000/api/health
-npm run app      # front end only → http://localhost:4200
+npm run dev      # Experience Builder: API on :4000 + app on :4400   ← start here
+npm run api      # backend only   → http://localhost:4000/api/health
+npm run app      # front end only → http://localhost:4400
 
 npm start        # Viewer (M1 runtime)  → http://localhost:4200
 npm run studio   # Visual builder       → http://localhost:4300
