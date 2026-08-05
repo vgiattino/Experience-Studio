@@ -73,6 +73,14 @@ render — see [`architecture/architecture-review.md`](./architecture/architectu
 
 ## Run it
 
+> **The workspace is on a feature branch.** `main` carries the architecture, schemas and docs; the
+> code — `apps/`, `libs/`, `server/`, `package.json` — is on `claude/opus-architecture-review-vxvhcg`.
+> A clone of `main` has no `package.json`, so start with
+> `git checkout claude/opus-architecture-review-vxvhcg`.
+>
+> Node 20.19+ or 22+ (Angular 21). On PowerShell, set environment variables as
+> `$env:PORT="4100"; npm run api`.
+
 ```bash
 npm install
 

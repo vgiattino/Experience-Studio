@@ -116,7 +116,7 @@ npm run api            # Node backend  → http://localhost:4000/api/health
 npm run app            # Angular app   → http://localhost:4400
 
 # ports are overridable, so nothing has to move if 4000 or 4400 is taken
-PORT=4100 npm run api
+PORT=4100 npm run api                  # PowerShell: $env:PORT="4100"; npm run api
 npm run app -- --port 4500
 
 # gates
@@ -132,6 +132,29 @@ the backend, so both share an origin and no CORS configuration is involved in de
 First boot seeds the store from the repository's shipped definitions, so the app has experiences to
 open before anything has been generated. The store lives in `server/data/` and is safe to delete —
 it re-seeds.
+
+### Windows
+
+Everything runs on Windows unchanged — `tsx`, `concurrently` and the npm scripts are all
+cross-platform, and every path in `server/` is built with `node:path`. Two differences worth knowing:
+
+```powershell
+# Environment variables are set differently in PowerShell
+$env:AI_PROVIDER="claude"; $env:ANTHROPIC_API_KEY="…"; npm run api
+$env:PORT="4100"; npm run api
+```
+
+Node 20.19+ or 22+ is required (Angular 21). Check with `node -v`.
+
+**The code lives on a feature branch.** `main` carries the architecture, schemas and docs only; the
+workspace — `apps/`, `libs/`, `server/`, `package.json` — is on
+`claude/opus-architecture-review-vxvhcg`. A clone of `main` has no `package.json`, so `npm install`
+fails with `ENOENT`. Check out the branch first:
+
+```powershell
+git fetch origin
+git checkout claude/opus-architecture-review-vxvhcg
+```
 
 To point generation at a real model:
 
