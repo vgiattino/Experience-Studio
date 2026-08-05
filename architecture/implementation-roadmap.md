@@ -26,6 +26,18 @@ Durations are omitted deliberately; sequence and exit criteria are the architect
 - NFR targets are numeric and testable.
 - A reader outside the team can state what v1 does and does not include.
 
+**Status: PARTIAL, and now with a specification to ratify against.** The load-bearing decisions
+exist as "decisions requiring ratification" tables at the end of each architecture document, not yet
+as accepted ADRs. The [Core Runtime Specification](./runtime/00-index.md) adds twelve more (RC1–RC12)
+and consolidates what the runtime *is* into one place — the seven concepts, the seven laws, and the
+proof that dashboards, search, workflow applications and AI agents are one runtime rather than four.
+
+It is the right shape for this milestone's remaining work: those tables, plus the seven per-document
+ones inside the specification, are the sign-off agenda. Two of its decisions should be settled before
+any M2/M3 code changes them, because both are cheap now and expensive later: `ActorContext` on every
+request (an audit shape every consumer binds to) and the operation registry's concurrency and
+idempotency fields (which change every stored call site if added after write-back ships).
+
 ---
 
 ## Milestone 1 — The Three Contracts
@@ -49,7 +61,7 @@ Durations are omitted deliberately; sequence and exit criteria are the architect
 **Status: DELIVERED**, and extended beyond the original scope with a runtime proof of concept
 that renders the reference definitions — see [`../docs/M1-IMPLEMENTATION.md`](../docs/M1-IMPLEMENTATION.md).
 Sixteen schemas, an expression grammar, five worked examples and two runtime page definitions
-all validate; the schemas are consumed by the contracts library, the validator, the renderer and
+all validate (twenty schemas and eight examples as of the runtime specification); the schemas are consumed by the contracts library, the validator, the renderer and
 the CI gate. Two amendments were needed and are recorded in `schemas/README.md` §7: a `content`
 component category, and the breakpoint cascade direction, which the schema had left unstated.
 

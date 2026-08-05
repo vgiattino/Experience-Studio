@@ -30,6 +30,10 @@ That has a consequence worth stating before the detail: **these schemas should b
 | `navigation.schema.json` | **8. Navigation** | Experience shell, page-local navigation, drill-down graph |
 | `security.schema.json` | **9. Security** | Authoring intent, roles, capabilities — **not enforcement** |
 | `versioning.schema.json` | **10. Versioning** | Version envelope, lifecycle, provenance, patch log, compatibility policy |
+| `operation.schema.json` | **11. Operation** | The write vocabulary — what an `invoke` action may target. **Proposed; see §10** |
+| `agent.schema.json` | **12. Agent** | A non-human actor and the grant that bounds it. **Proposed; see §10** |
+| `page-state.schema.json` | **13. Page state** | The serializable state of a rendered page. **Proposed; see §10** |
+| `runtime-contract.schema.json` | — | The read/write wire contract and the runtime capability descriptor. **Proposed; see §10** |
 | `expression-grammar.md` | — | The expression language specification |
 | `examples/` | — | Worked artifacts for the v1 journeys |
 
@@ -49,6 +53,12 @@ common
         component-instance ┤
         data-source ───────┤
                  page-definition ── experience
+
+  proposed (§11), additive — no existing schema changes:
+  common ── operation
+  common ── page-state
+  common + security + versioning ── agent
+  common + data-source ── runtime-contract
 ```
 
 No cycles. `layout` is separate from `page-definition` so that composite component slots can contain layout without a circular file reference.
@@ -323,7 +333,49 @@ Honest inventory of what this model does not yet cover.
 
 ---
 
-## 10. Decisions Requiring Ratification
+## 10. Runtime-Core Models (Proposed) — Models 11–13
+
+Three further models and one wire contract, added by the [Core Runtime Specification](../architecture/runtime/00-index.md), which
+answers what an Experience, a Page, a Component and a Data Source *are* at runtime, and how
+workflow applications and AI agents fit without a new execution path.
+
+They are **structurally gated and not yet executed.** `npm run validate` parses them, checks them
+against the 2020-12 metaschema, resolves every `$ref` and validates the worked examples. They are
+deliberately *not* registered in `@opus/validator`, because the runtime does not act on them until
+the specification is approved — a schema wired into the shipped validator is a schema the platform
+has accepted.
+
+| Schema | Model | Answers | Example |
+|---|---|---|---|
+| `operation.schema.json` | **11. Operation** | What may a page *change*, and under what concurrency, idempotency, blast radius and capability? | [`examples/exception-management.operations.json`](./examples/exception-management.operations.json) |
+| `agent.schema.json` | **12. Agent** | What may a non-human actor reach, on whose behalf, with what human gate and what budget? | [`examples/exception-triage.agent.json`](./examples/exception-triage.agent.json) |
+| `page-state.schema.json` | **13. Page state** | What produced the view on screen — for a deep link, a restore, a support bundle, an agent's context? | [`examples/exception-queue.pagestate.json`](./examples/exception-queue.pagestate.json) |
+| `runtime-contract.schema.json` | — | How does a runtime ask for data, request a change, say who it is acting as, and declare what it can execute? | — |
+
+### Why these four, and why now
+
+| Schema | The thing that is expensive to retrofit |
+|---|---|
+| Operation | Idempotency, optimistic concurrency and the declared blast radius. All three change every stored call site if added after write-back ships |
+| Agent | `onBehalfOf`, `turnId` and `rationale` on the audit row. Every audit consumer is built against that shape, and the period before the change can never be re-audited |
+| Page state | Four consumers need one envelope — deep links, restore, support reproduction, agent context. Without a defined one, each invents an encoding and links stop round-tripping |
+| Runtime contract | The read/write envelope already has two independent implementations (a client renderer and a gateway) and no schema. A contract with two implementations and no schema drifts |
+
+### How they obey the design rules
+
+They are held to the same ten rules as the rest of the directory, and three are worth showing:
+
+- **R1 closed objects.** Every object sets `additionalProperties: false`, including `toolGrant`'s five discriminated branches — so an invented grant kind fails loudly rather than being ignored by a runtime that does not recognise it.
+- **R6 nothing authored names a physical object.** `operation.physical` is server-side only and stripped from every client and model projection, exactly as catalog `physical` blocks are. A stolen definition reveals no write path.
+- **R7 two naming domains.** Operation *parameters* are `identifier` (kebab-case) because they are metadata bound to catalog attributes; agent *tool names* are `memberName` (camelCase) because they are contract members a model calls by name.
+
+### Classification under §8
+
+All four are **additive**: new artifact types plus one new optional property (`pins.operationRegistryVersion`). No existing schema changes, so every stored definition and every shipped example stays valid — which is asserted by the validation gate on every commit, not by inspection.
+
+---
+
+## 11. Decisions Requiring Ratification
 
 | # | Decision | Consequence if reversed later |
 |---|---|---|

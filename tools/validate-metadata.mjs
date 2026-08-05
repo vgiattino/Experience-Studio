@@ -70,6 +70,11 @@ const SUFFIX_TO_SCHEMA = [
   ['.experience.json', 'experience.schema.json'],
   ['.catalog.json', 'catalog.schema.json'],
   ['.manifest.json', 'component-manifest.schema.json'],
+  // Runtime-core artifact types (schemas/README.md §10). Gated structurally here; not yet
+  // wired into @opus/validator, because the runtime does not execute them pending approval.
+  ['.operations.json', 'operation.schema.json'],
+  ['.agent.json', 'agent.schema.json'],
+  ['.pagestate.json', 'page-state.schema.json'],
 ];
 
 function validateArtifacts(label, dir) {

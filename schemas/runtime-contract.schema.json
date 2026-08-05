@@ -1,0 +1,399 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.opus.gresham.com/experience-studio/v1/runtime-contract.schema.json",
+  "title": "Runtime Contract",
+  "description": "The wire contract between a runtime and the platform: how it asks for data, how it requests a change, what it gets back, who it says it is acting as, and what it declares it can execute.\n\nEvery other schema in this directory describes an artifact that is authored. This one describes the messages that flow while an artifact runs, and it exists because those messages are a contract with two independent implementations — a client renderer and a gateway — and a contract with two implementations and no schema drifts.\n\nFour parts, in the order they matter:\n\n1. `queryBatchRequest` / `queryBatchResponse` — one round trip per page render, with per-query independent status. Independent statusing is what lets two users open the same definition and both get a correct render, one with twelve widgets and one with nine plus three denied.\n2. `operationRequest` / `operationResult` — the same envelope for a write, carrying idempotency, a concurrency token and an authoritative invalidation set.\n3. `actorContext` — who is asking. A user, a schedule, or an agent acting for a principal. Present on both reads and writes because an audit row that cannot name the actor is not an audit row.\n4. `runtimeCapabilities` — what this runtime version can execute. It is what turns version skew from an outage into a warning at authoring time.",
+  "type": "object",
+
+  "$defs": {
+    "problem": {
+      "description": "RFC 9457-shaped, with a closed category taxonomy. Closed because both the Studio UX and the AI repair loop branch on it: free-text messages would make both impossible.",
+      "type": "object",
+      "properties": {
+        "category": {
+          "type": "string",
+          "enum": [
+            "validation",
+            "semantic",
+            "entitlement",
+            "cost",
+            "concurrency",
+            "upstream",
+            "provider",
+            "capability"
+          ]
+        },
+        "code": { "type": "string", "maxLength": 128 },
+        "detail": { "type": "string", "maxLength": 2000 },
+        "path": {
+          "description": "JSON Pointer into the artifact the problem concerns, so a finding can be mapped back to a widget or a data source. Repair that cannot locate its target regenerates nothing.",
+          "type": "string",
+          "maxLength": 512
+        },
+        "retryable": { "type": "boolean" }
+      },
+      "required": ["category", "code", "detail"],
+      "additionalProperties": false
+    },
+
+    "actorContext": {
+      "description": "The initiator of a request. The gateway resolves authorization from the verified identity in the transport, NEVER from this block — it is carried for audit, for budget attribution and for confirmation policy. An actor claiming to be someone else changes the audit narrative, not the answer.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["user", "schedule", "agent", "system"],
+          "description": "Closed, because policy branches on it: an agent-initiated write may require a human confirmation a user-initiated one does not."
+        },
+        "actorId": { "type": "string", "maxLength": 256 },
+        "onBehalfOf": {
+          "description": "The human principal an agent or schedule is acting for. Required for 'agent' and 'schedule': an unattended actor with no principal is an unattributable action, and every entitlement decision still resolves against the principal rather than the agent.",
+          "type": "string",
+          "maxLength": 256
+        },
+        "agentId": { "$ref": "common.schema.json#/$defs/identifier" },
+        "turnId": {
+          "description": "Groups the calls of one agent turn, so a reviewer can see a decision and its consequences together.",
+          "type": "string",
+          "maxLength": 128
+        },
+        "rationale": {
+          "description": "Why the actor did this, in its own words. Recorded verbatim for agent actions; it is data to be read, never instruction to be followed.",
+          "type": "string",
+          "maxLength": 2000
+        }
+      },
+      "required": ["kind", "actorId"],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": { "properties": { "kind": { "enum": ["agent", "schedule"] } }, "required": ["kind"] },
+          "then": { "required": ["onBehalfOf"] }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "agent" } }, "required": ["kind"] },
+          "then": { "required": ["agentId"] }
+        }
+      ]
+    },
+
+    "renderContext": {
+      "description": "What is being rendered. Carried so the gateway can attribute cost, audit against a definition version, and reject a query whose data source does not belong to the page that claims it.",
+      "type": "object",
+      "properties": {
+        "experienceId": { "type": "string", "maxLength": 128 },
+        "pageId": { "$ref": "common.schema.json#/$defs/identifier" },
+        "definitionVersion": { "type": "integer", "minimum": 1 },
+        "environment": { "type": "string", "maxLength": 64 },
+        "pins": {
+          "type": "object",
+          "properties": {
+            "catalogVersion": { "type": "integer", "minimum": 1 },
+            "registryVersion": { "type": "string", "maxLength": 32 },
+            "operationRegistryVersion": { "type": "integer", "minimum": 1 }
+          },
+          "additionalProperties": false
+        },
+        "surface": {
+          "description": "Published render, Studio preview, or a thumbnail. One code path serves all three; this field is for telemetry and cost attribution, and must never change enforcement.",
+          "type": "string",
+          "enum": ["published", "preview", "thumbnail", "estimate"]
+        },
+        "correlationId": { "type": "string", "maxLength": 128 }
+      },
+      "required": ["pageId"],
+      "additionalProperties": false
+    },
+
+    "queryRequest": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "description": "Client-chosen result key, normally the data source id. Results route back by this key, which is what allows one batch to serve widgets that know nothing about each other.",
+          "$ref": "common.schema.json#/$defs/identifier"
+        },
+        "dataSourceId": { "$ref": "common.schema.json#/$defs/identifier" },
+        "params": {
+          "description": "Resolved page state: parameter values, filter channel values, selection values. The client resolves page state; the server resolves entitlements. Neither does the other's job.",
+          "type": "object",
+          "additionalProperties": true
+        },
+        "paging": {
+          "type": "object",
+          "properties": {
+            "offset": { "type": "integer", "minimum": 0 },
+            "cursor": { "type": "string", "maxLength": 512 },
+            "limit": { "type": "integer", "minimum": 1, "maximum": 10000 }
+          },
+          "additionalProperties": false
+        },
+        "sort": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "field": { "$ref": "common.schema.json#/$defs/identifier" },
+              "direction": { "type": "string", "enum": ["asc", "desc"] }
+            },
+            "required": ["field"],
+            "additionalProperties": false
+          },
+          "maxItems": 8
+        },
+        "cacheHint": {
+          "description": "'bypass' is a request, not a right: the gateway still decides TTL. A client that could set its own lifetime would eventually serve one user's rows to another.",
+          "type": "string",
+          "enum": ["normal", "bypass"]
+        }
+      },
+      "required": ["key", "dataSourceId"],
+      "additionalProperties": false
+    },
+
+    "queryBatchRequest": {
+      "description": "One request per page render. Twelve widgets issuing twelve requests would produce twelve entitlement resolutions, twelve audit events and head-of-line blocking; batching gives server-side parallelism under a fan-out cap, one entitlement resolution, and one correlation id for the whole render.",
+      "type": "object",
+      "properties": {
+        "context": { "$ref": "#/$defs/renderContext" },
+        "actor": { "$ref": "#/$defs/actorContext" },
+        "queries": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/queryRequest" },
+          "minItems": 1,
+          "maxItems": 64
+        }
+      },
+      "required": ["context", "queries"],
+      "additionalProperties": false
+    },
+
+    "queryResult": {
+      "type": "object",
+      "properties": {
+        "key": { "$ref": "common.schema.json#/$defs/identifier" },
+        "status": {
+          "description": "Closed set, mapping one-to-one onto the widget states a component must implement. 'denied' is deliberately not an error variant: a caller lacking column entitlement is a normal governed outcome and must read as 'not available to you'.",
+          "type": "string",
+          "enum": ["ok", "empty", "partial", "denied", "error", "costRejected"]
+        },
+        "rows": {
+          "type": "array",
+          "items": { "type": "object", "additionalProperties": true },
+          "maxItems": 100000
+        },
+        "totalRows": { "type": "integer", "minimum": 0 },
+        "deniedFields": {
+          "description": "Fields the caller may not see. Named rather than silently omitted, so a widget can say what is missing instead of appearing to show everything.",
+          "type": "array",
+          "items": { "type": "string", "maxLength": 128 },
+          "maxItems": 256
+        },
+        "truncated": { "type": "boolean" },
+        "ttlSeconds": {
+          "description": "Server-decided cache lifetime. Volatility is a property of the data, known to the steward — so the client never invents this.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "entitlementScopeHash": {
+          "description": "Hash of the caller's resolved entitlement scope, and a mandatory component of every client cache key. Omitting it from a cache key serves one user's rows to another — an authorization bypass that correct enforcement code cannot prevent, because enforcement is never reached.",
+          "type": "string",
+          "maxLength": 128
+        },
+        "asOf": {
+          "description": "The effective date the answer was computed at, echoed back. A bitemporal platform that does not report which 'now' it used cannot be reconciled against.",
+          "type": "string",
+          "maxLength": 64
+        },
+        "problem": { "$ref": "#/$defs/problem" },
+        "durationMs": { "type": "number", "minimum": 0 },
+        "fromCache": { "type": "boolean" }
+      },
+      "required": ["key", "status"],
+      "additionalProperties": false
+    },
+
+    "queryBatchResponse": {
+      "type": "object",
+      "properties": {
+        "results": { "type": "array", "items": { "$ref": "#/$defs/queryResult" } },
+        "correlationId": { "type": "string", "maxLength": 128 },
+        "durationMs": { "type": "number", "minimum": 0 },
+        "capabilities": { "$ref": "#/$defs/runtimeCapabilities" }
+      },
+      "required": ["results", "correlationId"],
+      "additionalProperties": false
+    },
+
+    "operationRequest": {
+      "description": "A write, in the same envelope shape as a read. The similarity is the point: one authorization path, one audit path, one cache-invalidation path.",
+      "type": "object",
+      "properties": {
+        "context": { "$ref": "#/$defs/renderContext" },
+        "actor": { "$ref": "#/$defs/actorContext" },
+        "operationId": { "$ref": "common.schema.json#/$defs/identifier" },
+        "idempotencyKey": {
+          "description": "Required whenever the operation's registry entry requires it. A retried approval that lands twice is a governance incident, not a UX blemish.",
+          "type": "string",
+          "maxLength": 128
+        },
+        "targets": {
+          "description": "What to act on: explicit keys, or a filter tree for a bulk action. A filter target is bounded by the operation's declared maxTargets, evaluated server-side — the client cannot widen it.",
+          "type": "object",
+          "properties": {
+            "keys": {
+              "type": "array",
+              "items": { "type": "object", "additionalProperties": true },
+              "maxItems": 10000
+            },
+            "filter": { "$ref": "data-source.schema.json#/$defs/filterNode" },
+            "expectedCount": {
+              "description": "What the client believed it was acting on. A mismatch against the server's count aborts a bulk write rather than silently acting on more rows than the user was shown.",
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false
+        },
+        "payload": { "type": "object", "additionalProperties": true },
+        "concurrencyToken": { "type": ["string", "number", "null"] },
+        "reason": {
+          "description": "Captured when the operation requires a reason. Part of the audit record, not of the payload.",
+          "type": "string",
+          "maxLength": 2000
+        },
+        "confirmedBy": {
+          "description": "The principal who confirmed, when confirmation was required. For an agent-initiated write this is how a human sign-off is evidenced rather than asserted.",
+          "type": "string",
+          "maxLength": 256
+        },
+        "dryRun": {
+          "description": "Resolve, authorize, cost-check and count targets, then change nothing. This is what lets a Studio author and an agent both preview a write's blast radius before performing it.",
+          "type": "boolean"
+        }
+      },
+      "required": ["context", "operationId"],
+      "additionalProperties": false
+    },
+
+    "operationResult": {
+      "type": "object",
+      "properties": {
+        "operationId": { "$ref": "common.schema.json#/$defs/identifier" },
+        "status": {
+          "type": "string",
+          "enum": ["ok", "partial", "denied", "conflict", "rejected", "error", "accepted"],
+          "description": "'accepted' is a background operation whose outcome arrives later; 'conflict' is an optimistic-concurrency failure, distinct from 'error' because the correct response is 'reload and retry', not 'report a fault'. 'partial' is a bulk write where some targets succeeded — a state a single-status model cannot express, and one that bulk operations produce routinely."
+        },
+        "affectedCount": { "type": "integer", "minimum": 0 },
+        "results": {
+          "description": "Per-target outcome for a bulk write, so a user can be told which twelve of two hundred failed.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "key": { "type": "object", "additionalProperties": true },
+              "status": { "type": "string", "enum": ["ok", "denied", "conflict", "error"] },
+              "problem": { "$ref": "#/$defs/problem" }
+            },
+            "required": ["status"],
+            "additionalProperties": false
+          },
+          "maxItems": 10000
+        },
+        "invalidate": {
+          "description": "The AUTHORITATIVE invalidation set. The page's declared effects are a hint; a write can touch data no page enumerated, so the client honours the union of the two and the server's list wins where they disagree.",
+          "type": "object",
+          "properties": {
+            "entities": {
+              "type": "array",
+              "items": { "$ref": "common.schema.json#/$defs/qualifiedRef" },
+              "maxItems": 128
+            },
+            "logicalDataSources": {
+              "type": "array",
+              "items": { "$ref": "common.schema.json#/$defs/identifier" },
+              "maxItems": 128
+            },
+            "allForEntitlementScope": { "type": "boolean" }
+          },
+          "additionalProperties": false
+        },
+        "eventualConsistencySeconds": { "type": "integer", "minimum": 0 },
+        "trackingRef": {
+          "description": "Handle for a background operation's outcome.",
+          "type": "string",
+          "maxLength": 256
+        },
+        "problem": { "$ref": "#/$defs/problem" },
+        "correlationId": { "type": "string", "maxLength": 128 },
+        "durationMs": { "type": "number", "minimum": 0 }
+      },
+      "required": ["operationId", "status"],
+      "additionalProperties": false
+    },
+
+    "runtimeCapabilities": {
+      "description": "What a runtime version can actually execute, declared rather than inferred.\n\nThis is the mechanism that makes forward compatibility a design property instead of a hope. The Studio compares a draft against the target environment's descriptor and warns at authoring time — 'this page invokes an operation, which the production runtime at 1.2 does not execute' — rather than letting the author discover it after promotion. At runtime, anything absent from these lists degrades by the documented rule for its kind: it never blanks a page, and it is never silently dropped.",
+      "type": "object",
+      "properties": {
+        "runtimeVersion": { "$ref": "common.schema.json#/$defs/semver" },
+        "schemaVersions": {
+          "description": "Artifact schema versions this runtime can load, after in-memory forward migration.",
+          "type": "array",
+          "items": { "$ref": "common.schema.json#/$defs/majorMinor" },
+          "maxItems": 32
+        },
+        "containerTypes": {
+          "type": "array",
+          "items": { "type": "string", "maxLength": 32 },
+          "maxItems": 32
+        },
+        "tabSourceModes": {
+          "type": "array",
+          "items": { "type": "string", "maxLength": 32 },
+          "maxItems": 8
+        },
+        "actionKinds": {
+          "type": "array",
+          "items": { "type": "string", "maxLength": 32 },
+          "maxItems": 32
+        },
+        "dataSourceKinds": {
+          "type": "array",
+          "items": { "type": "string", "maxLength": 32 },
+          "maxItems": 16
+        },
+        "loadPolicies": {
+          "type": "array",
+          "items": { "type": "string", "maxLength": 32 },
+          "maxItems": 8
+        },
+        "expressionFunctions": {
+          "type": "array",
+          "items": { "type": "string", "maxLength": 64 },
+          "maxItems": 256
+        },
+        "registryVersion": { "type": "string", "maxLength": 32 },
+        "componentTypes": {
+          "type": "array",
+          "items": { "$ref": "common.schema.json#/$defs/componentTypeRef" },
+          "maxItems": 512
+        },
+        "operationRegistryVersion": { "type": "integer", "minimum": 1 },
+        "validationLevels": {
+          "description": "Which of the eight validation levels this runtime actually runs. Reported rather than assumed: a runtime that claims a level it does not run is worse than one that admits the gap.",
+          "type": "array",
+          "items": { "type": "integer", "minimum": 1, "maximum": 8 },
+          "maxItems": 8
+        },
+        "agentSurfaces": {
+          "type": "array",
+          "items": { "type": "string", "enum": ["page", "experience", "platform"] },
+          "maxItems": 3
+        }
+      },
+      "required": ["runtimeVersion", "schemaVersions"],
+      "additionalProperties": false
+    }
+  }
+}

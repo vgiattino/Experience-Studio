@@ -1,0 +1,32 @@
+{
+  "schemaVersion": "1.1",
+  "experienceId": "securities-operations",
+  "pageId": "exception-management",
+  "definitionVersion": 1,
+  "environment": "prod",
+
+  "params": {
+    "as-of": "2026-08-05",
+    "age-threshold-hours": 48
+  },
+
+  "filters": {
+    "severity": ["HIGH", "CRITICAL"],
+    "asset-class": ["BOND"],
+    "status": null,
+    "query": "Enel",
+    "active-rule": "DQ-PRICE-STALE"
+  },
+
+  "selections": {
+    "focused-exception": [{ "exception-id": "EXC000412" }]
+  },
+
+  "activeTabs": {
+    "rule-tabs": "DQ-PRICE-STALE"
+  },
+
+  "capturedAt": "2026-08-05T14:22:03Z",
+  "capturedBy": "steward@example.com",
+  "purpose": "link"
+}

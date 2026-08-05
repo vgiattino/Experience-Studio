@@ -47,11 +47,19 @@ Delivered:
 | AI page generation | Intent → grounded retrieval → template → plan → validated page JSON → render — [`docs/AI-GENERATION-WORKFLOW.md`](./docs/AI-GENERATION-WORKFLOW.md) |
 | Visual page builder | Drag, drop, inspect, re-layout, preview responsively, save — editing the *same* JSON the runtime interprets — [`docs/VISUAL-BUILDER.md`](./docs/VISUAL-BUILDER.md) |
 | EDM business templates | Four templates over governed EDM metadata — master dashboard, security overview, party overview, exception workspace — with drill-down between them and tabs generated from data — [`docs/EDM-TEMPLATES.md`](./docs/EDM-TEMPLATES.md) |
-| Metadata model | Sixteen JSON Schemas, expression grammar, worked examples — [`schemas/README.md`](./schemas/README.md) |
+| Metadata model | Twenty JSON Schemas, expression grammar, worked examples — [`schemas/README.md`](./schemas/README.md) |
+
+**And the runtime it all rests on is specified, not implied.**
+[`architecture/runtime/`](./architecture/runtime/) is the core runtime specification: what an
+Experience, a Page, a Component and a Data Source *are*, how a page renders, how a generated page is
+represented, and how pages evolve without breaking. It answers those questions in a way that makes
+dashboards, search experiences, workflow applications and future AI agents **the same runtime** —
+adding two artifact types (an operation registry, an agent grant) and one request field (who is
+acting), and no new execution path. It is a draft pending approval; nothing in it is implemented.
 
 Deliberately **not** built yet: a real LLM behind the provider port, the evaluation harness, a
 Definition *Service* rather than browser-local drafts, a catalog *service* rather than a static
-artifact, publishing and promotion, and the real Data Gateway. The
+artifact, publishing and promotion, write-back, agents, and the real Data Gateway. The
 roadmap built the deterministic renderer first so generation aims at a target already proven to
 render — see [`architecture/architecture-review.md`](./architecture/architecture-review.md) §R2.
 
@@ -83,7 +91,8 @@ per-widget states, the query log, and which validation levels ran — and which 
 | Path | Contents |
 |---|---|
 | [`architecture/`](./architecture/) | Target architecture: frontend, backend, AI, runtime, security, plus the pre-implementation review and roadmap |
-| [`schemas/`](./schemas/) | The core metadata model — ten models as JSON Schemas, the expression grammar, worked examples |
+| [`architecture/runtime/`](./architecture/runtime/) | The core runtime specification: object model, the seven answers, sequence diagrams, degradation contract |
+| [`schemas/`](./schemas/) | The core metadata model — ten models as JSON Schemas, three proposed runtime-core models, the expression grammar, worked examples |
 | [`docs/`](./docs/) | Product vision documents, personas, journeys, requirements, and the implementation records |
 | `apps/viewer/` | Runtime shell, the AI generation panel, and the page definitions, fixtures and catalog both apps serve |
 | `apps/studio/` | The visual builder — a second app sharing one renderer |

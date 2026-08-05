@@ -1,0 +1,271 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.opus.gresham.com/experience-studio/v1/operation.schema.json",
+  "title": "Operation Registry",
+  "description": "The write counterpart of the data source model, and the contract an `invoke` action targets.\n\nA data source is a declarative question about the catalog; an operation is a declarative *request to change* it. Both are logical, both are resolved to a physical target per environment, and both are enforced in one place. That symmetry is the whole point: without it, write-back arrives as a second data path with its own authorization, its own audit and its own cache semantics, which is the change this schema exists to avoid.\n\nWhat makes an operation safe to add later is that nothing about it lives in a page definition. A page declares `invoke` naming an operation id, exactly as it declares a data source naming an entity. The operation's inputs, its concurrency rules, its blast radius and its required capabilities are registry content authored by a steward and pinned by version — so a page cannot invent a write, and a write cannot change shape under a published page.\n\nRegistry entries are an immutable published snapshot, like the catalog. A definition that invokes an operation pins `operationRegistryVersion` in its version envelope.",
+  "type": "object",
+
+  "properties": {
+    "schemaVersion": { "$ref": "common.schema.json#/$defs/majorMinor" },
+    "registryVersion": {
+      "description": "Monotonic version of this snapshot. Immutable once published; a definition pins it.",
+      "type": "integer",
+      "minimum": 1
+    },
+    "tenantId": { "type": "string", "maxLength": 128 },
+    "state": { "type": "string", "enum": ["draft", "published", "deprecated"] },
+    "publishedAt": { "type": "string", "format": "date-time" },
+    "operations": {
+      "description": "Keyed by operation id, so a JSON Patch path into an operation stays stable and impact analysis is an indexable query.",
+      "type": "object",
+      "propertyNames": { "$ref": "common.schema.json#/$defs/identifier" },
+      "additionalProperties": { "$ref": "#/$defs/operation" },
+      "maxProperties": 2000
+    }
+  },
+  "required": ["schemaVersion", "registryVersion", "operations"],
+  "additionalProperties": false,
+
+  "$defs": {
+    "operation": {
+      "type": "object",
+      "properties": {
+        "id": { "$ref": "common.schema.json#/$defs/identifier" },
+        "businessName": { "$ref": "common.schema.json#/$defs/i18nString" },
+        "description": { "type": "string", "maxLength": 2000 },
+        "synonyms": {
+          "description": "Grounding for generation and for natural-language dispatch by an agent, on the same principle as catalog synonyms: retrieval quality is curated metadata, not something the model is expected to infer.",
+          "type": "array",
+          "items": { "type": "string", "maxLength": 128 },
+          "maxItems": 32
+        },
+
+        "entity": {
+          "description": "The catalog entity this operation changes. Present even for operations that write several entities: it names the one whose identity the caller supplies, which is what makes the operation resolvable from a row.",
+          "$ref": "common.schema.json#/$defs/qualifiedRef"
+        },
+
+        "intent": {
+          "description": "Closed set, because the runtime and the Studio both branch on it: it decides default confirmation, default emphasis, whether an operation is offered on a multi-row selection, and whether an agent may ever auto-confirm it. 'custom' exists so an unusual operation is expressible without widening the set, and is treated as destructive by default.",
+          "type": "string",
+          "enum": [
+            "create",
+            "update",
+            "correct",
+            "annotate",
+            "approve",
+            "reject",
+            "assign",
+            "reassign",
+            "escalate",
+            "cancel",
+            "delete",
+            "bulkUpdate",
+            "custom"
+          ]
+        },
+
+        "targeting": {
+          "description": "How the operation identifies what it acts on.",
+          "type": "object",
+          "properties": {
+            "mode": {
+              "type": "string",
+              "enum": ["single", "selection", "filter", "none"],
+              "description": "'single' takes one key; 'selection' takes a selection channel's contents; 'filter' takes a filter tree, which is how a bulk action over a queue is expressed without enumerating keys client-side; 'none' is a create."
+            },
+            "maxTargets": {
+              "description": "Hard ceiling the gateway enforces. A bulk action without one is an unbounded write, which is the write-side equivalent of an unfiltered scan.",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
+            }
+          },
+          "required": ["mode"],
+          "additionalProperties": false
+        },
+
+        "parameters": {
+          "description": "Typed inputs, keyed by name. Deliberately the same shape as a data source's parameters so one validation path serves reads and writes.",
+          "type": "object",
+          "propertyNames": { "$ref": "common.schema.json#/$defs/identifier" },
+          "additionalProperties": { "$ref": "#/$defs/operationParameter" },
+          "maxProperties": 64
+        },
+
+        "concurrency": {
+          "description": "Optimistic concurrency. Modelled now rather than later because retrofitting it means changing every stored call site.",
+          "type": "object",
+          "properties": {
+            "mode": { "type": "string", "enum": ["none", "version", "timestamp", "etag"] },
+            "tokenFrom": {
+              "description": "Field of the target row carrying the token, e.g. 'row-version'. The client echoes it; the gateway compares. A mismatch is a typed 'concurrency' problem the UI can explain, not a silent overwrite.",
+              "$ref": "common.schema.json#/$defs/identifier"
+            }
+          },
+          "required": ["mode"],
+          "additionalProperties": false
+        },
+
+        "idempotency": {
+          "type": "object",
+          "properties": {
+            "required": { "type": "boolean", "default": true },
+            "scope": {
+              "type": "string",
+              "enum": ["operation", "operationAndTarget", "session"],
+              "default": "operationAndTarget"
+            },
+            "retentionSeconds": { "type": "integer", "minimum": 60, "maximum": 2592000 }
+          },
+          "additionalProperties": false
+        },
+
+        "effects": {
+          "description": "The declared blast radius, and the reason the read-side dependency graph extends to writes: after a successful operation the runtime knows what to re-query without any page wiring it by hand.\n\nThis declaration is a HINT, not the authority. A write can affect data the page never declared, so the operation response carries the authoritative invalidation set and the client honours the union of the two. A declared set that were treated as complete would produce stale widgets after every write with a side effect a steward had not enumerated.",
+          "type": "object",
+          "properties": {
+            "invalidatesEntities": {
+              "type": "array",
+              "items": { "$ref": "common.schema.json#/$defs/qualifiedRef" },
+              "maxItems": 64
+            },
+            "invalidatesLogicalDataSources": {
+              "type": "array",
+              "items": { "$ref": "common.schema.json#/$defs/identifier" },
+              "maxItems": 64
+            },
+            "emitsEvents": {
+              "description": "Domain events published through the outbox, for subscribers the page knows nothing about.",
+              "type": "array",
+              "items": { "type": "string", "maxLength": 128 },
+              "maxItems": 32
+            },
+            "eventualConsistencySeconds": {
+              "description": "How long the change may take to be visible to a read. Non-zero means the runtime must not silently re-query and show the old value as if it were the new one — it reports the write succeeded and the view is catching up.",
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 3600
+            }
+          },
+          "additionalProperties": false
+        },
+
+        "security": {
+          "description": "Platform-side intent and requirements. Data authorization is still resolved from the caller's identity at the gateway: an operation entry cannot grant a write EDM has not granted.",
+          "type": "object",
+          "properties": {
+            "requiredCapabilities": {
+              "type": "array",
+              "items": { "type": "string", "maxLength": 128 },
+              "maxItems": 32
+            },
+            "confirmation": {
+              "type": "object",
+              "properties": {
+                "required": { "type": "boolean" },
+                "requiresReason": { "type": "boolean" },
+                "message": { "$ref": "common.schema.json#/$defs/i18nString" }
+              },
+              "additionalProperties": false
+            },
+            "auditProfile": { "type": "string", "enum": ["standard", "elevated"] },
+            "sensitivityCeiling": {
+              "description": "The highest classification of data this operation may write. Used at publication to warn a reviewer, and to refuse an agent grant above its own ceiling.",
+              "$ref": "common.schema.json#/$defs/sensitivity"
+            },
+            "reversible": {
+              "description": "Whether the platform can undo the change through a compensating operation. Drives confirmation strength and whether an agent may perform it unattended.",
+              "type": "boolean"
+            },
+            "compensatedBy": { "$ref": "common.schema.json#/$defs/identifier" }
+          },
+          "additionalProperties": false
+        },
+
+        "agent": {
+          "description": "Whether a non-human actor may call this operation, and under what ceiling. Absent means no: an operation is human-only until a steward says otherwise, which is the deny-by-default posture applied to actors rather than to data.",
+          "type": "object",
+          "properties": {
+            "eligible": { "type": "boolean", "default": false },
+            "autoConfirm": {
+              "description": "May an agent proceed without a human confirming this call. Only ever legitimate for reversible, idempotent, non-destructive intents; validation rejects it otherwise.",
+              "type": "boolean",
+              "default": false
+            },
+            "maxTargetsPerCall": { "type": "integer", "minimum": 1, "maximum": 10000 },
+            "rationaleRequired": {
+              "description": "The agent must supply a human-readable reason, recorded in the audit row beside the actor and the principal it acted for.",
+              "type": "boolean",
+              "default": true
+            }
+          },
+          "additionalProperties": false
+        },
+
+        "cost": {
+          "type": "object",
+          "properties": {
+            "class": { "type": "string", "enum": ["low", "medium", "high"] },
+            "expectedDurationClass": { "type": "string", "enum": ["immediate", "seconds", "background"] },
+            "asyncResultVia": {
+              "description": "For 'background' operations: how the outcome arrives. A long write must not be modelled as a request that simply takes a while, or every client invents its own polling.",
+              "type": "string",
+              "enum": ["poll", "event", "none"]
+            }
+          },
+          "additionalProperties": false
+        },
+
+        "lifecycle": {
+          "type": "object",
+          "properties": {
+            "stability": { "type": "string", "enum": ["experimental", "stable", "deprecated"] },
+            "since": { "type": "string", "maxLength": 32 },
+            "deprecatedIn": { "type": "string", "maxLength": 32 },
+            "replacedBy": { "$ref": "common.schema.json#/$defs/identifier" },
+            "migrationNote": { "type": "string", "maxLength": 1000 }
+          },
+          "required": ["stability"],
+          "additionalProperties": false
+        },
+
+        "physical": {
+          "description": "SERVER-SIDE ONLY. The executable target — service, procedure, EDM write path. Stripped from every client and model projection, on the same rule that keeps physical data objects out of authored artifacts: a stolen definition must reveal nothing about the implementation, and promotion between environments must be a rebinding rather than a content edit.",
+          "type": "object",
+          "additionalProperties": true
+        },
+
+        "aiHints": { "$ref": "common.schema.json#/$defs/aiHints" },
+        "tags": { "$ref": "common.schema.json#/$defs/tags" },
+        "deprecated": { "type": "boolean" }
+      },
+      "required": ["id", "businessName", "entity", "intent", "targeting", "lifecycle"],
+      "additionalProperties": false
+    },
+
+    "operationParameter": {
+      "type": "object",
+      "properties": {
+        "label": { "$ref": "common.schema.json#/$defs/i18nString" },
+        "dataType": { "$ref": "common.schema.json#/$defs/dataType" },
+        "required": { "type": "boolean" },
+        "multiValued": { "type": "boolean" },
+        "boundToAttribute": {
+          "description": "The catalog attribute this parameter writes. Present so the Studio can generate an input control with the attribute's own type, enum values and format — an operation form is generated from metadata, exactly as an inspector is.",
+          "$ref": "common.schema.json#/$defs/qualifiedRef"
+        },
+        "allowedValues": {
+          "type": "array",
+          "items": { "type": ["string", "number", "boolean"] },
+          "maxItems": 200
+        },
+        "maxLength": { "type": "integer", "minimum": 1, "maximum": 100000 },
+        "sensitivity": { "$ref": "common.schema.json#/$defs/sensitivity" },
+        "description": { "type": "string", "maxLength": 1000 }
+      },
+      "required": ["dataType"],
+      "additionalProperties": false
+    }
+  }
+}

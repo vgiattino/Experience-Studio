@@ -1,0 +1,248 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.opus.gresham.com/experience-studio/v1/agent.schema.json",
+  "title": "Agent Definition",
+  "description": "A non-human actor attached to an experience, and the grant that bounds it.\n\nThe design claim this schema encodes is that a runtime agent needs no new execution path. An agent's entire reach is a subset of what a page ALREADY declares — its data sources, its actions, its operations — so an agent cannot do anything a user of that page could not do, and the runtime gains no verb it did not already have. What an agent adds is an actor kind, a grant, a budget and a confirmation policy. Nothing else.\n\nThree consequences follow, and they are the reason this is worth declaring rather than coding:\n\n1. **The blast radius is enumerable.** A reviewer reads `tools` and knows exactly what the agent may touch. An agent whose reach is expressed in prompt text is unreviewable.\n2. **Rendering stays deterministic.** An agent may change page STATE — the same channels a click writes — and may propose a PATCH to a definition. It may not emit markup, a query shape, or a component. So a page render remains a pure function of definition, state, data and identity, and the runtime guarantee survives the arrival of runtime AI.\n3. **Every action keeps a human principal.** An agent acts `onBehalfOf` someone, entitlements resolve against that person, and the audit row names both. Retrofitting that after agents exist means rewriting every audit consumer.\n\nAgents are authored artifacts under the same lifecycle as any other: versioned, reviewed, published, promotable, revocable.",
+  "type": "object",
+
+  "properties": {
+    "schemaVersion": { "$ref": "common.schema.json#/$defs/majorMinor" },
+    "id": { "$ref": "common.schema.json#/$defs/identifier" },
+    "name": { "$ref": "common.schema.json#/$defs/i18nString" },
+    "description": { "$ref": "common.schema.json#/$defs/i18nString" },
+    "icon": { "type": "string", "maxLength": 64 },
+
+    "kind": {
+      "description": "Closed set, because the runtime's obligations differ per kind. 'assistant' answers and proposes, and acts only when a human accepts. 'monitor' observes on a schedule and raises findings; it may never write. 'operator' may write within its grant, and is the only kind that can act unattended — which is why it is the kind that requires the strongest confirmation and budget declarations.",
+      "type": "string",
+      "enum": ["assistant", "monitor", "operator"]
+    },
+
+    "surface": {
+      "description": "Where the agent is attached. A page agent sees one page's state; an experience agent may navigate between the experience's pages; a platform agent is authoring-side only and never touches a runtime page.",
+      "type": "string",
+      "enum": ["page", "experience", "platform"]
+    },
+
+    "attachedTo": {
+      "description": "The pages this agent may operate on, when surface is 'page' or 'experience'. Absent means every page of the experience — which validation warns about for an 'operator', because an unbounded write surface is rarely intended.",
+      "type": "array",
+      "items": { "$ref": "common.schema.json#/$defs/identifier" },
+      "maxItems": 64
+    },
+
+    "instructions": {
+      "description": "The agent's standing brief, in business language. It is PROMPT CONTENT, not a permission: nothing written here can widen `tools`, and the runtime does not parse it for capability. Stated explicitly because the most likely misuse of this schema is to express reach in prose and expect it to be enforced.",
+      "type": "object",
+      "properties": {
+        "purpose": { "type": "string", "maxLength": 2000 },
+        "guidance": { "type": "string", "maxLength": 8000 },
+        "outOfScope": { "type": "string", "maxLength": 2000 },
+        "templateRef": {
+          "description": "Versioned prompt template in source control, referenced rather than inlined so a change to how an agent reasons is code-reviewed and traceable like any other change.",
+          "type": "string",
+          "maxLength": 256
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "tools": {
+      "description": "The grant. Keyed by a local tool name so the map is patchable and auditable, and so a reviewer's diff reads as 'this agent gained the ability to reassign exceptions'.\n\nEvery entry must reference something declared elsewhere — a data source or action on an attached page, or an operation in the pinned operation registry. Semantic validation rejects a dangling grant, which is what stops an agent from being given a capability the platform does not have.",
+      "type": "object",
+      "propertyNames": { "$ref": "common.schema.json#/$defs/memberName" },
+      "additionalProperties": { "$ref": "#/$defs/toolGrant" },
+      "maxProperties": 64
+    },
+
+    "stateAccess": {
+      "description": "What the agent may read of the running page. Deliberately explicit and deliberately narrow: an agent that reads every row of every widget is a data egress path, and the sensitivity of what leaves for a model provider is the property that matters most here.",
+      "type": "object",
+      "properties": {
+        "params": { "type": "boolean", "default": true },
+        "filters": { "type": "boolean", "default": true },
+        "selections": { "type": "boolean", "default": true },
+        "rows": {
+          "description": "'none' sees no data at all; 'aggregatesOnly' sees measures and counts but no record-level rows; 'entitled' sees what the principal is entitled to see, and nothing beyond it — the gateway decides, exactly as for a widget.",
+          "type": "string",
+          "enum": ["none", "aggregatesOnly", "entitled"],
+          "default": "none"
+        },
+        "maxRows": { "type": "integer", "minimum": 1, "maximum": 10000 },
+        "sensitivityCeiling": {
+          "description": "The agent may not read data classified above this, regardless of the principal's entitlements. A ceiling below the principal's reach is the point: it narrows the model's exposure without narrowing the human's.",
+          "$ref": "common.schema.json#/$defs/sensitivity",
+          "default": "internal"
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "egress": {
+      "description": "What may leave the platform for a model provider. Defaults are the restrictive ones, on the same policy that governs generation: catalog metadata by default, record-level values only by explicit opt-in and never above the ceiling.",
+      "type": "object",
+      "properties": {
+        "sendsRowValues": { "type": "boolean", "default": false },
+        "sendsAggregates": { "type": "boolean", "default": true },
+        "sendsCatalogMetadata": { "type": "boolean", "default": true },
+        "redactionProfile": { "type": "string", "maxLength": 64 },
+        "regionPinned": { "type": "boolean", "default": true }
+      },
+      "additionalProperties": false
+    },
+
+    "humanInLoop": {
+      "description": "Where the human sits. This is the field that decides whether an agent is a suggestion engine or an actor, and it is required — a default here would be a policy decision made by omission.",
+      "type": "object",
+      "properties": {
+        "confirmation": {
+          "type": "string",
+          "enum": ["always", "writesOnly", "destructiveOnly", "never"],
+          "description": "'never' is legitimate only for a read-only agent or an operator whose granted operations are all reversible, idempotent and marked auto-confirmable in the registry; validation enforces that rather than trusting it."
+        },
+        "onBehalfOfRequired": {
+          "description": "Always true in practice, and present so that an attempt to set it false is a visible, reviewable act rather than an omission.",
+          "type": "boolean",
+          "default": true
+        },
+        "proposalMode": {
+          "description": "How the agent's suggested change is presented when confirmation is required: a JSON Patch preview for a definition change, a dry-run result for a write, or a plain narrative.",
+          "type": "string",
+          "enum": ["patchPreview", "dryRun", "narrative"]
+        },
+        "escalateAfterFailures": { "type": "integer", "minimum": 1, "maximum": 10 }
+      },
+      "required": ["confirmation"],
+      "additionalProperties": false
+    },
+
+    "budget": {
+      "description": "Bounds per turn and per period. An agent without a budget is an unbounded cost and an unbounded blast radius; both are enforced server-side, because a client-side budget is a suggestion.",
+      "type": "object",
+      "properties": {
+        "maxToolCallsPerTurn": { "type": "integer", "minimum": 1, "maximum": 100 },
+        "maxOperationsPerTurn": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "maxTokensPerTurn": { "type": "integer", "minimum": 1 },
+        "maxTurnsPerHour": { "type": "integer", "minimum": 1 },
+        "maxDurationMs": { "type": "integer", "minimum": 1000, "maximum": 600000 },
+        "onBudgetExhausted": {
+          "description": "'stop' halts and reports; 'escalate' hands the remainder to a human with what it has so far. Silent truncation is not an option — the same rule the query planner follows when a page exceeds its fan-out budget.",
+          "type": "string",
+          "enum": ["stop", "escalate"]
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "trigger": {
+      "description": "What starts a turn. A user asking is the default; a schedule or a domain event is what makes a monitor useful. An event trigger names a domain event an operation emits — which is how an agent reacts to a write without polling.",
+      "type": "object",
+      "properties": {
+        "onUserRequest": { "type": "boolean", "default": true },
+        "onSchedule": { "type": "string", "maxLength": 128 },
+        "onEvents": {
+          "type": "array",
+          "items": { "type": "string", "maxLength": 128 },
+          "maxItems": 16
+        },
+        "onPageOpen": { "type": "boolean", "default": false }
+      },
+      "additionalProperties": false
+    },
+
+    "observability": {
+      "type": "object",
+      "properties": {
+        "auditProfile": { "type": "string", "enum": ["standard", "elevated"] },
+        "recordsRationale": { "type": "boolean", "default": true },
+        "recordsToolCalls": { "type": "boolean", "default": true },
+        "retainsTranscript": {
+          "description": "Whether the turn's reasoning transcript is retained. Retention has a discovery cost as well as a privacy cost, so it is a declared choice.",
+          "type": "boolean",
+          "default": false
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "security": { "$ref": "security.schema.json#/$defs/artifactSecurity" },
+    "version": { "$ref": "versioning.schema.json#/$defs/versionEnvelope" },
+    "tags": { "$ref": "common.schema.json#/$defs/tags" }
+  },
+  "required": ["schemaVersion", "id", "name", "kind", "surface", "humanInLoop", "version"],
+  "additionalProperties": false,
+
+  "$defs": {
+    "toolGrant": {
+      "description": "One capability the agent holds. The `kind` decides what `ref` names, and the discriminated form is what gives a precise validation error instead of 'does not match any of five schemas'.",
+      "oneOf": [
+        {
+          "type": "object",
+          "description": "Read a declared data source. The agent sees what the principal is entitled to see; nothing more, and never a query shape of its own devising.",
+          "properties": {
+            "kind": { "const": "readDataSource" },
+            "ref": { "$ref": "common.schema.json#/$defs/identifier" },
+            "label": { "$ref": "common.schema.json#/$defs/i18nString" },
+            "maxRows": { "type": "integer", "minimum": 1, "maximum": 10000 },
+            "maxCallsPerTurn": { "type": "integer", "minimum": 1, "maximum": 50 }
+          },
+          "required": ["kind", "ref"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "Dispatch a declared page action — set a filter, change a parameter, select a row, navigate. State-changing but not data-changing: the agent moves the page to a view the user could have reached themselves.",
+          "properties": {
+            "kind": { "const": "dispatchAction" },
+            "ref": { "$ref": "common.schema.json#/$defs/identifier" },
+            "label": { "$ref": "common.schema.json#/$defs/i18nString" },
+            "maxCallsPerTurn": { "type": "integer", "minimum": 1, "maximum": 50 }
+          },
+          "required": ["kind", "ref"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "Call a registry operation — a write. The grant cannot exceed the operation's own agent ceiling: `autoConfirm` here is refused unless the registry entry permits it, and `maxTargets` is clamped to the registry's.",
+          "properties": {
+            "kind": { "const": "callOperation" },
+            "ref": { "$ref": "common.schema.json#/$defs/identifier" },
+            "label": { "$ref": "common.schema.json#/$defs/i18nString" },
+            "autoConfirm": { "type": "boolean", "default": false },
+            "maxTargets": { "type": "integer", "minimum": 1, "maximum": 10000 },
+            "maxCallsPerTurn": { "type": "integer", "minimum": 1, "maximum": 50 },
+            "dryRunFirst": {
+              "description": "Require a dry run before the real call, so the agent's own blast radius is measured before it is inflicted.",
+              "type": "boolean",
+              "default": true
+            }
+          },
+          "required": ["kind", "ref"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "Propose a change to a definition as a JSON Patch. Design-time reach on the runtime side of the fence: the patch goes to the definition store as a proposal and a human accepts it, so 'the agent edited my dashboard' is always something a person agreed to.",
+          "properties": {
+            "kind": { "const": "proposeDefinitionPatch" },
+            "scope": { "type": "string", "enum": ["page", "experience"] },
+            "label": { "$ref": "common.schema.json#/$defs/i18nString" },
+            "maxOperations": { "type": "integer", "minimum": 1, "maximum": 200 }
+          },
+          "required": ["kind", "scope"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "Explain what the page shows, in words, from state and results it may already read. The only tool that produces no effect at all, and the one most agents should start with.",
+          "properties": {
+            "kind": { "const": "explain" },
+            "label": { "$ref": "common.schema.json#/$defs/i18nString" }
+          },
+          "required": ["kind"],
+          "additionalProperties": false
+        }
+      ]
+    }
+  }
+}

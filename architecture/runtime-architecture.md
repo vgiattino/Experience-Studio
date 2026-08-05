@@ -5,6 +5,16 @@ Related: [`frontend-architecture.md`](./frontend-architecture.md) · [`backend-a
 
 This document answers one question in detail: **how does a JSON page definition become a running, governed, entitled application?**
 
+> **Companion specification.** [`runtime/`](./runtime/) specifies the runtime *model* — what an
+> Experience, a Page, a Component, a Data Source and an Operation are, how actors reach them, and
+> how the model absorbs workflow applications and AI agents without a new execution path. This
+> document specifies the *pipeline* that executes that model. Where the two overlap, the pipeline
+> stages below are the detail and the specification is the frame; two additions there change nothing
+> here — a **write loop** alongside stage 7's read loop
+> ([`runtime/06-rendering.md`](./runtime/06-rendering.md) §5), and a **degradation contract**
+> generalising §10's unknown-component row to every vocabulary axis
+> ([`runtime/08-evolution.md`](./runtime/08-evolution.md) §3).
+
 **Implemented in M1.** Stages 1–8 below run in `libs/renderer`, with a mock gateway standing in for stage 3's data plane. Every claim in §1, §5, §6, §8, §9 and §10 was verified in a browser — see [`../docs/M1-IMPLEMENTATION.md`](../docs/M1-IMPLEMENTATION.md) §2.
 
 ---

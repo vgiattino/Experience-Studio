@@ -21,10 +21,11 @@ The platform's centre of gravity is therefore the **definition** — the artifac
 | [`frontend-architecture.md`](./frontend-architecture.md) | Angular structure, component framework, state management, rendering engine |
 | [`backend-architecture.md`](./backend-architecture.md) | Service decomposition, APIs, storage model, reliability |
 | [`ai-architecture.md`](./ai-architecture.md) | Prompt processing, metadata retrieval, context management, generation flow, evaluation |
-| [`runtime-architecture.md`](./runtime-architecture.md) | How a JSON definition becomes a running application |
+| [`runtime/`](./runtime/) | **Core Runtime Specification** — what an Experience, Page, Component and Data Source *are*; how workflow applications and AI agents fit without a new execution path. Object model, sequence diagrams, four new schemas |
+| [`runtime-architecture.md`](./runtime-architecture.md) | How a JSON definition becomes a running application — the eight pipeline stages and the failure matrix |
 | [`security-architecture.md`](./security-architecture.md) | Roles, permissions, entitlement enforcement, tenant isolation, threat model |
 | [`ai-generation-architecture.md`](./ai-generation-architecture.md) | Superseded by `ai-architecture.md` |
-| [`../schemas/README.md`](../schemas/README.md) | The core metadata model: ten models, JSON schemas, worked examples |
+| [`../schemas/README.md`](../schemas/README.md) | The core metadata model: ten models, three proposed runtime-core models, JSON schemas, worked examples |
 | [`../schemas/expression-grammar.md`](../schemas/expression-grammar.md) | Expression language specification |
 | [`../docs/M1-IMPLEMENTATION.md`](../docs/M1-IMPLEMENTATION.md) | Milestone 1 implementation record: what was built, verified, deviated and deferred |
 
@@ -97,6 +98,9 @@ Architectural principles established across the documents above:
 | 8 | Component manifests are machine-readable contracts with four consumers | Frontend §3.2 |
 | 9 | All change is a JSON Patch through one store, whether from a human or the AI | Frontend §4.3 |
 | 10 | Generation quality is measured on a corpus and gated in CI | AI §7 |
+| 11 | Every state change is a declared transition; every data change is a registry operation | Runtime spec L4, L5 |
+| 12 | Every actor — user, schedule, agent — uses the same entry points and the same checks | Runtime spec L6 |
+| 13 | Unknown vocabulary degrades visibly; it never blanks a page and is never silently dropped | Runtime spec L7 |
 
 ---
 

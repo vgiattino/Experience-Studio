@@ -1,0 +1,227 @@
+{
+  "schemaVersion": "1.1",
+  "registryVersion": 1,
+  "state": "published",
+  "publishedAt": "2026-08-05T09:00:00Z",
+  "operations": {
+    "annotate-exception": {
+      "id": "annotate-exception",
+      "businessName": "Add Note",
+      "description": "Attach an investigation note to a data quality exception. The lightest write in the registry, and the one that makes a queue collaborative rather than merely visible.",
+      "synonyms": ["comment", "add note", "annotate"],
+      "entity": "dq.exception",
+      "intent": "annotate",
+      "targeting": { "mode": "single" },
+      "parameters": {
+        "note": {
+          "label": "Note",
+          "dataType": "string",
+          "required": true,
+          "maxLength": 4000,
+          "sensitivity": "internal",
+          "description": "Free text entered by the investigator. Client-originated content: delimited and marked untrusted wherever it later enters a model context."
+        }
+      },
+      "concurrency": { "mode": "none" },
+      "idempotency": { "required": true, "scope": "operationAndTarget" },
+      "effects": {
+        "invalidatesEntities": ["dq.exception"],
+        "emitsEvents": ["dq.exception.annotated"],
+        "eventualConsistencySeconds": 0
+      },
+      "security": {
+        "requiredCapabilities": ["edm.exception.annotate"],
+        "auditProfile": "standard",
+        "sensitivityCeiling": "internal",
+        "reversible": true
+      },
+      "agent": { "eligible": true, "autoConfirm": false, "rationaleRequired": true },
+      "cost": { "class": "low", "expectedDurationClass": "immediate" },
+      "lifecycle": { "stability": "stable", "since": "1.1.0" },
+      "physical": {
+        "note": "Server-side only; stripped from client and model projections.",
+        "service": "edm-dq",
+        "procedure": "exception.addNote"
+      }
+    },
+
+    "assign-exception": {
+      "id": "assign-exception",
+      "businessName": "Assign",
+      "description": "Assign an exception to an investigator. Reassignment of an already-assigned break uses the same operation: the write is idempotent in its outcome, which is why one operation serves both.",
+      "synonyms": ["assign", "reassign", "give to"],
+      "entity": "dq.exception",
+      "intent": "assign",
+      "targeting": { "mode": "selection", "maxTargets": 200 },
+      "parameters": {
+        "assignee": {
+          "label": "Assignee",
+          "dataType": "string",
+          "required": true,
+          "description": "Platform user id. Validated against the tenant's directory server-side; a client-supplied name is never trusted as an identity."
+        },
+        "priority": {
+          "label": "Priority",
+          "dataType": "string",
+          "allowedValues": ["LOW", "NORMAL", "HIGH"]
+        }
+      },
+      "concurrency": { "mode": "version", "tokenFrom": "row-version" },
+      "idempotency": { "required": true, "scope": "operationAndTarget" },
+      "effects": {
+        "invalidatesEntities": ["dq.exception"],
+        "invalidatesLogicalDataSources": ["ds.dq-exceptions"],
+        "emitsEvents": ["dq.exception.assigned"]
+      },
+      "security": {
+        "requiredCapabilities": ["edm.exception.assign"],
+        "confirmation": { "required": false },
+        "auditProfile": "standard",
+        "reversible": true,
+        "compensatedBy": "assign-exception"
+      },
+      "agent": {
+        "eligible": true,
+        "autoConfirm": true,
+        "maxTargetsPerCall": 25,
+        "rationaleRequired": true
+      },
+      "cost": { "class": "low", "expectedDurationClass": "immediate" },
+      "lifecycle": { "stability": "stable", "since": "1.1.0" }
+    },
+
+    "approve-exception-waiver": {
+      "id": "approve-exception-waiver",
+      "businessName": "Approve Waiver",
+      "description": "Accept a data quality break as tolerated, with a reason. A governance decision rather than a correction: the underlying value does not change, the platform's judgement of it does.",
+      "entity": "dq.exception",
+      "intent": "approve",
+      "targeting": { "mode": "single" },
+      "parameters": {
+        "expires-on": {
+          "label": "Waiver Expires",
+          "dataType": "date",
+          "required": true,
+          "description": "A waiver without an expiry is a silent permanent exemption, which is how a control decays without anyone deciding to weaken it."
+        }
+      },
+      "concurrency": { "mode": "version", "tokenFrom": "row-version" },
+      "idempotency": { "required": true, "scope": "operationAndTarget" },
+      "effects": {
+        "invalidatesEntities": ["dq.exception"],
+        "emitsEvents": ["dq.exception.waived"],
+        "eventualConsistencySeconds": 5
+      },
+      "security": {
+        "requiredCapabilities": ["edm.exception.waive"],
+        "confirmation": { "required": true, "requiresReason": true },
+        "auditProfile": "elevated",
+        "sensitivityCeiling": "confidential",
+        "reversible": true,
+        "compensatedBy": "revoke-exception-waiver"
+      },
+      "agent": { "eligible": false },
+      "cost": { "class": "low", "expectedDurationClass": "immediate" },
+      "lifecycle": { "stability": "stable", "since": "1.1.0" }
+    },
+
+    "revoke-exception-waiver": {
+      "id": "revoke-exception-waiver",
+      "businessName": "Revoke Waiver",
+      "description": "Compensating operation for an approved waiver. Declared as its own registry entry rather than as a flag on the approval, so revocation carries its own capability, its own audit profile and its own reason.",
+      "entity": "dq.exception",
+      "intent": "cancel",
+      "targeting": { "mode": "single" },
+      "concurrency": { "mode": "version", "tokenFrom": "row-version" },
+      "idempotency": { "required": true, "scope": "operationAndTarget" },
+      "effects": { "invalidatesEntities": ["dq.exception"], "emitsEvents": ["dq.exception.waiverRevoked"] },
+      "security": {
+        "requiredCapabilities": ["edm.exception.waive"],
+        "confirmation": { "required": true, "requiresReason": true },
+        "auditProfile": "elevated",
+        "reversible": false
+      },
+      "agent": { "eligible": false },
+      "lifecycle": { "stability": "stable", "since": "1.1.0" }
+    },
+
+    "bulk-close-exceptions": {
+      "id": "bulk-close-exceptions",
+      "businessName": "Close Selected",
+      "description": "Close a set of resolved breaks in one write. Targeted by filter as well as by selection, so closing 4,000 breaks does not require the client to enumerate 4,000 keys — the queue the user was looking at IS the target, expressed as the same filter tree the read used.",
+      "entity": "dq.exception",
+      "intent": "bulkUpdate",
+      "targeting": { "mode": "filter", "maxTargets": 5000 },
+      "parameters": {
+        "resolution": {
+          "label": "Resolution",
+          "dataType": "string",
+          "required": true,
+          "allowedValues": ["FIXED", "NOT_AN_ISSUE", "SUPERSEDED"]
+        }
+      },
+      "concurrency": { "mode": "none" },
+      "idempotency": { "required": true, "scope": "operation" },
+      "effects": {
+        "invalidatesEntities": ["dq.exception"],
+        "invalidatesLogicalDataSources": ["ds.dq-exceptions"],
+        "emitsEvents": ["dq.exception.closed"],
+        "eventualConsistencySeconds": 30
+      },
+      "security": {
+        "requiredCapabilities": ["edm.exception.close", "edm.exception.bulk"],
+        "confirmation": { "required": true, "requiresReason": true },
+        "auditProfile": "elevated",
+        "reversible": false
+      },
+      "agent": { "eligible": false },
+      "cost": { "class": "high", "expectedDurationClass": "background", "asyncResultVia": "event" },
+      "lifecycle": { "stability": "experimental", "since": "1.1.0" }
+    },
+
+    "correct-security-attribute": {
+      "id": "correct-security-attribute",
+      "businessName": "Correct Value",
+      "description": "Override a mastered attribute on a security with a stewarded value. The write that makes a security master page a workspace rather than a report — and the one whose blast radius is widest, because a golden-copy change ripples into every consumer of the instrument.",
+      "entity": "securities.security",
+      "intent": "correct",
+      "targeting": { "mode": "single" },
+      "parameters": {
+        "attribute": {
+          "label": "Attribute",
+          "dataType": "string",
+          "required": true,
+          "description": "Catalog attribute id. Resolved against the pinned catalog version server-side, so a correction cannot name a field the catalog does not have."
+        },
+        "value": { "label": "New Value", "dataType": "string", "required": true },
+        "source-preference": {
+          "label": "Prefer Source",
+          "dataType": "string",
+          "description": "Optionally pin the golden value to a named vendor rather than a literal, which is the correction a steward more often wants."
+        }
+      },
+      "concurrency": { "mode": "timestamp", "tokenFrom": "updated-at" },
+      "idempotency": { "required": true, "scope": "operationAndTarget" },
+      "effects": {
+        "invalidatesEntities": ["securities.security", "securities.source-value", "dq.exception"],
+        "emitsEvents": ["securities.security.corrected"],
+        "eventualConsistencySeconds": 60
+      },
+      "security": {
+        "requiredCapabilities": ["edm.security.correct"],
+        "confirmation": { "required": true, "requiresReason": true },
+        "auditProfile": "elevated",
+        "sensitivityCeiling": "confidential",
+        "reversible": true,
+        "compensatedBy": "correct-security-attribute"
+      },
+      "agent": { "eligible": false },
+      "cost": { "class": "medium", "expectedDurationClass": "seconds" },
+      "lifecycle": { "stability": "experimental", "since": "1.1.0" },
+      "aiHints": {
+        "whenToUse": "Only when the user has identified a specific wrong value and a specific right one.",
+        "whenNotToUse": "Never infer the corrected value from a vendor disagreement. Which vendor is right is a stewardship judgement, not an inference."
+      }
+    }
+  }
+}

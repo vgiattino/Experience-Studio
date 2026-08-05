@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.opus.gresham.com/experience-studio/v1/page-state.schema.json",
+  "title": "Page State Envelope",
+  "description": "The serializable state of one rendered page: which parameters, filters, selections and active tabs produced the view on screen.\n\nThe runtime already holds this state; what it has never had is a NAME for it, and four capabilities all need one:\n\n1. **Deep links.** `syncToUrl` is declared throughout the page model and a URL is just this envelope, serialized. Without a defined envelope every surface invents its own encoding and links stop round-tripping.\n2. **Support and reproduction.** A defect in a governed platform is reproducible from definition version, identity and state. Two of those three were already addressable; this is the third.\n3. **Agent context.** An agent must be told what the user is looking at. Handing it this envelope is bounded, reviewable and free of data; handing it the rendered page is none of those things.\n4. **Restore.** Returning to a workspace where you left it is a state restore, not a navigation.\n\nWhat this envelope must NEVER carry is as important as what it carries. No data rows: state is what was asked, not what came back. No entitlement decision: those are resolved from identity at request time and a cached decision travelling in a link is an authorization bypass. No transient runtime state — an in-flight write, an optimistic value, an unsent agent proposal — because that state is not something a user should be able to restore into, and a link that resurrects a half-finished write is a defect with a governance consequence.",
+  "type": "object",
+
+  "properties": {
+    "schemaVersion": { "$ref": "common.schema.json#/$defs/majorMinor" },
+
+    "experienceId": { "type": "string", "maxLength": 128 },
+    "pageId": { "$ref": "common.schema.json#/$defs/identifier" },
+
+    "definitionVersion": {
+      "description": "The artifact version this state was captured against. State is only meaningful relative to a definition: a filter channel that no longer exists must be dropped on restore rather than silently retained, and that requires knowing which version produced it.",
+      "type": "integer",
+      "minimum": 1
+    },
+
+    "environment": { "type": "string", "maxLength": 64 },
+
+    "params": {
+      "description": "Declared page and experience parameters, by id. Values are literals — a parameter whose default is an expression is resolved before capture, because a restored link must mean the same thing tomorrow as it does today.",
+      "type": "object",
+      "propertyNames": { "$ref": "common.schema.json#/$defs/identifier" },
+      "additionalProperties": { "$ref": "#/$defs/stateValue" },
+      "maxProperties": 64
+    },
+
+    "filters": {
+      "description": "Filter channel values. Null and empty are meaningfully different from absent: absent means the channel was never set, null means it was explicitly cleared, and a restore must reproduce the distinction or a cleared filter comes back set.",
+      "type": "object",
+      "propertyNames": { "$ref": "common.schema.json#/$defs/identifier" },
+      "additionalProperties": { "$ref": "#/$defs/stateValue" },
+      "maxProperties": 64
+    },
+
+    "selections": {
+      "description": "Selection channel contents, as the key fields the channel declares — never a row index, which would not survive a re-query, and never a whole row, which would put data in the envelope.",
+      "type": "object",
+      "propertyNames": { "$ref": "common.schema.json#/$defs/identifier" },
+      "additionalProperties": {
+        "type": "array",
+        "items": { "type": "object", "additionalProperties": { "$ref": "#/$defs/stateValue" } },
+        "maxItems": 1000
+      },
+      "maxProperties": 32
+    },
+
+    "activeTabs": {
+      "description": "Active tab per tabs container, keyed by layout node id. Present because a tab is page state that a user expects a link to preserve — and for a data-driven tabs container the tab id is a row identity, which is why it must be captured as a value rather than as an index.",
+      "type": "object",
+      "propertyNames": { "$ref": "common.schema.json#/$defs/identifier" },
+      "additionalProperties": { "type": "string", "maxLength": 256 },
+      "maxProperties": 32
+    },
+
+    "paging": {
+      "description": "Per-data-source paging position. Optional, and deliberately not part of a shareable link by default: a colleague opening a link expects the top of the queue, not page seven of a result set that has since changed.",
+      "type": "object",
+      "propertyNames": { "$ref": "common.schema.json#/$defs/identifier" },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "offset": { "type": "integer", "minimum": 0 },
+          "cursor": { "type": "string", "maxLength": 512 },
+          "sort": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "field": { "$ref": "common.schema.json#/$defs/identifier" },
+                "direction": { "type": "string", "enum": ["asc", "desc"] }
+              },
+              "required": ["field"],
+              "additionalProperties": false
+            },
+            "maxItems": 8
+          }
+        },
+        "additionalProperties": false
+      },
+      "maxProperties": 32
+    },
+
+    "capturedAt": { "type": "string", "format": "date-time" },
+
+    "capturedBy": {
+      "description": "Who captured it, for a support bundle. Never used to resolve authorization on restore — the restoring caller's own identity decides what they see, which is why the same link legitimately renders differently for two people.",
+      "type": "string",
+      "maxLength": 256
+    },
+
+    "purpose": {
+      "type": "string",
+      "enum": ["link", "restore", "support", "agentContext"],
+      "description": "Why the envelope exists. 'link' and 'restore' round-trip through the URL and session; 'support' may be attached to a defect report; 'agentContext' is the projection handed to an agent turn. The distinction matters because a support bundle may legitimately carry more than a shareable link should."
+    }
+  },
+  "required": ["schemaVersion", "pageId"],
+  "additionalProperties": false,
+
+  "$defs": {
+    "stateValue": {
+      "description": "A literal or a list of literals. Deliberately not a computable value: state is the RESOLVED result of one, and storing the wrapper instead would make a link's meaning depend on when it was opened.",
+      "oneOf": [
+        { "type": ["string", "number", "boolean", "null"] },
+        {
+          "type": "array",
+          "items": { "type": ["string", "number", "boolean", "null"] },
+          "maxItems": 1000
+        }
+      ]
+    }
+  }
+}
