@@ -317,7 +317,7 @@ const FAULTS: readonly { value: SimulatedFault; label: string }[] = [
       font-weight: var(--opus-weight-medium);
       padding: var(--opus-space-2) var(--opus-space-4);
       color: var(--opus-text-inverse);
-      background: var(--opus-emphasis-info);
+      background: var(--opus-accent);
       border: 0;
       border-radius: var(--opus-radius-sm);
       cursor: pointer;
@@ -372,7 +372,7 @@ const FAULTS: readonly { value: SimulatedFault; label: string }[] = [
     }
 
     .chip:hover:not(:disabled) {
-      border-color: var(--opus-emphasis-info);
+      border-color: var(--opus-accent);
       color: var(--opus-text);
     }
 
@@ -465,7 +465,7 @@ const FAULTS: readonly { value: SimulatedFault; label: string }[] = [
 
     .inspectors button.active {
       color: var(--opus-text);
-      border-block-end-color: var(--opus-emphasis-info);
+      border-block-end-color: var(--opus-accent);
     }
 
     .inspector-body { min-inline-size: 0; }

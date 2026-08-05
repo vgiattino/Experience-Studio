@@ -134,8 +134,8 @@ import { ActionDispatcherService, type NavigationRequest } from './action-dispat
 
     .page-action[data-emphasis='primary'] {
       color: var(--opus-text-inverse);
-      background: var(--opus-emphasis-info);
-      border-color: var(--opus-emphasis-info);
+      background: var(--opus-accent);
+      border-color: var(--opus-accent);
     }
 
     .page-action:hover {
@@ -144,7 +144,7 @@ import { ActionDispatcherService, type NavigationRequest } from './action-dispat
 
     .page-action[data-emphasis='primary']:hover {
       opacity: 0.9;
-      background: var(--opus-emphasis-info);
+      background: var(--opus-accent);
     }
 
     .page-action:focus-visible {

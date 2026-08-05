@@ -216,7 +216,7 @@ interface Cell {
     }
 
     tbody tr[data-selected='true'] {
-      background: var(--opus-emphasis-info-bg);
+      background: var(--opus-accent-soft);
     }
 
     tbody tr:focus-visible {

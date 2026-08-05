@@ -15,13 +15,17 @@
 
 @use '@angular/material' as mat;
 @use '../../../libs/design-system/styles/tokens';
+@use '../../../libs/design-system/styles/coda-theme';
 
 html {
   @include mat.theme(
     (
       color: (
-        primary: mat.$azure-palette,
-        tertiary: mat.$cyan-palette,
+        /* Magenta, because the brand is magenta. Material generates its whole tonal system from
+           this seed, so the toolbar, the ripples, the focus rings and the selected states all land
+           on the CODA accent instead of being corrected one component at a time. */
+        primary: mat.$magenta-palette,
+        tertiary: mat.$violet-palette,
       ),
       typography: Roboto,
       density: 0,

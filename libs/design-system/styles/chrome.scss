@@ -1,0 +1,1078 @@
+/**
+ * Application chrome — the structural layer of the CODA design language.
+ *
+ * Ported from the Opus EDM console's global stylesheet (`vgiattino/MDE`, `frontend/src/styles.scss`),
+ * with one change throughout: every literal colour became a `--opus-*` token. The MDE original reads
+ * `background: var(--bg-2)`; this reads `background: var(--opus-surface-hover)`. The consequence is
+ * that the chrome inherits whichever palette the app imported, so the same shell renders in CODA
+ * magenta or in the platform's original blue, in light or dark, with no duplicate rulesets.
+ *
+ * WHY GLOBAL CLASSES RATHER THAN COMPONENTS. These are *layout contracts* shared by three apps: a
+ * topbar is 56px, a rail is 68px and expands to 240px, a workbench is a 260px list beside a body.
+ * Encapsulating them in components would mean either re-declaring the geometry per app or piping it
+ * through inputs; declaring it once as a class is what lets `apps/studio` and a future authoring
+ * surface look like the same product without sharing a component tree. The components that *do*
+ * ship (`opus-app-bar`, `opus-nav-rail`, `opus-list-panel`) are the parts with behaviour.
+ *
+ * Consumed by importing this file after `tokens` and, optionally, `coda-theme`.
+ */
+
+/* ==========================================================
+   Shell: topbar over (rail + main)
+   ========================================================== */
+.opus-app {
+  display: grid;
+  grid-template-rows: var(--opus-topbar-height, 56px) minmax(0, 1fr);
+  block-size: 100dvh;
+  background: var(--opus-surface);
+}
+
+.opus-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--opus-space-3);
+  padding-inline: 22px;
+  background: var(--opus-surface);
+  border-block-end: 1px solid var(--opus-border);
+  position: relative;
+  z-index: 30;
+}
+
+.opus-topbar-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-inline-size: 0;
+}
+
+/**
+ * The wordmark. `strong` carries the brand colour, so the mark is one element and the emphasis is
+ * markup rather than a second span with a class.
+ */
+.opus-wordmark {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+  font-weight: var(--opus-weight-regular);
+  color: var(--opus-text);
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+
+  strong {
+    font-weight: 700;
+    color: var(--opus-accent);
+  }
+}
+
+.opus-topbar-icon {
+  inline-size: 36px;
+  block-size: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  border-radius: var(--opus-radius-sm);
+  color: var(--opus-text-secondary);
+  position: relative;
+  cursor: pointer;
+  text-decoration: none;
+
+  &:hover {
+    background: var(--opus-surface-hover);
+    color: var(--opus-text);
+  }
+
+  &[aria-pressed='true'] {
+    background: var(--opus-accent-soft);
+    color: var(--opus-accent);
+  }
+
+  /* Unread marker. Ringed in the surface colour so it reads as raised on either theme. */
+  .opus-dot {
+    position: absolute;
+    inset-block-start: 8px;
+    inset-inline-end: 8px;
+    inline-size: 7px;
+    block-size: 7px;
+    border-radius: 50%;
+    background: var(--opus-accent);
+    border: 1.5px solid var(--opus-surface);
+  }
+}
+
+.opus-avatar {
+  inline-size: 32px;
+  block-size: 32px;
+  margin-inline-start: 6px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #6b46c1 0%, #a11478 100%);
+  color: #fff;
+  font-size: var(--opus-text-sm);
+  font-weight: var(--opus-weight-semibold);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  cursor: pointer;
+}
+
+/**
+ * Body: rail and main as inset rounded panels.
+ *
+ * The 8px margin and the border on both panels is the console's signature — content sits inside
+ * bordered cards on a slightly darker page, rather than running to the window edge. It also gives
+ * the rail somewhere to grow into when it expands over the main panel.
+ */
+.opus-body {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  overflow: hidden;
+  min-block-size: 0;
+  background: var(--opus-canvas);
+}
+
+.opus-main {
+  overflow: auto;
+  background: var(--opus-surface);
+  border: 1px solid var(--opus-border);
+  border-radius: var(--opus-radius-lg);
+  margin: var(--opus-chrome-inset, 8px) var(--opus-chrome-inset, 8px) var(--opus-chrome-inset, 8px) 0;
+  min-inline-size: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ==========================================================
+   Navigation rail — 68px of icons, 240px on hover
+   ========================================================== */
+.opus-rail {
+  inline-size: var(--opus-rail-width, 68px);
+  background: var(--opus-surface);
+  border: 1px solid var(--opus-border);
+  border-radius: var(--opus-radius-lg);
+  margin: var(--opus-chrome-inset, 8px);
+  display: flex;
+  flex-direction: column;
+  padding-block: var(--opus-space-2) var(--opus-space-3);
+  transition: inline-size var(--opus-duration-normal) var(--opus-easing);
+  position: relative;
+  z-index: 20;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  flex-shrink: 0;
+
+  &.expanded {
+    inline-size: var(--opus-rail-width-expanded, 240px);
+  }
+}
+
+.opus-rail-section {
+  padding: 10px 14px 4px;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--opus-text-muted);
+  font-weight: var(--opus-weight-semibold);
+  white-space: nowrap;
+  overflow: hidden;
+  min-block-size: 26px;
+  flex-shrink: 0;
+}
+
+.opus-rail:not(.expanded) .opus-rail-section {
+  text-align: center;
+  padding: 10px 6px 4px;
+  font-size: 9px;
+}
+
+.opus-rail:not(.expanded) .opus-rail-section-full,
+.opus-rail.expanded .opus-rail-section-mini {
+  display: none;
+}
+
+.opus-nav-item {
+  display: flex;
+  align-items: center;
+  gap: var(--opus-space-3);
+  block-size: 40px;
+  margin: 1px var(--opus-space-2);
+  padding-inline: var(--opus-space-3);
+  border-radius: var(--opus-radius-sm);
+  color: var(--opus-text-secondary);
+  text-decoration: none;
+  cursor: pointer;
+  position: relative;
+  white-space: nowrap;
+  overflow: hidden;
+  border: 0;
+  background: transparent;
+  inline-size: calc(100% - 16px);
+  text-align: start;
+  flex-shrink: 0;
+  font: inherit;
+  font-size: var(--opus-text-md);
+
+  &:hover {
+    background: var(--opus-surface-hover);
+    text-decoration: none;
+  }
+
+  /* The active state is a tint *and* a left marker: on a 68px rail the tint alone is a small
+     square that reads as a hover, and the marker survives the collapse. */
+  &.active {
+    background: var(--opus-accent-soft);
+    color: var(--opus-accent);
+
+    &::before {
+      content: '';
+      position: absolute;
+      inset-inline-start: -8px;
+      inset-block: var(--opus-space-2);
+      inline-size: 3px;
+      background: var(--opus-accent);
+      border-radius: 0 2px 2px 0;
+    }
+  }
+}
+
+.opus-nav-icon {
+  inline-size: 20px;
+  block-size: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.opus-nav-label {
+  font-size: var(--opus-text-md);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.opus-rail:not(.expanded) {
+  .opus-nav-item {
+    justify-content: center;
+    padding: 0;
+    margin: 1px var(--opus-space-3);
+    inline-size: calc(100% - 24px);
+  }
+
+  .opus-nav-label {
+    display: none;
+  }
+
+  .opus-nav-item:hover .opus-tip {
+    opacity: 1;
+  }
+}
+
+.opus-tip {
+  position: absolute;
+  inset-inline-start: calc(100% + 12px);
+  inset-block-start: 50%;
+  transform: translateY(-50%);
+  background: #1a1a1a;
+  color: #fff;
+  padding: 6px 10px;
+  border-radius: var(--opus-radius-sm);
+  font-size: var(--opus-text-sm);
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--opus-duration-fast) var(--opus-easing);
+  z-index: 100;
+}
+
+/* ==========================================================
+   Workbench — a list beside a body
+   ========================================================== */
+.opus-workbench {
+  display: grid;
+  grid-template-columns: var(--opus-wb-list-width, 260px) minmax(0, 1fr);
+  block-size: 100%;
+  min-block-size: 0;
+  overflow: hidden;
+  transition: grid-template-columns var(--opus-duration-normal) var(--opus-easing);
+
+  /* Collapsed, the list keeps a 44px stub so the reopen affordance never moves. */
+  &.list-collapsed {
+    grid-template-columns: 44px minmax(0, 1fr);
+  }
+}
+
+.opus-wb-list {
+  border-inline-end: 1px solid var(--opus-border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-inline-size: 0;
+}
+
+.opus-wb-list-head {
+  display: flex;
+  align-items: center;
+  gap: var(--opus-space-2);
+  padding: 14px 14px 10px;
+  border-block-end: 1px solid var(--opus-border);
+  flex-shrink: 0;
+
+  .title {
+    font-size: var(--opus-text-md);
+    font-weight: var(--opus-weight-semibold);
+    color: var(--opus-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .count {
+    font-size: var(--opus-text-xs);
+    color: var(--opus-text-muted);
+  }
+
+  .spacer {
+    flex: 1;
+  }
+}
+
+.opus-wb-list-search {
+  padding: 10px 12px;
+  border-block-end: 1px solid var(--opus-border);
+  flex-shrink: 0;
+}
+
+.opus-wb-list-items {
+  flex: 1;
+  overflow-y: auto;
+  padding-block: var(--opus-space-1);
+  margin: 0;
+  list-style: none;
+}
+
+.opus-wb-list-item {
+  padding: 8px 14px;
+  font-size: var(--opus-text-md);
+  color: var(--opus-text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: var(--opus-space-2);
+  inline-size: 100%;
+  text-align: start;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  transition: background var(--opus-duration-fast) var(--opus-easing);
+
+  &:hover {
+    background: var(--opus-surface-hover);
+  }
+
+  &.active {
+    background: var(--opus-accent-soft);
+    color: var(--opus-accent);
+    font-weight: var(--opus-weight-medium);
+  }
+
+  .label {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .hint {
+    font-size: var(--opus-text-xs);
+    color: var(--opus-text-muted);
+  }
+}
+
+.opus-wb-body {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-inline-size: 0;
+  min-block-size: 0;
+}
+
+.opus-wb-body-head {
+  padding: 16px 20px 0;
+  border-block-end: 1px solid var(--opus-border);
+  flex-shrink: 0;
+}
+
+.opus-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-block-end: var(--opus-space-1);
+
+  h1 {
+    font-size: var(--opus-text-lg);
+    font-weight: var(--opus-weight-semibold);
+    color: var(--opus-text);
+    display: flex;
+    align-items: center;
+    gap: var(--opus-space-2);
+    margin: 0;
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .right {
+    margin-inline-start: auto;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .head-icon {
+    color: var(--opus-text-secondary);
+    display: flex;
+    align-items: center;
+  }
+}
+
+.opus-desc {
+  font-size: var(--opus-text-sm);
+  color: var(--opus-text-muted);
+  padding-block-end: var(--opus-space-3);
+  margin: 0;
+}
+
+.opus-wb-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 20px;
+  border-block-end: 1px solid var(--opus-border);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.opus-wb-tab-body {
+  flex: 1;
+  overflow: auto;
+  min-block-size: 0;
+}
+
+/* ==========================================================
+   Pills
+   ========================================================== */
+.opus-ver-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px var(--opus-space-2);
+  background: var(--opus-surface-hover);
+  border: 1px solid var(--opus-border);
+  border-radius: 12px;
+  font-size: var(--opus-text-xs);
+  font-weight: var(--opus-weight-medium);
+  color: var(--opus-text-secondary);
+  cursor: pointer;
+  font-family: inherit;
+
+  &:hover {
+    border-color: var(--opus-border-strong);
+    background: var(--opus-surface-active);
+  }
+}
+
+.opus-env-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--opus-space-1);
+  padding: 2px var(--opus-space-2);
+  border-radius: 12px;
+  font-size: var(--opus-text-xs);
+  font-weight: var(--opus-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+
+  &.live {
+    background: var(--opus-emphasis-positive-bg);
+    color: var(--opus-emphasis-positive);
+  }
+
+  &.draft {
+    background: var(--opus-surface-hover);
+    color: var(--opus-text-muted);
+  }
+
+  &.warn {
+    background: var(--opus-emphasis-warning-bg);
+    color: var(--opus-emphasis-warning);
+  }
+
+  &.error {
+    background: var(--opus-emphasis-negative-bg);
+    color: var(--opus-emphasis-negative);
+  }
+}
+
+/* ==========================================================
+   Buttons
+   ========================================================== */
+.opus-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--opus-space-2);
+  padding: 8px 14px;
+  border-radius: var(--opus-radius-sm);
+  border: 1px solid var(--opus-border-strong);
+  background: var(--opus-surface);
+  color: var(--opus-text);
+  font: inherit;
+  font-size: var(--opus-text-md);
+  font-weight: var(--opus-weight-medium);
+  cursor: pointer;
+  transition:
+    background var(--opus-duration-fast) var(--opus-easing),
+    border-color var(--opus-duration-fast) var(--opus-easing);
+
+  &:hover:not(:disabled) {
+    background: var(--opus-surface-hover);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  &.primary {
+    background: var(--opus-accent);
+    border-color: var(--opus-accent);
+    color: var(--opus-accent-contrast);
+
+    &:hover:not(:disabled) {
+      background: var(--opus-accent-hover);
+      border-color: var(--opus-accent-hover);
+    }
+  }
+
+  &.ghost {
+    border-color: transparent;
+    background: transparent;
+  }
+
+  &.sm {
+    padding: 5px 10px;
+    font-size: var(--opus-text-sm);
+  }
+}
+
+.opus-icon-btn {
+  inline-size: 32px;
+  block-size: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--opus-radius-sm);
+  border: 0;
+  background: transparent;
+  color: var(--opus-text-secondary);
+  cursor: pointer;
+  flex-shrink: 0;
+
+  &:hover:not(:disabled) {
+    background: var(--opus-surface-hover);
+    color: var(--opus-text);
+  }
+
+  &:disabled {
+    opacity: 0.35;
+    cursor: default;
+  }
+
+  &.active,
+  &[aria-pressed='true'] {
+    background: var(--opus-accent-soft);
+    color: var(--opus-accent);
+  }
+}
+
+/* The AI affordance. Bordered rather than filled: it offers, it does not act. */
+.opus-ai-star {
+  inline-size: 28px;
+  block-size: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--opus-radius-sm);
+  border: 1px solid var(--opus-border);
+  background: var(--opus-surface);
+  color: var(--opus-accent);
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: var(--opus-accent-soft);
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+}
+
+.opus-tool-sep {
+  inline-size: 1px;
+  block-size: 20px;
+  background: var(--opus-border);
+  margin-inline: 2px;
+  flex-shrink: 0;
+}
+
+/* ==========================================================
+   Form controls
+   ========================================================== */
+.opus-field {
+  display: block;
+  margin-block-end: var(--opus-space-4);
+}
+
+.opus-field-label {
+  display: block;
+  font-size: var(--opus-text-md);
+  font-weight: var(--opus-weight-semibold);
+  margin-block-end: 6px;
+  color: var(--opus-text);
+}
+
+.opus-field-help {
+  font-size: var(--opus-text-xs);
+  color: var(--opus-text-muted);
+  margin-block-start: var(--opus-space-1);
+}
+
+.opus-input,
+.opus-select,
+.opus-textarea {
+  inline-size: 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--opus-border-strong);
+  border-radius: var(--opus-radius-sm);
+  background: var(--opus-surface);
+  color: var(--opus-text);
+  font: inherit;
+  font-size: var(--opus-text-md);
+  outline: none;
+  transition:
+    border-color var(--opus-duration-fast) var(--opus-easing),
+    box-shadow var(--opus-duration-fast) var(--opus-easing);
+
+  &:focus {
+    border-color: var(--opus-accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--opus-accent) 14%, transparent);
+  }
+
+  &::placeholder {
+    color: var(--opus-text-faint);
+  }
+}
+
+.opus-textarea {
+  resize: vertical;
+  min-block-size: 96px;
+}
+
+.opus-search-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+
+  .opus-search-icon {
+    position: absolute;
+    inset-inline-start: 9px;
+    display: flex;
+    color: var(--opus-text-muted);
+    pointer-events: none;
+  }
+
+  .opus-input {
+    padding-inline-start: 30px;
+    padding-block: 6px;
+    font-size: var(--opus-text-sm);
+  }
+}
+
+/* ==========================================================
+   Tabs
+   ========================================================== */
+.opus-tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  border-block-end: 1px solid var(--opus-border);
+  padding-inline: 20px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  flex-shrink: 0;
+}
+
+.opus-tab {
+  padding: 10px 14px;
+  font: inherit;
+  font-size: var(--opus-text-md);
+  font-weight: var(--opus-weight-medium);
+  color: var(--opus-text-secondary);
+  border: 0;
+  background: transparent;
+  border-block-end: 2px solid transparent;
+  margin-block-end: -1px;
+  cursor: pointer;
+  transition:
+    color var(--opus-duration-fast) var(--opus-easing),
+    border-color var(--opus-duration-fast) var(--opus-easing);
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+
+  &:hover {
+    color: var(--opus-text);
+  }
+
+  &.active {
+    color: var(--opus-accent);
+    border-block-end-color: var(--opus-accent);
+  }
+}
+
+.opus-tab-badge {
+  padding: 0 5px;
+  font-size: 10px;
+  font-weight: var(--opus-weight-semibold);
+  color: var(--opus-text-inverse);
+  background: var(--opus-text-muted);
+  border-radius: 999px;
+}
+
+/* ==========================================================
+   AI panel
+   ========================================================== */
+.opus-ai-panel {
+  border: 1px solid var(--opus-accent-soft);
+  border-radius: var(--opus-radius-md);
+  overflow: hidden;
+}
+
+.opus-ai-panel-head {
+  display: flex;
+  align-items: center;
+  gap: var(--opus-space-2);
+  padding: 10px 14px;
+  background: var(--opus-accent-soft);
+  font-size: var(--opus-text-sm);
+  font-weight: var(--opus-weight-semibold);
+  color: var(--opus-accent);
+}
+
+.opus-ai-panel-body {
+  padding: 12px 14px;
+  background: var(--opus-surface);
+  display: flex;
+  flex-direction: column;
+  gap: var(--opus-space-2);
+}
+
+.opus-ai-suggestion {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--opus-space-2);
+  font-size: var(--opus-text-md);
+  color: var(--opus-text-secondary);
+  padding-block: 6px;
+  border-block-end: 1px solid var(--opus-surface-hover);
+  text-align: start;
+  border-inline: 0;
+  border-block-start: 0;
+  background: transparent;
+  font-family: inherit;
+  inline-size: 100%;
+  cursor: pointer;
+
+  &:last-child {
+    border-block-end: 0;
+  }
+
+  &:hover {
+    color: var(--opus-text);
+  }
+
+  .ai-ic {
+    color: var(--opus-accent);
+    flex-shrink: 0;
+    margin-block-start: 2px;
+    display: flex;
+  }
+
+  .ai-txt {
+    flex: 1;
+    line-height: var(--opus-leading-normal);
+  }
+}
+
+.opus-ai-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  background: var(--opus-accent);
+  color: var(--opus-accent-contrast);
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* ==========================================================
+   Popover / menu
+   ========================================================== */
+.opus-popover {
+  position: absolute;
+  inset-block-start: calc(100% + 8px);
+  inset-inline-end: 0;
+  background: var(--opus-surface);
+  border: 1px solid var(--opus-border);
+  border-radius: var(--opus-radius-lg);
+  box-shadow: var(--opus-shadow-overlay);
+  z-index: 200;
+  min-inline-size: 200px;
+}
+
+.opus-popover-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--opus-space-3);
+  padding: 12px 16px;
+  font-weight: var(--opus-weight-semibold);
+  font-size: var(--opus-text-md);
+  border-block-end: 1px solid var(--opus-border);
+}
+
+.opus-popover-list {
+  max-block-size: 360px;
+  overflow-y: auto;
+  margin: 0;
+  padding: var(--opus-space-1);
+  list-style: none;
+}
+
+.opus-menu-item {
+  display: flex;
+  align-items: center;
+  gap: var(--opus-space-2);
+  padding: 8px 12px;
+  border-radius: var(--opus-radius-sm);
+  font: inherit;
+  font-size: var(--opus-text-md);
+  cursor: pointer;
+  color: var(--opus-text-secondary);
+  inline-size: 100%;
+  text-align: start;
+  border: 0;
+  background: transparent;
+
+  &:hover {
+    background: var(--opus-surface-hover);
+  }
+
+  &.active {
+    color: var(--opus-accent);
+  }
+}
+
+.opus-menu-divider {
+  block-size: 1px;
+  background: var(--opus-border);
+  margin-block: var(--opus-space-1);
+}
+
+/* ==========================================================
+   Status banners
+   ========================================================== */
+.opus-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: var(--opus-radius-md);
+  font-size: var(--opus-text-md);
+  border: 1px solid transparent;
+  margin: 0;
+
+  &.info {
+    background: var(--opus-emphasis-info-bg);
+    color: var(--opus-emphasis-info);
+  }
+
+  &.warn {
+    background: var(--opus-emphasis-warning-bg);
+    color: var(--opus-emphasis-warning);
+  }
+
+  &.success {
+    background: var(--opus-emphasis-positive-bg);
+    color: var(--opus-emphasis-positive);
+  }
+
+  &.error {
+    background: var(--opus-emphasis-negative-bg);
+    color: var(--opus-emphasis-negative);
+  }
+}
+
+/* ==========================================================
+   Zoom control — ported from the EDM solution canvas
+   ========================================================== */
+.opus-zoom {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  background: var(--opus-surface);
+  border: 1px solid var(--opus-border);
+  border-radius: 999px;
+
+  .opus-zoom-pct {
+    min-inline-size: 44px;
+    text-align: center;
+    font-size: var(--opus-text-xs);
+    font-variant-numeric: tabular-nums;
+    color: var(--opus-text-secondary);
+  }
+
+  .opus-icon-btn {
+    inline-size: 26px;
+    block-size: 26px;
+  }
+}
+
+/* ==========================================================
+   Scrollbars, utilities, motion
+   ========================================================== */
+.opus-hstack {
+  display: flex;
+  align-items: center;
+  gap: var(--opus-space-2);
+}
+
+.opus-vstack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--opus-space-2);
+}
+
+.opus-muted {
+  color: var(--opus-text-muted);
+  font-size: var(--opus-text-sm);
+}
+
+.opus-spacer {
+  flex: 1;
+}
+
+.opus-truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.opus-sr-only {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@keyframes opus-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.opus-fade-in {
+  animation: opus-fade-in var(--opus-duration-fast) var(--opus-easing);
+}
+
+@keyframes opus-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.opus-spin {
+  animation: opus-spin 0.8s linear infinite;
+}
+
+/**
+ * Thin scrollbars.
+ *
+ * Applied globally because a 6px bar is part of the console's density: default-width bars inside a
+ * 260px list panel take a visible slice of the label column.
+ */
+::-webkit-scrollbar {
+  inline-size: 6px;
+  block-size: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--opus-border-strong);
+  border-radius: 3px;
+
+  &:hover {
+    background: var(--opus-text-faint);
+  }
+}
+
+/**
+ * Below the tablet breakpoint the workbench stops being two columns.
+ *
+ * The list becomes a full-width strip above the body rather than a 260px column, because at 430px a
+ * 260px list leaves 170px of body — narrower than the smallest widget the renderer will lay out.
+ */
+@media (max-width: 900px) {
+  .opus-workbench,
+  .opus-workbench.list-collapsed {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .opus-wb-list {
+    border-inline-end: 0;
+    border-block-end: 1px solid var(--opus-border);
+    max-block-size: 40vh;
+  }
+
+  .opus-rail {
+    display: none;
+  }
+
+  .opus-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .opus-main {
+    margin-inline: var(--opus-chrome-inset, 8px);
+  }
+}

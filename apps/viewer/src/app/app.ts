@@ -182,7 +182,7 @@ const EXPERIENCE_URL = `${DEFINITIONS_BASE}/securities-operations.experience.jso
       block-size: 1.75rem;
       font-size: var(--opus-text-md);
       color: var(--opus-text-inverse);
-      background: var(--opus-emphasis-info);
+      background: var(--opus-accent);
       border-radius: var(--opus-radius-sm);
       flex-shrink: 0;
     }
@@ -266,9 +266,9 @@ const EXPERIENCE_URL = `${DEFINITIONS_BASE}/securities-operations.experience.jso
 
     .create.active {
       color: var(--opus-text-inverse);
-      background: var(--opus-emphasis-info);
+      background: var(--opus-accent);
       border-style: solid;
-      border-color: var(--opus-emphasis-info);
+      border-color: var(--opus-accent);
     }
 
     .create:focus-visible {

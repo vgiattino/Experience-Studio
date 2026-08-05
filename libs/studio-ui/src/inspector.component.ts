@@ -462,8 +462,8 @@ const GAPS = ['none', 'sm', 'md', 'lg'] as const;
 
     .row button.primary {
       color: var(--opus-text-inverse);
-      background: var(--opus-emphasis-info);
-      border-color: var(--opus-emphasis-info);
+      background: var(--opus-accent);
+      border-color: var(--opus-accent);
     }
 
     .row button.primary:disabled {

@@ -1,0 +1,73 @@
+/**
+ * The canvas editing overlay.
+ *
+ * Selection outline, hover outline and drop indicators, applied with CSS over the `data-node`
+ * attribute the renderer publishes — so nothing about the rendered tree changes between design and
+ * preview mode, which is what keeps the preview honest.
+ *
+ * WHY THESE RULES ARE GLOBAL AND NOT IN `canvas.component.ts`. They were, and they did not work.
+ * Angular's default emulated encapsulation rewrites a component's selectors to require that
+ * component's `_ngcontent` attribute, and the elements carrying `data-node` are rendered by
+ * `PageRendererComponent` — a *different* component, in a different view, with a different scope
+ * attribute. So `.surface [data-node][data-editor-selected='true']` matched nothing, and the builder
+ * shipped with no visible selection outline, no hover outline, and no drop indicator. The rules were
+ * present, plausible on review, and inert in the browser; only opening the page builder and reading
+ * a computed style found it.
+ *
+ * These selectors are a *contract between two libraries* — the renderer publishes `data-node`, and
+ * `EditorService` writes `data-editor-selected` / `data-editor-drop` onto the same elements — not one
+ * component's private markup. A cross-view contract cannot live inside a scoped stylesheet. The
+ * alternatives were `::ng-deep`, which is deprecated and does the same thing less legibly, and
+ * `ViewEncapsulation.None` on the canvas, which would leak every canvas rule to every app.
+ *
+ * Imported by an app's global `styles.scss`. It is scoped under `opus-canvas`, so nothing here can
+ * reach a page the Viewer renders.
+ */
+
+/* The overlay draws with `outline` and absolutely-positioned pseudo-elements, both of which need a
+   positioned box to sit on. Applied in both modes so switching modes cannot reflow the page. */
+opus-canvas .surface [data-node] {
+  position: relative;
+}
+
+opus-canvas .frame[data-mode='design'] {
+  .surface [data-node]:hover {
+    outline: 1px dashed var(--opus-border-strong, rgb(127 127 127 / 55%));
+    outline-offset: 1px;
+  }
+
+  .surface [data-node][data-editor-selected='true'] {
+    outline: 2px solid var(--opus-accent);
+    outline-offset: 1px;
+  }
+
+  /* A hovered ancestor and a selected descendant both draw, and the outer dashed outline reads as
+     noise around the thing the author actually picked. Selection wins on its own element. */
+  .surface [data-node][data-editor-selected='true']:hover {
+    outline: 2px solid var(--opus-accent);
+  }
+
+  .surface [data-node][data-editor-drop='before']::before,
+  .surface [data-node][data-editor-drop='after']::after {
+    content: '';
+    position: absolute;
+    inset-inline: 0;
+    block-size: 3px;
+    background: var(--opus-accent);
+    z-index: 2;
+  }
+
+  .surface [data-node][data-editor-drop='before']::before {
+    inset-block-start: -2px;
+  }
+
+  .surface [data-node][data-editor-drop='after']::after {
+    inset-block-end: -2px;
+  }
+
+  .surface [data-node][data-editor-drop='inside'] {
+    outline: 2px solid var(--opus-accent);
+    outline-offset: -2px;
+    background: color-mix(in srgb, var(--opus-accent) 8%, transparent);
+  }
+}

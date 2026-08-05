@@ -140,7 +140,7 @@ interface Rendered {
     .item[data-active='true'] {
       color: var(--opus-text);
       font-weight: var(--opus-weight-medium);
-      background: var(--opus-emphasis-info-bg);
+      background: var(--opus-accent-soft);
     }
 
     .item:focus-visible {

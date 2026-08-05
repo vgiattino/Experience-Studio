@@ -23,6 +23,15 @@
   --opus-radius-md: 8px;
   --opus-radius-lg: 12px;
   --opus-shadow-raised: 0 1px 2px rgb(0 0 0 / 8%), 0 4px 12px rgb(0 0 0 / 6%);
+  --opus-shadow-hairline: 0 1px 2px rgb(0 0 0 / 5%);
+  --opus-shadow-overlay: 0 8px 24px rgb(0 0 0 / 16%);
+
+  /* ── chrome metrics, so a shell does not invent its own */
+  --opus-topbar-height: 56px;
+  --opus-rail-width: 68px;
+  --opus-rail-width-expanded: 240px;
+  --opus-wb-list-width: 260px;
+  --opus-chrome-inset: 8px;
 
   /* ── typography */
   --opus-font-sans: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
@@ -65,8 +74,27 @@
   --opus-text: #171c26;
   --opus-text-secondary: #566076;
   --opus-text-muted: #7a869c;
+  --opus-text-faint: #97a1b4;
   --opus-text-inverse: #ffffff;
   --opus-focus-ring: #2563eb;
+  --opus-surface-active: #e4e9f1;
+
+  /**
+   * ── brand accent: chrome only.
+   *
+   * Distinct from `emphasis-info` because they answer different questions. `accent` is "this is the
+   * product's colour" — the active nav item, the active tab, the primary button, the canvas selection
+   * outline. `emphasis-info` is "this row is informational", which a definition may say and which
+   * must stay legible next to positive, warning and negative. They coincided while both were blue,
+   * and the CODA theme separates them: its brand is magenta and its informational colour is blue.
+   *
+   * A definition may name an emphasis. It may not name an accent — the accent belongs to the shell.
+   */
+  --opus-accent: #1d4ed8;
+  --opus-accent-hover: #1b3fb0;
+  --opus-accent-pressed: #16358f;
+  --opus-accent-soft: #dbeafe;
+  --opus-accent-contrast: #ffffff;
 
   /* ── emphasis semantics: the only vocabulary a definition may use */
   --opus-emphasis-neutral: #475569;
@@ -108,6 +136,14 @@
     --opus-text-inverse: #0d1117;
     --opus-focus-ring: #60a5fa;
 
+    --opus-text-faint: #6b7688;
+    --opus-surface-active: #2a3341;
+    --opus-accent: #60a5fa;
+    --opus-accent-hover: #7db8fb;
+    --opus-accent-pressed: #4a93ea;
+    --opus-accent-soft: #14243d;
+    --opus-accent-contrast: #0d1117;
+
     --opus-emphasis-neutral: #a3aec0;
     --opus-emphasis-neutral-bg: #232b36;
     --opus-emphasis-positive: #4ade80;
@@ -131,6 +167,8 @@
     --opus-chart-axis: #7a869c;
 
     --opus-shadow-raised: 0 1px 2px rgb(0 0 0 / 40%), 0 4px 12px rgb(0 0 0 / 30%);
+    --opus-shadow-hairline: 0 1px 3px rgb(0 0 0 / 40%);
+    --opus-shadow-overlay: 0 8px 24px rgb(0 0 0 / 60%);
   }
 }
 
@@ -148,6 +186,14 @@
   --opus-text-muted: #7a869c;
   --opus-text-inverse: #0d1117;
   --opus-focus-ring: #60a5fa;
+
+  --opus-text-faint: #6b7688;
+  --opus-surface-active: #2a3341;
+  --opus-accent: #60a5fa;
+  --opus-accent-hover: #7db8fb;
+  --opus-accent-pressed: #4a93ea;
+  --opus-accent-soft: #14243d;
+  --opus-accent-contrast: #0d1117;
 
   --opus-emphasis-neutral: #a3aec0;
   --opus-emphasis-neutral-bg: #232b36;
@@ -172,6 +218,8 @@
   --opus-chart-axis: #7a869c;
 
   --opus-shadow-raised: 0 1px 2px rgb(0 0 0 / 40%), 0 4px 12px rgb(0 0 0 / 30%);
+  --opus-shadow-hairline: 0 1px 3px rgb(0 0 0 / 40%);
+  --opus-shadow-overlay: 0 8px 24px rgb(0 0 0 / 60%);
 }
 
 /* Density is a page-level presentation choice, applied as a data attribute. */

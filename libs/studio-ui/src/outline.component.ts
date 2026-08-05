@@ -94,7 +94,7 @@ interface OutlineRow {
     }
 
     .row.selected {
-      background: var(--opus-emphasis-info);
+      background: var(--opus-accent);
       color: var(--opus-text-inverse);
     }
 
@@ -110,10 +110,10 @@ interface OutlineRow {
 
     /* The indicator has to say which of the three things a drop will do, or the user finds out
        by doing it. A line means sibling; a filled band means "inside this container". */
-    .row.drop-before { border-block-start-color: var(--opus-emphasis-info); }
-    .row.drop-after { border-block-end-color: var(--opus-emphasis-info); }
+    .row.drop-before { border-block-start-color: var(--opus-accent); }
+    .row.drop-after { border-block-end-color: var(--opus-accent); }
     .row.drop-inside {
-      box-shadow: inset 0 0 0 2px var(--opus-emphasis-info);
+      box-shadow: inset 0 0 0 2px var(--opus-accent);
       border-radius: var(--opus-radius-sm);
     }
 

@@ -1,0 +1,173 @@
+/**
+ * CODA — the Opus design language, ported from the Opus EDM console (`vgiattino/MDE`).
+ *
+ * WHY THIS IS A TOKEN LAYER AND NOT A RESKIN. The look of Opus EDM is carried almost entirely by
+ * one palette and one type scale: magenta brand, a five-step neutral ink ramp, a four-step surface
+ * ramp, 13px dense text, 4px radii, hairline borders. None of that is structural. So the port is a
+ * second *value set* for the tokens the platform already has — every component, every widget, and
+ * every generated page changes appearance without a single component edit, and a page definition
+ * still cannot name a colour (`tokens.scss` header).
+ *
+ * Import order matters: `tokens` establishes the vocabulary and the semantics, this file re-values
+ * it. An app that imports `tokens` alone keeps the original palette, which is what makes this a
+ * theme rather than a fork.
+ *
+ * ONE ADDITION TO THE VOCABULARY. `--opus-accent` did not exist. Chrome across the apps was reaching
+ * for `--opus-emphasis-info` to mean "brand" — active nav item, active tab, primary button, the
+ * canvas selection outline — which conflated "this is the product's colour" with "this row is
+ * informational". CODA forces the distinction: its brand is magenta and its informational blue is
+ * still blue, so the two cannot share a token. Chrome now uses `--opus-accent`; `emphasis-info`
+ * went back to meaning information.
+ */
+
+@use 'tokens';
+
+:root {
+  /* ── CODA brand: magenta. The one colour the product is recognised by. */
+  --opus-accent: #a11478;
+  --opus-accent-hover: #6d0d51;
+  --opus-accent-pressed: #570a41;
+  --opus-accent-soft: #fceaec;
+  --opus-accent-contrast: #ffffff;
+
+  /* ── neutral ink ramp (CODA `--ink` … `--ink-5`) */
+  --opus-text: #0e1111;
+  --opus-text-secondary: #666666;
+  --opus-text-muted: #888888;
+  --opus-text-faint: #999999;
+  --opus-text-inverse: #ffffff;
+
+  /* ── surface ramp (CODA `--bg` … `--bg-3`). `surface` is white and `canvas` is near-white:
+        the console reads as panels floating on paper, not cards on grey. */
+  --opus-canvas: #f9f9f9;
+  --opus-surface: #ffffff;
+  --opus-surface-raised: #ffffff;
+  --opus-surface-sunken: #f6f6f6;
+  --opus-surface-hover: #f6f6f6;
+  --opus-surface-active: #eeeeee;
+  --opus-border: #dddddd;
+  --opus-border-strong: #cccccc;
+  --opus-focus-ring: #a11478;
+
+  /* ── type: Segoe UI first, 13px base. The density is the point — an EDM console shows a
+        working set, and 15px text costs roughly two rows a screen. */
+  --opus-font-sans: 'Segoe UI', 'Segoe UI Variable', 'Inter', -apple-system, BlinkMacSystemFont,
+    system-ui, sans-serif;
+  --opus-text-xs: 11px;
+  --opus-text-sm: 12px;
+  --opus-text-md: 13px;
+  --opus-text-lg: 16px;
+  --opus-text-xl: 20px;
+  --opus-text-2xl: 24px;
+  --opus-text-3xl: 30px;
+
+  /* ── geometry and elevation */
+  --opus-radius-sm: 4px;
+  --opus-radius-md: 6px;
+  --opus-radius-lg: 8px;
+  --opus-shadow-raised: 0 2px 4px rgb(16 24 40 / 6%), 0 4px 8px rgb(16 24 40 / 10%);
+  --opus-shadow-hairline: 0 1px 2px rgb(16 24 40 / 5%);
+  --opus-shadow-overlay: 0 8px 24px rgb(0 0 0 / 16%);
+
+  /* ── emphasis semantics, re-valued to CODA's status palette. Named the same, so nothing that
+        consumes them has to know the theme changed. */
+  --opus-emphasis-neutral: #666666;
+  --opus-emphasis-neutral-bg: #f6f6f6;
+  --opus-emphasis-positive: #008566;
+  --opus-emphasis-positive-bg: #dcfce7;
+  --opus-emphasis-warning: #b25e00;
+  --opus-emphasis-warning-bg: #fef9c3;
+  --opus-emphasis-negative: #df2d45;
+  --opus-emphasis-negative-bg: #fee2e2;
+  --opus-emphasis-info: #0067bd;
+  --opus-emphasis-info-bg: #e6f0f7;
+  --opus-emphasis-muted: #888888;
+  --opus-emphasis-muted-bg: #f6f6f6;
+
+  /* ── charts: brand magenta leads, then CODA blue and teal. Six hues, ordered so the first two
+        are distinguishable under the common forms of colour blindness. */
+  --opus-chart-1: #a11478;
+  --opus-chart-2: #0067bd;
+  --opus-chart-3: #008566;
+  --opus-chart-4: #b25e00;
+  --opus-chart-5: #6b46c1;
+  --opus-chart-6: #df2d45;
+  --opus-chart-grid: #eeeeee;
+  --opus-chart-axis: #888888;
+
+  /* ── chrome metrics, so a shell does not invent its own */
+  --opus-topbar-height: 56px;
+  --opus-rail-width: 68px;
+  --opus-rail-width-expanded: 240px;
+  --opus-wb-list-width: 260px;
+  --opus-chrome-inset: 8px;
+}
+
+/**
+ * Dark theme.
+ *
+ * The neutral ramp inverts and the brand does not: magenta at 20% lightness on a near-black surface
+ * still reads as the product's colour, where a lightened magenta reads as a different product. The
+ * soft brand tint becomes a translucency rather than a tint, because a fixed pink over a dark
+ * surface muddies instead of receding.
+ */
+@mixin coda-dark {
+  --opus-text: #e8eaed;
+  --opus-text-secondary: #9aa0a6;
+  --opus-text-muted: #80868b;
+  --opus-text-faint: #5f6368;
+  --opus-text-inverse: #161819;
+
+  --opus-canvas: #161819;
+  --opus-surface: #242729;
+  --opus-surface-raised: #2d3033;
+  --opus-surface-sunken: #1a1c1e;
+  --opus-surface-hover: #2d3033;
+  --opus-surface-active: #3a3d40;
+  --opus-border: rgb(255 255 255 / 12%);
+  --opus-border-strong: rgb(255 255 255 / 22%);
+
+  --opus-accent: #d94ca7;
+  --opus-accent-hover: #e46fb8;
+  --opus-accent-pressed: #c22f90;
+  --opus-accent-soft: rgb(161 20 120 / 26%);
+  --opus-accent-contrast: #ffffff;
+  --opus-focus-ring: #d94ca7;
+
+  --opus-emphasis-neutral: #9aa0a6;
+  --opus-emphasis-neutral-bg: #2d3033;
+  --opus-emphasis-positive: #4ade80;
+  --opus-emphasis-positive-bg: rgb(0 133 102 / 22%);
+  --opus-emphasis-warning: #fbbf24;
+  --opus-emphasis-warning-bg: rgb(178 94 0 / 26%);
+  --opus-emphasis-negative: #f87171;
+  --opus-emphasis-negative-bg: rgb(223 45 69 / 24%);
+  --opus-emphasis-info: #6cb6ec;
+  --opus-emphasis-info-bg: rgb(0 103 189 / 22%);
+  --opus-emphasis-muted: #80868b;
+  --opus-emphasis-muted-bg: #2d3033;
+
+  --opus-chart-1: #e46fb8;
+  --opus-chart-2: #6cb6ec;
+  --opus-chart-3: #34d3a8;
+  --opus-chart-4: #f0a35c;
+  --opus-chart-5: #a78bfa;
+  --opus-chart-6: #f87171;
+  --opus-chart-grid: rgb(255 255 255 / 10%);
+  --opus-chart-axis: #80868b;
+
+  --opus-shadow-hairline: 0 1px 3px rgb(0 0 0 / 40%);
+  --opus-shadow-raised: 0 2px 8px rgb(0 0 0 / 50%);
+  --opus-shadow-overlay: 0 8px 24px rgb(0 0 0 / 60%);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    @include coda-dark;
+  }
+}
+
+/* The explicit override wins in both directions — a viewer who chose light stays light. */
+:root[data-theme='dark'] {
+  @include coda-dark;
+}

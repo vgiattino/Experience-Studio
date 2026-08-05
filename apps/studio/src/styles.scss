@@ -1,4 +1,22 @@
+/**
+ * The token vocabulary, the CODA palette, and the chrome the shell is assembled from.
+ *
+ * `chrome` is global rather than component-scoped because a topbar height, a rail width and a
+ * workbench's column split are layout contracts shared across surfaces, not the private business of
+ * one component — see the header of `chrome.scss`.
+ */
 @use '../../../libs/design-system/styles/tokens';
+@use '../../../libs/design-system/styles/coda-theme';
+@use '../../../libs/design-system/styles/chrome';
+
+/**
+ * The canvas editing overlay.
+ *
+ * Global because its selectors cross a component boundary: the renderer publishes `data-node` and
+ * the editor writes `data-editor-*` onto the same elements, and Angular's emulated encapsulation
+ * cannot express a rule that spans two views. Read the file's header before moving it back.
+ */
+@use '../../../libs/studio-ui/styles/editing-overlay';
 
 *,
 *::before,
@@ -24,6 +42,9 @@ body {
 /* The page never scrolls horizontally; wide content scrolls inside its own container. */
 body {
   overflow-x: hidden;
+  /* The builder is a fixed workspace: panels scroll, the document does not. */
+  overflow-y: hidden;
+  block-size: 100dvh;
 }
 
 :focus-visible {

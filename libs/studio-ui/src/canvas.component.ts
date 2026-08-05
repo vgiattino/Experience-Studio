@@ -195,47 +195,12 @@ import { EditorService } from './editor.service';
     }
 
     /*
-      Editing affordances are applied with CSS over the renderer's own 'data-node' attribute,
-      so nothing about the rendered tree changes between design and preview mode — which is
-      what keeps the preview honest.
+      THE EDITING OVERLAY IS NOT HERE. Selection, hover and drop indicators target the data-node
+      attribute published by PageRendererComponent, which renders in its own view with its own
+      encapsulation scope — so rules written here would be rewritten to require *this* component's
+      scope attribute and would match nothing. They live in styles/editing-overlay.scss, which an
+      app imports globally. See that file's header: this was a real defect, not a preference.
     */
-    .surface [data-node] {
-      position: relative;
-    }
-
-    .frame[data-mode='design'] .surface [data-node]:hover {
-      outline: 1px dashed var(--opus-border-strong, rgb(127 127 127 / 55%));
-      outline-offset: 1px;
-    }
-
-    .frame[data-mode='design'] .surface [data-node][data-editor-selected='true'] {
-      outline: 2px solid var(--opus-emphasis-info);
-      outline-offset: 1px;
-    }
-
-    .frame[data-mode='design'] .surface [data-node][data-editor-drop='before']::before,
-    .frame[data-mode='design'] .surface [data-node][data-editor-drop='after']::after {
-      content: '';
-      position: absolute;
-      inset-inline: 0;
-      block-size: 3px;
-      background: var(--opus-emphasis-info);
-      z-index: 2;
-    }
-
-    .frame[data-mode='design'] .surface [data-node][data-editor-drop='before']::before {
-      inset-block-start: -2px;
-    }
-
-    .frame[data-mode='design'] .surface [data-node][data-editor-drop='after']::after {
-      inset-block-end: -2px;
-    }
-
-    .frame[data-mode='design'] .surface [data-node][data-editor-drop='inside'] {
-      outline: 2px solid var(--opus-emphasis-info);
-      outline-offset: -2px;
-      background: color-mix(in srgb, var(--opus-emphasis-info) 8%, transparent);
-    }
   `,
 })
 export class CanvasComponent {

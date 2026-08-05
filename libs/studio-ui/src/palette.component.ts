@@ -135,7 +135,7 @@ const CONTAINERS: readonly ContainerEntry[] = [
     }
 
     .entry:hover {
-      border-color: var(--opus-emphasis-info);
+      border-color: var(--opus-accent);
     }
 
     .entry:focus-visible {

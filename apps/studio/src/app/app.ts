@@ -1,5 +1,5 @@
 /**
- * Studio shell.
+ * Studio shell — the visual page builder, in the CODA workbench.
  *
  * A SECOND APPLICATION, SHARING ONE RENDERER (frontend-architecture.md §2.1, decision F1). The
  * alternative — a lazy `/studio` route in the Viewer — is simpler to deploy and was rejected: it
@@ -10,6 +10,24 @@
  * The shell owns the workspace: which page is open, the panels around the canvas, save, and the
  * keyboard shortcuts. It owns no editing logic — every mutation goes through `EditorService` to
  * the `DefinitionStore` as a patch.
+ *
+ * WHY IT LOOKS LIKE THE OPUS EDM CONSOLE. The chrome is CODA, ported from `vgiattino/MDE`: topbar
+ * over a hover-expanding icon rail, panels inset as bordered cards, a workbench of a searchable list
+ * beside a body with a title row and a toolbar of icon buttons. The reason is not resemblance for
+ * its own sake — an analyst who authors an experience in this builder administers the EDM the
+ * experience reads from, and two products that share a data model and share nothing visually make
+ * the second one feel like a bolt-on. Four things came across as behaviour rather than paint:
+ *
+ *   - the rail: navigation for 68px instead of 250px, so the canvas keeps the width;
+ *   - the list panel: the page picker is a searchable list, not a `<select>` — see below;
+ *   - the title row: version and lifecycle as pills, where the console puts them;
+ *   - canvas zoom: the console's solution canvas zooms, and a dense dashboard needs it.
+ *
+ * WHY THE PAGE PICKER STOPPED BEING A `<select>`. A dropdown hides its contents until clicked, has
+ * nowhere to put a per-item state, and cannot be filtered. The console's answer is a persistent list
+ * with a filter box, which is strictly more capable: the author sees which sibling pages exist while
+ * editing one, the unsaved-draft marker becomes a hint column rather than a bullet glued to the
+ * option text, and finding a page in a 30-page experience is typing rather than scrolling.
  */
 
 import {
@@ -25,6 +43,14 @@ import { CatalogService } from '@opus/catalog';
 import { GatewayService, loadFixtureTables, type PhysicalResolver } from '@opus/data-client';
 import { PageLoaderService } from '@opus/renderer';
 import { text, type ExperienceDefinition, type UserContext } from '@opus/contracts';
+import {
+  IconComponent,
+  ListPanelComponent,
+  NavRailComponent,
+  ThemeService,
+  type ListPanelItem,
+  type NavSection,
+} from '@opus/design-system';
 import { TelemetryService } from '@opus/platform';
 import {
   DefinitionStore,
@@ -54,8 +80,51 @@ const DATA_BASE = 'data';
 const CATALOG_URL = 'catalog/securities.catalog.json';
 const EXPERIENCE_URL = `${DEFINITIONS_BASE}/securities-operations.experience.json`;
 
-type LeftTab = 'palette' | 'outline';
+/** What the left column holds. The rail switches between these; there is no router. */
+type LeftPanel = 'pages' | 'add' | 'structure';
+
+/** What the right dock holds. */
 type RightTab = 'inspector' | 'history' | 'json';
+
+/** Zoom stops, rather than a continuous slider: the author wants 100% back exactly. */
+const ZOOM_STEPS = [50, 67, 80, 100, 125, 150] as const;
+
+/**
+ * The rail.
+ *
+ * Grouped the way the console groups: what you are working on, then what you add to it, then the
+ * record of what you did. The groups are data, so an entitlement filter or a generated shell can
+ * compute them — the same argument the component registry makes for widgets.
+ */
+const NAV_SECTIONS: readonly NavSection[] = [
+  {
+    items: [{ id: 'pages', label: 'Pages', icon: 'library' }],
+  },
+  {
+    label: 'Authoring',
+    mini: 'AUTHOR',
+    items: [
+      { id: 'add', label: 'Add a widget', icon: 'grid' },
+      { id: 'structure', label: 'Page structure', icon: 'layers' },
+    ],
+  },
+];
+
+/**
+ * The preview-width control, as icons. Labels stay as tooltips — a toolbar has no room for six.
+ *
+ * Six stops share four glyphs, so the pairs are separated by SIZE: a large phone draws a larger phone
+ * than a phone, and a desktop a larger monitor than a laptop. Two identical glyphs side by side read
+ * as one control rendered twice, and the author cannot tell which stop they are on without hovering.
+ */
+const PREVIEW_ICONS: Record<PreviewSize['id'], { name: string; size: number }> = {
+  fit: { name: 'panel-left', size: 15 },
+  xs: { name: 'mobile', size: 13 },
+  sm: { name: 'mobile', size: 16 },
+  md: { name: 'tablet', size: 16 },
+  lg: { name: 'desktop', size: 14 },
+  xl: { name: 'desktop', size: 17 },
+};
 
 @Component({
   selector: 'opus-studio-root',
@@ -66,418 +135,488 @@ type RightTab = 'inspector' | 'history' | 'json';
   imports: [
     CanvasComponent,
     HistoryPanelComponent,
+    IconComponent,
     InspectorComponent,
     JsonViewComponent,
+    ListPanelComponent,
+    NavRailComponent,
     OutlineComponent,
     PaletteComponent,
   ],
   template: `
-    <div class="studio">
-      <header class="topbar">
-        <div class="brand">
-          <span class="mark" aria-hidden="true">◈</span>
-          <div>
-            <p class="product">Opus Experience Studio</p>
-            <p class="context">{{ experienceName() }}</p>
-          </div>
+    <div class="opus-app">
+      <header class="opus-topbar">
+        <div class="opus-topbar-group">
+          <span class="opus-wordmark">Opus <strong>Experience Studio</strong></span>
+          <span class="opus-tool-sep"></span>
+          <span class="experience opus-truncate" [title]="experienceName()">
+            {{ experienceName() }}
+          </span>
         </div>
 
-        <label class="page-picker">
-          <span class="sr-only">Page</span>
-          <select [disabled]="!listings().length" (change)="onPageChange($any($event.target).value)">
-            @if (!listings().length) {
-              <option value="">Loading pages…</option>
-            }
-            @for (listing of listings(); track listing.id) {
-              <option [value]="listing.id" [selected]="listing.id === openPageId()">
-                {{ listing.name }}{{ listing.hasDraft ? ' •' : '' }}
-              </option>
-            }
-          </select>
-        </label>
-
-        @if (dirty()) {
-          <span class="dirty" title="Unsaved changes">Unsaved</span>
-        } @else if (store.savedAt()) {
-          <span class="saved">Saved</span>
-        }
-
-        <div class="spacer"></div>
-
-        <div class="viewport" role="group" aria-label="Preview width">
-          @for (size of previewSizes; track size.id) {
-            <button
-              type="button"
-              [attr.data-preview]="size.id"
-              [class.active]="preview().id === size.id"
-              [attr.aria-pressed]="preview().id === size.id"
-              [title]="size.hint"
-              (click)="selection.setPreview(size)"
-            >
-              {{ size.label }}
-            </button>
+        <div class="opus-topbar-group">
+          @if (dirty()) {
+            <span class="opus-env-pill warn" title="This page has unsaved changes">Unsaved</span>
+          } @else if (store.savedAt()) {
+            <span class="opus-env-pill draft">Saved</span>
           }
-        </div>
 
-        <button
-          type="button"
-          class="mode"
-          [class.active]="mode() === 'preview'"
-          [attr.aria-pressed]="mode() === 'preview'"
-          (click)="toggleMode()"
-        >
-          {{ mode() === 'preview' ? '✓ Preview' : 'Preview' }}
-        </button>
-
-        <button type="button" (click)="store.undo()" [disabled]="!store.canUndo()" title="Undo (⌘Z)">↶</button>
-        <button type="button" (click)="store.redo()" [disabled]="!store.canRedo()" title="Redo (⇧⌘Z)">↷</button>
-        <button type="button" class="primary" [disabled]="!dirty()" (click)="save()">Save draft</button>
-        <button type="button" (click)="revertToPublished()" [disabled]="!hasDraft()">Discard draft</button>
-      </header>
-
-      @if (message(); as note) {
-        <p class="banner" [attr.data-kind]="note.kind" role="status">{{ note.text }}</p>
-      }
-
-      <div class="body">
-        <aside class="left">
-          <nav class="tabs">
-            <button type="button" [class.active]="leftTab() === 'palette'" (click)="leftTab.set('palette')">
-              Add
-            </button>
-            <button type="button" [class.active]="leftTab() === 'outline'" (click)="leftTab.set('outline')">
-              Structure
-            </button>
-          </nav>
-          @if (leftTab() === 'palette') {
-            <opus-palette />
-          } @else {
-            <opus-outline />
-          }
-        </aside>
-
-        <main class="middle">
-          @if (store.definition()) {
-            <opus-canvas [user]="author" />
-          } @else {
-            <div class="centred">
-              <p>Select a page to start editing.</p>
-            </div>
-          }
-        </main>
-
-        <aside class="right">
-          <nav class="tabs">
-            <button type="button" [class.active]="rightTab() === 'inspector'" (click)="rightTab.set('inspector')">
-              Properties
-            </button>
-            <button type="button" [class.active]="rightTab() === 'history'" (click)="rightTab.set('history')">
-              History
-              @if (store.history().length) {
-                <span class="badge">{{ store.history().length }}</span>
-              }
-            </button>
-            <button type="button" [class.active]="rightTab() === 'json'" (click)="rightTab.set('json')">
-              JSON
-            </button>
-          </nav>
-          @switch (rightTab()) {
-            @case ('inspector') {
-              <opus-inspector />
-            }
-            @case ('history') {
-              <opus-history-panel />
-            }
-            @case ('json') {
-              <opus-json-view />
-            }
-          }
-        </aside>
-      </div>
-
-      <footer class="statusbar">
-        @if (validation(); as report) {
           <button
             type="button"
-            class="validity"
-            [attr.data-valid]="report.valid"
-            [attr.aria-expanded]="showFindings()"
-            [disabled]="!report.findings.length"
-            (click)="showFindings.set(!showFindings())"
+            class="opus-topbar-icon"
+            [title]="theme.nextLabel()"
+            [attr.aria-label]="theme.nextLabel()"
+            (click)="theme.cycle()"
           >
-            {{ report.valid ? '✓ Valid' : '✗ Invalid' }} · {{ report.findings.length }} finding(s)
-            @if (report.findings.length) {
-              {{ showFindings() ? '▾' : '▸' }}
-            }
+            <opus-icon [name]="themeIcon()" />
           </button>
-          <span class="levels">
-            ran {{ report.levelsRun.join(', ') }}
-            @if (report.levelsNotRun.length) {
-              · not run {{ report.levelsNotRun.join(', ') }}
-            }
-          </span>
-        } @else {
-          <span class="levels">Not yet validated</span>
-        }
-        <span class="spacer"></span>
-        <span class="counts">
-          {{ widgetCount() }} widget(s) · {{ sourceCount() }} data source(s)
-        </span>
-      </footer>
 
-      <!--
-        An "Invalid" status with no explanation is useless to an author, and worse than none: it
-        says something is wrong and gives them no way to find it. Each finding names its level, its
-        path and its reason, and clicking one selects the widget it implicates.
-      -->
-      @if (showFindings() && findings().length) {
-        <ul class="findings">
-          @for (finding of findings(); track $index) {
-            <li [attr.data-severity]="finding.severity">
-              <button type="button" (click)="revealFinding(finding.path)">
-                <span class="level">{{ finding.level }}</span>
-                <span class="code">{{ finding.code }}</span>
-                <span class="msg">{{ finding.message }}</span>
-                <span class="path">{{ finding.path }}</span>
-              </button>
-            </li>
+          <span class="opus-avatar" [title]="author.displayName">{{ initials() }}</span>
+        </div>
+      </header>
+
+      <div class="opus-body">
+        <opus-nav-rail
+          [sections]="navSections"
+          [activeId]="leftPanel()"
+          label="Studio navigation"
+          (select)="onRailSelect($event)"
+        />
+
+        <div class="opus-main">
+          @if (message(); as note) {
+            <p class="opus-banner {{ note.kind }}" role="status">
+              <opus-icon [name]="note.kind === 'error' ? 'warning' : 'info'" [size]="16" />
+              <span>{{ note.text }}</span>
+            </p>
           }
-        </ul>
-      }
+
+          <div class="opus-workbench" [class.list-collapsed]="listCollapsed()">
+            @switch (leftPanel()) {
+              @case ('pages') {
+                <opus-list-panel
+                  title="Pages"
+                  placeholder="Filter pages…"
+                  emptyText="This experience declares no pages yet."
+                  [items]="pageItems()"
+                  [selectedId]="openPageId()"
+                  [(collapsed)]="listCollapsed"
+                  (pick)="onPageChange($event)"
+                />
+              }
+              @case ('add') {
+                <div class="opus-wb-list">
+                  <div class="opus-wb-list-head">
+                    <span class="title">Add a widget</span>
+                    <span class="spacer"></span>
+                    <button
+                      type="button"
+                      class="opus-icon-btn"
+                      title="Hide the panel"
+                      (click)="listCollapsed.set(true)"
+                    >
+                      <opus-icon name="chevron-left" [size]="16" />
+                    </button>
+                  </div>
+                  <div class="panel-body">
+                    <opus-palette />
+                  </div>
+                </div>
+              }
+              @case ('structure') {
+                <div class="opus-wb-list">
+                  <div class="opus-wb-list-head">
+                    <span class="title">Page structure</span>
+                    <span class="count">{{ widgetCount() }} widget(s)</span>
+                    <span class="spacer"></span>
+                    <button
+                      type="button"
+                      class="opus-icon-btn"
+                      title="Hide the panel"
+                      (click)="listCollapsed.set(true)"
+                    >
+                      <opus-icon name="chevron-left" [size]="16" />
+                    </button>
+                  </div>
+                  <div class="panel-body">
+                    <opus-outline />
+                  </div>
+                </div>
+              }
+            }
+
+            <div class="opus-wb-body">
+              <div class="opus-wb-body-head">
+                <div class="opus-title-row">
+                  @if (listCollapsed()) {
+                    <button
+                      type="button"
+                      class="opus-icon-btn"
+                      title="Show the panel"
+                      (click)="listCollapsed.set(false)"
+                    >
+                      <opus-icon name="chevron-right" [size]="16" />
+                    </button>
+                  }
+                  <span class="head-icon"><opus-icon name="page" [size]="16" /></span>
+                  <h1 [title]="pageName()">{{ pageName() }}</h1>
+
+                  <!--
+                    Version and lifecycle, where the console puts them. The pill is the affordance
+                    for history because that is the question a version number provokes: an author who
+                    reads "v3" wants to know what the three changes were.
+                  -->
+                  <button
+                    type="button"
+                    class="opus-ver-pill"
+                    title="Show the change log for this editing session"
+                    (click)="rightTab.set('history')"
+                  >
+                    <opus-icon name="history" [size]="12" [weight]="2" />
+                    v{{ artifactVersion() }}
+                  </button>
+                  <span class="opus-env-pill" [class]="lifecycleClass()">{{ lifecycle() }}</span>
+
+                  <div class="right">
+                    <span class="opus-muted">{{ sourceCount() }} data source(s)</span>
+                  </div>
+                </div>
+                <p class="opus-desc">{{ pageDescription() }}</p>
+              </div>
+
+              <div class="opus-wb-toolbar" role="toolbar" aria-label="Editing actions">
+                <button
+                  type="button"
+                  class="opus-icon-btn"
+                  (click)="store.undo()"
+                  [disabled]="!store.canUndo()"
+                  title="Undo (⌘Z)"
+                >
+                  <opus-icon name="undo" [size]="15" [weight]="2" />
+                </button>
+                <button
+                  type="button"
+                  class="opus-icon-btn"
+                  (click)="store.redo()"
+                  [disabled]="!store.canRedo()"
+                  title="Redo (⇧⌘Z)"
+                >
+                  <opus-icon name="redo" [size]="15" [weight]="2" />
+                </button>
+
+                <span class="opus-tool-sep"></span>
+
+                <button type="button" class="opus-btn primary sm" [disabled]="!dirty()" (click)="save()">
+                  <opus-icon name="save" [size]="14" [weight]="2" />
+                  Save draft
+                </button>
+                <button
+                  type="button"
+                  class="opus-btn sm"
+                  [disabled]="!hasDraft()"
+                  (click)="revertToPublished()"
+                  title="Throw the draft away and reopen the published page"
+                >
+                  <opus-icon name="revert" [size]="14" [weight]="2" />
+                  Discard
+                </button>
+
+                <span class="opus-tool-sep"></span>
+
+                <button
+                  type="button"
+                  class="opus-icon-btn"
+                  [class.active]="mode() === 'preview'"
+                  [attr.aria-pressed]="mode() === 'preview'"
+                  title="Preview: hide the editing affordances and behave as the Viewer does"
+                  (click)="toggleMode()"
+                >
+                  <opus-icon name="eye" [size]="15" [weight]="2" />
+                </button>
+
+                <div class="widths" role="group" aria-label="Preview width">
+                  @for (size of previewSizes; track size.id) {
+                    <button
+                      type="button"
+                      class="opus-icon-btn"
+                      [attr.data-preview]="size.id"
+                      [class.active]="preview().id === size.id"
+                      [attr.aria-pressed]="preview().id === size.id"
+                      [title]="size.label + ' — ' + size.hint"
+                      (click)="selection.setPreview(size)"
+                    >
+                      <opus-icon
+                        [name]="previewIcon(size.id).name"
+                        [size]="previewIcon(size.id).size"
+                        [weight]="2"
+                      />
+                    </button>
+                  }
+                </div>
+
+                <span class="opus-tool-sep"></span>
+
+                <div class="opus-zoom">
+                  <button
+                    type="button"
+                    class="opus-icon-btn"
+                    title="Zoom out"
+                    [disabled]="zoom() === zoomSteps[0]"
+                    (click)="zoomBy(-1)"
+                  >
+                    <opus-icon name="zoom-out" [size]="13" [weight]="2" />
+                  </button>
+                  <button
+                    type="button"
+                    class="opus-zoom-pct"
+                    title="Reset the zoom to 100%"
+                    (click)="zoom.set(100)"
+                  >
+                    {{ zoom() }}%
+                  </button>
+                  <button
+                    type="button"
+                    class="opus-icon-btn"
+                    title="Zoom in"
+                    [disabled]="zoom() === zoomSteps[zoomSteps.length - 1]"
+                    (click)="zoomBy(1)"
+                  >
+                    <opus-icon name="zoom-in" [size]="13" [weight]="2" />
+                  </button>
+                </div>
+
+                <span class="opus-spacer"></span>
+
+                <!--
+                  Validation as an ambient status, in the toolbar rather than a footer. The Studio is
+                  the one place a definition is *invalid on purpose* — mid-edit, between two property
+                  changes — so this can never be a gate. It names the levels that ran, because a
+                  validator whose absent levels are invisible reads as a validator that passed.
+                -->
+                @if (validation(); as report) {
+                  <button
+                    type="button"
+                    class="validity"
+                    [attr.data-valid]="report.valid"
+                    [attr.aria-expanded]="showFindings()"
+                    [disabled]="!report.findings.length"
+                    [title]="levelsTitle(report)"
+                    (click)="showFindings.set(!showFindings())"
+                  >
+                    <opus-icon [name]="report.valid ? 'check' : 'warning'" [size]="14" [weight]="2" />
+                    {{ report.valid ? 'Valid' : 'Invalid' }}
+                    @if (report.findings.length) {
+                      · {{ report.findings.length }} finding(s)
+                    }
+                  </button>
+                } @else {
+                  <span class="opus-muted">Not yet validated</span>
+                }
+              </div>
+
+              @if (showFindings() && findings().length) {
+                <ul class="findings">
+                  @for (finding of findings(); track $index) {
+                    <li [attr.data-severity]="finding.severity">
+                      <button type="button" (click)="revealFinding(finding.path)">
+                        <span class="level">{{ finding.level }}</span>
+                        <span class="code">{{ finding.code }}</span>
+                        <span class="msg">{{ finding.message }}</span>
+                        <span class="path">{{ finding.path }}</span>
+                      </button>
+                    </li>
+                  }
+                </ul>
+              }
+
+              <div class="stage opus-wb-tab-body">
+                <div class="canvas-dock">
+                  @if (store.definition()) {
+                    <!--
+                      Zoom is a transform on a wrapper, and NOTHING ELSE. The renderer resolves its
+                      breakpoint from a ResizeObserver on its own element (§5.3), so anything that
+                      changes the layer's layout width changes which layout the author is looking at.
+                      A transform does not, which is why zooming out to see a whole dashboard leaves
+                      it on the desktop layout instead of silently switching it to the phone one.
+
+                      The first version of this backfilled the space a scaled-down layer leaves, by
+                      setting the layer's width to 100/scale per cent — and that measurably broke the
+                      guarantee: zooming from 100% to 67% moved the renderer from the md layout to the
+                      lg one. Zoom and responsive preview are two controls, and the width belongs to
+                      the other one. So the empty space stays.
+                    -->
+                    <div class="zoom-layer" [style.transform]="'scale(' + zoom() / 100 + ')'">
+                      <opus-canvas [user]="author" />
+                    </div>
+                  } @else {
+                    <div class="centred">
+                      <opus-icon name="page" [size]="28" />
+                      <p>Select a page to start editing.</p>
+                    </div>
+                  }
+                </div>
+
+                <aside class="dock">
+                  <nav class="opus-tabs">
+                    <button
+                      type="button"
+                      class="opus-tab"
+                      [class.active]="rightTab() === 'inspector'"
+                      (click)="rightTab.set('inspector')"
+                    >
+                      Properties
+                    </button>
+                    <button
+                      type="button"
+                      class="opus-tab"
+                      [class.active]="rightTab() === 'history'"
+                      (click)="rightTab.set('history')"
+                    >
+                      History
+                      @if (store.history().length) {
+                        <span class="opus-tab-badge">{{ store.history().length }}</span>
+                      }
+                    </button>
+                    <button
+                      type="button"
+                      class="opus-tab"
+                      [class.active]="rightTab() === 'json'"
+                      (click)="rightTab.set('json')"
+                    >
+                      JSON
+                    </button>
+                  </nav>
+                  <div class="dock-body">
+                    @switch (rightTab()) {
+                      @case ('inspector') {
+                        <opus-inspector />
+                      }
+                      @case ('history') {
+                        <opus-history-panel />
+                      }
+                      @case ('json') {
+                        <opus-json-view />
+                      }
+                    }
+                  </div>
+                </aside>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   `,
   styles: `
     :host {
       display: block;
-      block-size: 100vh;
+      block-size: 100dvh;
       overflow: hidden;
       background: var(--opus-canvas);
       color: var(--opus-text);
       font-family: var(--opus-font-sans);
+      font-size: var(--opus-text-md);
     }
 
-    .studio {
-      display: grid;
-      grid-template-rows: auto auto minmax(0, 1fr) auto auto;
-      block-size: 100vh;
+    .experience {
+      font-size: var(--opus-text-md);
+      color: var(--opus-text-secondary);
+      max-inline-size: 22rem;
     }
 
-    .topbar {
-      display: flex;
-      align-items: center;
-      gap: var(--opus-space-2);
-      padding: var(--opus-space-2) var(--opus-space-3);
-      background: var(--opus-surface);
-      border-block-end: 1px solid var(--opus-border);
+    .opus-banner {
+      margin: var(--opus-space-2) var(--opus-space-2) 0;
     }
 
-    .brand {
-      display: flex;
-      align-items: center;
-      gap: var(--opus-space-2);
+    /* The workbench fills what is left of the main panel under an optional banner. */
+    .opus-main {
+      min-block-size: 0;
     }
 
-    .mark {
-      display: grid;
-      place-items: center;
-      inline-size: 1.6rem;
-      block-size: 1.6rem;
-      color: var(--opus-text-inverse);
-      background: var(--opus-emphasis-info);
-      border-radius: var(--opus-radius-sm);
-    }
-
-    .product {
-      margin: 0;
-      font-size: var(--opus-text-xs);
-      color: var(--opus-text-muted);
-    }
-
-    .context {
-      margin: 0;
-      font-size: var(--opus-text-sm);
-      font-weight: var(--opus-weight-semibold);
-    }
-
-    .spacer {
+    .opus-workbench {
       flex: 1;
+      min-block-size: 0;
     }
 
-    select,
-    button {
-      font: inherit;
-      font-size: var(--opus-text-xs);
-      padding: 4px var(--opus-space-2);
-      color: var(--opus-text);
-      background: var(--opus-surface);
-      border: 1px solid var(--opus-border);
-      border-radius: var(--opus-radius-sm);
-      cursor: pointer;
+    .panel-body {
+      flex: 1;
+      overflow-y: auto;
+      min-block-size: 0;
     }
 
-    select {
-      font-size: var(--opus-text-sm);
-      max-inline-size: 18rem;
-    }
-
-    button:disabled {
-      opacity: 0.45;
-      cursor: not-allowed;
-    }
-
-    button.primary:not(:disabled) {
-      color: var(--opus-text-inverse);
-      background: var(--opus-emphasis-info);
-      border-color: var(--opus-emphasis-info);
-    }
-
-    button.active,
-    .mode.active {
-      color: var(--opus-text-inverse);
-      background: var(--opus-emphasis-info);
-      border-color: var(--opus-emphasis-info);
-    }
-
-    select:focus-visible,
-    button:focus-visible {
-      outline: 2px solid var(--opus-focus-ring);
-      outline-offset: 1px;
-    }
-
-    .viewport {
-      display: flex;
+    .widths {
+      display: inline-flex;
+      align-items: center;
       gap: 1px;
     }
 
-    .viewport button {
-      border-radius: 0;
-    }
-
-    .viewport button:first-child {
-      border-start-start-radius: var(--opus-radius-sm);
-      border-end-start-radius: var(--opus-radius-sm);
-    }
-
-    .viewport button:last-child {
-      border-start-end-radius: var(--opus-radius-sm);
-      border-end-end-radius: var(--opus-radius-sm);
-    }
-
-    .dirty,
-    .saved {
-      font-size: var(--opus-text-xs);
-      padding: 2px var(--opus-space-2);
-      border-radius: 999px;
-    }
-
-    .dirty {
-      color: var(--opus-text-inverse);
-      background: var(--opus-emphasis-warning);
-    }
-
-    .saved {
-      color: var(--opus-text-muted);
-      border: 1px solid var(--opus-border);
-    }
-
-    .banner {
-      margin: 0;
-      padding: var(--opus-space-2) var(--opus-space-3);
-      font-size: var(--opus-text-xs);
-      border-block-end: 1px solid var(--opus-border);
-    }
-
-    .banner[data-kind='error'] {
-      background: color-mix(in srgb, var(--opus-emphasis-negative) 12%, transparent);
-    }
-
-    .banner[data-kind='info'] {
-      background: color-mix(in srgb, var(--opus-emphasis-info) 10%, transparent);
-    }
-
-    .body {
+    /* Two-pane stage: canvas and the property dock. */
+    .stage {
       display: grid;
-      grid-template-columns: 17rem minmax(0, 1fr) 21rem;
+      grid-template-columns: minmax(0, 1fr) 21rem;
       min-block-size: 0;
+      overflow: hidden;
     }
 
-    .left,
-    .right {
-      display: grid;
-      grid-template-rows: auto minmax(0, 1fr);
+    .canvas-dock {
+      overflow: auto;
+      min-inline-size: 0;
+      background: var(--opus-canvas);
+    }
+
+    /* Origin top-left rather than top-centre: a scaled-up canvas has to stay reachable by scrolling
+       from the origin, and a centred origin pushes its left edge out of the scroll range. */
+    .zoom-layer {
+      transform-origin: top left;
+      transition: transform var(--opus-duration-normal) var(--opus-easing);
+    }
+
+    .dock {
+      display: flex;
+      flex-direction: column;
       min-block-size: 0;
       background: var(--opus-surface);
-    }
-
-    .left {
-      border-inline-end: 1px solid var(--opus-border);
-    }
-
-    .right {
       border-inline-start: 1px solid var(--opus-border);
     }
 
-    .tabs {
-      display: flex;
-      border-block-end: 1px solid var(--opus-border);
+    .dock .opus-tabs {
+      padding-inline: var(--opus-space-2);
     }
 
-    .tabs button {
+    .dock-body {
       flex: 1;
-      border: 0;
-      border-radius: 0;
-      border-block-end: 2px solid transparent;
-      background: none;
-      color: var(--opus-text-muted);
-      padding-block: var(--opus-space-2);
-    }
-
-    .tabs button.active {
-      color: var(--opus-text);
-      background: none;
-      border-block-end-color: var(--opus-emphasis-info);
-    }
-
-    .badge {
-      margin-inline-start: 4px;
-      padding: 0 5px;
-      font-size: 0.6rem;
-      color: var(--opus-text-inverse);
-      background: var(--opus-text-muted);
-      border-radius: 999px;
-    }
-
-    .middle {
-      min-inline-size: 0;
+      overflow-y: auto;
       min-block-size: 0;
-      overflow: auto;
     }
 
     .centred {
       display: grid;
       place-items: center;
-      min-block-size: 60vh;
+      gap: var(--opus-space-3);
+      min-block-size: 60%;
+      padding: var(--opus-space-7);
       color: var(--opus-text-muted);
-    }
-
-    .statusbar {
-      display: flex;
-      align-items: center;
-      gap: var(--opus-space-2);
-      padding: 4px var(--opus-space-3);
-      font-family: var(--opus-font-mono);
-      font-size: var(--opus-text-xs);
-      color: var(--opus-text-muted);
-      background: var(--opus-surface);
-      border-block-start: 1px solid var(--opus-border);
     }
 
     .validity {
-      font-family: inherit;
-      font-size: var(--opus-text-xs);
-      padding: 1px var(--opus-space-1);
+      display: inline-flex;
+      align-items: center;
+      gap: var(--opus-space-1);
+      font: inherit;
+      font-size: var(--opus-text-sm);
+      padding: 4px var(--opus-space-2);
       border: 0;
-      background: none;
+      border-radius: var(--opus-radius-sm);
+      background: transparent;
+      cursor: pointer;
+    }
+
+    .validity:disabled {
+      cursor: default;
+    }
+
+    .validity:hover:not(:disabled) {
+      background: var(--opus-surface-hover);
     }
 
     .validity[data-valid='false'] {
@@ -488,14 +627,20 @@ type RightTab = 'inspector' | 'history' | 'json';
       color: var(--opus-emphasis-positive);
     }
 
+    /*
+      An "Invalid" status with no explanation is useless to an author, and worse than none: it says
+      something is wrong and gives them no way to find it. Each finding names its level, its path and
+      its reason, and clicking one selects the widget it implicates.
+    */
     .findings {
       list-style: none;
       margin: 0;
       padding: 0;
       max-block-size: 9rem;
       overflow-y: auto;
-      background: var(--opus-surface);
-      border-block-start: 1px solid var(--opus-border);
+      background: var(--opus-surface-sunken);
+      border-block-end: 1px solid var(--opus-border);
+      flex-shrink: 0;
     }
 
     .findings li[data-severity='error'] {
@@ -513,38 +658,81 @@ type RightTab = 'inspector' | 'history' | 'json';
       inline-size: 100%;
       text-align: start;
       border: 0;
-      border-radius: 0;
       background: none;
-      font-size: var(--opus-text-xs);
-      padding: 3px var(--opus-space-2);
+      font: inherit;
+      font-size: var(--opus-text-sm);
+      padding: 3px var(--opus-space-3);
+      cursor: pointer;
+      color: var(--opus-text);
+    }
+
+    .findings button:hover {
+      background: var(--opus-surface-hover);
     }
 
     .findings .level,
     .findings .code,
     .findings .path {
       font-family: var(--opus-font-mono);
-      font-size: 0.65rem;
+      font-size: var(--opus-text-xs);
       color: var(--opus-text-muted);
     }
 
     .findings .msg {
-      color: var(--opus-text);
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
 
-    .sr-only {
-      position: absolute;
-      inline-size: 1px;
-      block-size: 1px;
-      overflow: hidden;
-      clip-path: inset(50%);
+    :focus-visible {
+      outline: 2px solid var(--opus-focus-ring);
+      outline-offset: 1px;
     }
 
-    @media (max-width: 1100px) {
-      .body {
-        grid-template-columns: 12rem minmax(0, 1fr) 16rem;
+    /* Below the laptop band the property dock stops being a column and stacks under the canvas. */
+    @media (max-width: 1180px) {
+      .stage {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: minmax(0, 1fr) 18rem;
+      }
+
+      .dock {
+        border-inline-start: 0;
+        border-block-start: 1px solid var(--opus-border);
+      }
+    }
+
+    /*
+      On a phone the two-row grid gives the canvas whatever is left after a fixed 18rem dock — and
+      once the list panel and the head and the toolbar have taken their share, what is left is
+      nothing: the first version of this showed a property inspector and no page. So below the tablet
+      band the stage stops being a grid at all. It becomes one scrollable column, the canvas gets a
+      floor rather than a share, and the author scrolls from the page to its properties.
+    */
+    @media (max-width: 900px) {
+      .stage {
+        display: block;
+        overflow-y: auto;
+      }
+
+      .canvas-dock {
+        min-block-size: 60vh;
+        overflow: visible;
+      }
+
+      .dock {
+        border-inline-start: 0;
+        border-block-start: 1px solid var(--opus-border);
+      }
+
+      .dock-body {
+        overflow: visible;
+      }
+    }
+
+    @media (max-width: 900px) {
+      .experience {
+        display: none;
       }
     }
   `,
@@ -559,18 +747,26 @@ export class StudioApp {
 
   protected readonly store = inject(DefinitionStore);
   protected readonly selection = inject(SelectionService);
+  protected readonly theme = inject(ThemeService);
 
   protected readonly author: UserContext = AUTHOR;
   protected readonly previewSizes = PREVIEW_SIZES;
+  protected readonly navSections = NAV_SECTIONS;
+  protected readonly zoomSteps = ZOOM_STEPS;
 
   protected readonly experience = signal<ExperienceDefinition | null>(null);
   protected readonly listings = this.drafts.listings;
   protected readonly openPageId = signal<string | null>(null);
-  protected readonly leftTab = signal<LeftTab>('palette');
+  protected readonly leftPanel = signal<LeftPanel>('pages');
+  protected readonly listCollapsed = signal(false);
   protected readonly rightTab = signal<RightTab>('inspector');
-  protected readonly message = signal<{ kind: 'info' | 'error'; text: string } | null>(null);
+  /** `kind` maps straight onto the chrome banner variants, so the shell never translates. */
+  protected readonly message = signal<{ kind: 'info' | 'success' | 'error'; text: string } | null>(
+    null,
+  );
   protected readonly validation = signal<ValidationReport | null>(null);
   protected readonly showFindings = signal(false);
+  protected readonly zoom = signal<number>(100);
 
   /** Findings as a plain list, so the template never has to narrow an optional report. */
   protected readonly findings = computed(() => this.validation()?.findings ?? []);
@@ -582,6 +778,32 @@ export class StudioApp {
   protected readonly experienceName = computed(
     () => text(this.experience()?.name) || 'Loading…',
   );
+
+  protected readonly pageName = computed(
+    () => text(this.store.definition()?.name) || 'No page open',
+  );
+
+  protected readonly pageDescription = computed(() => {
+    const definition = this.store.definition();
+    if (!definition) return 'Choose a page from the list to open it on the canvas.';
+    return (
+      text(definition.description) ||
+      `${this.widgetCount()} widget(s) over ${this.sourceCount()} data source(s). Every change is a JSON Patch against the artifact the runtime loads.`
+    );
+  });
+
+  protected readonly artifactVersion = computed(
+    () => this.store.definition()?.version?.artifactVersion ?? 0,
+  );
+
+  protected readonly lifecycle = computed(
+    () => this.store.definition()?.version?.lifecycleState ?? 'none',
+  );
+
+  protected readonly lifecycleClass = computed(() => {
+    const state = this.lifecycle();
+    return state === 'published' ? 'live' : state === 'deprecated' ? 'warn' : 'draft';
+  });
 
   protected readonly hasDraft = computed(() => {
     const id = this.openPageId();
@@ -595,17 +817,39 @@ export class StudioApp {
     () => Object.keys(this.store.definition()?.dataSources ?? {}).length,
   );
 
+  /**
+   * The page list, as list-panel items.
+   *
+   * The hint column carries the unsaved-draft state, which is the whole reason the picker moved out
+   * of a `<select>`: an option element had nowhere to say it except by appending a bullet.
+   */
+  protected readonly pageItems = computed<readonly ListPanelItem[]>(() =>
+    this.listings().map((listing) => ({
+      id: listing.id,
+      label: listing.name,
+      icon: 'page',
+      ...(listing.hasDraft ? { hint: 'draft' } : {}),
+    })),
+  );
+
+  protected readonly initials = computed(() =>
+    this.author.displayName
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase() ?? '')
+      .join(''),
+  );
+
+  protected readonly themeIcon = computed(() => {
+    const mode = this.theme.mode();
+    return mode === 'light' ? 'sun' : mode === 'dark' ? 'moon' : 'theme-auto';
+  });
+
   constructor() {
     void this.bootstrap();
 
-    /**
-     * Validate continuously, with the catalog, so level 3 runs.
-     *
-     * The Studio is the one place a definition is *invalid on purpose* — mid-edit, between two
-     * property changes — so validation has to be an ambient status rather than a gate. The status
-     * bar names the levels that ran, because a validator whose absent levels are invisible reads
-     * as a validator that passed.
-     */
+    /** Validate continuously, with the catalog, so level 3 runs. */
     effect(() => {
       const definition = this.store.definition();
       if (!definition) {
@@ -614,6 +858,36 @@ export class StudioApp {
       }
       void this.validate(definition);
     });
+  }
+
+  protected previewIcon(id: PreviewSize['id']): { name: string; size: number } {
+    return PREVIEW_ICONS[id];
+  }
+
+  protected levelsTitle(report: ValidationReport): string {
+    const notRun = report.levelsNotRun.length ? `; not run: ${report.levelsNotRun.join(', ')}` : '';
+    return `Validation levels run: ${report.levelsRun.join(', ')}${notRun}`;
+  }
+
+  /** Move one stop through the zoom scale. Stops, so 100% is always reachable exactly. */
+  protected zoomBy(direction: 1 | -1): void {
+    const steps = ZOOM_STEPS;
+    const index = steps.indexOf(this.zoom() as (typeof steps)[number]);
+    const from = index === -1 ? steps.indexOf(100) : index;
+    const next = steps[Math.min(steps.length - 1, Math.max(0, from + direction))];
+    if (next !== undefined) this.zoom.set(next);
+  }
+
+  /**
+   * The rail switched panels.
+   *
+   * Selecting a panel reopens the list if it was collapsed: a click on "Add a widget" that changed
+   * an invisible panel would read as a dead control.
+   */
+  protected onRailSelect(id: string): void {
+    if (id !== 'pages' && id !== 'add' && id !== 'structure') return;
+    this.leftPanel.set(id);
+    this.listCollapsed.set(false);
   }
 
   private async validate(definition: unknown): Promise<void> {
@@ -704,7 +978,7 @@ export class StudioApp {
 
   protected async onPageChange(pageId: string): Promise<void> {
     if (pageId === this.openPageId()) return;
-    // Switching away from unsaved work must be a decision, not a side effect of a dropdown.
+    // Switching away from unsaved work must be a decision, not a side effect of a click.
     if (this.dirty() && !window.confirm('This page has unsaved changes. Discard them?')) {
       return;
     }
@@ -724,7 +998,7 @@ export class StudioApp {
     }
     this.store.markSaved();
     this.message.set({
-      kind: 'info',
+      kind: 'success',
       text: `Saved as a draft. ${this.store.history().length} change(s) recorded; publishing is a separate, reviewed step.`,
     });
     const experience = this.experience();
@@ -809,6 +1083,22 @@ export class StudioApp {
     if (meta && event.key.toLowerCase() === 's') {
       event.preventDefault();
       this.save();
+      return;
+    }
+    // Zoom, on the keys every canvas tool binds them to.
+    if (meta && (event.key === '=' || event.key === '+')) {
+      event.preventDefault();
+      this.zoomBy(1);
+      return;
+    }
+    if (meta && event.key === '-') {
+      event.preventDefault();
+      this.zoomBy(-1);
+      return;
+    }
+    if (meta && event.key === '0') {
+      event.preventDefault();
+      this.zoom.set(100);
       return;
     }
     if (typing) return;

@@ -21,6 +21,9 @@ line of Angular.
 *is* the page definition: every drag and every property change is a JSON Patch against the artifact
 the runtime loads, undo is the inverse patch, and the canvas is the production renderer. A page
 built there, saved, and handed to the Viewer renders identically — because there is only one model.
+The builder wears the **Opus EDM console's chrome** — a hover-expanding icon rail, a searchable page
+list, version and lifecycle pills, a zoomable canvas — because the analyst authoring an experience
+administers the EDM it reads from, and one product should look like one product.
 
 **And the JSON describes real EDM work.** Four business templates ship as definitions: a Security
 Master Dashboard, a Security Overview comparing every vendor's contribution against the golden copy,
@@ -48,6 +51,7 @@ Delivered:
 | Visual page builder | Drag, drop, inspect, re-layout, preview responsively, save — editing the *same* JSON the runtime interprets — [`docs/VISUAL-BUILDER.md`](./docs/VISUAL-BUILDER.md) |
 | Experience Builder prototype | Prompt → Experience JSON → rendered page, with a Node/REST backend, local JSON storage and a swappable model provider — [`docs/implementation-status.md`](./docs/implementation-status.md) |
 | EDM business templates | Four templates over governed EDM metadata — master dashboard, security overview, party overview, exception workspace — with drill-down between them and tabs generated from data — [`docs/EDM-TEMPLATES.md`](./docs/EDM-TEMPLATES.md) |
+| CODA design language | The Opus EDM console's look and feel as a token layer plus shared chrome — one palette swap re-themes every app, every widget and every generated page — [`docs/CODA-DESIGN-SYSTEM.md`](./docs/CODA-DESIGN-SYSTEM.md) |
 | Metadata model | Twenty JSON Schemas, expression grammar, worked examples — [`schemas/README.md`](./schemas/README.md) |
 
 **And it runs as an application.** `npm run dev` starts an Express backend (`:4000`) and an Angular

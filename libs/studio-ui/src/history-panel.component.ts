@@ -154,7 +154,7 @@ import { EditorService } from './editor.service';
     }
 
     li[data-origin='ai'] .origin {
-      color: var(--opus-emphasis-info);
+      color: var(--opus-accent);
     }
 
     li[data-origin='json'] .origin {

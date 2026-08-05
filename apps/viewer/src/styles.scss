@@ -1,4 +1,13 @@
+/**
+ * The token vocabulary, then the CODA palette that re-values it.
+ *
+ * Two imports rather than one because they are two decisions. `tokens` is the vocabulary and its
+ * semantics — what a definition is allowed to name. `coda-theme` is a value set for that vocabulary,
+ * ported from the Opus EDM console so the runtime and the console read as one product. Dropping the
+ * second line returns the platform's original palette without touching a component.
+ */
 @use '../../../libs/design-system/styles/tokens';
+@use '../../../libs/design-system/styles/coda-theme';
 
 *,
 *::before,

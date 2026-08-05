@@ -27,7 +27,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 
 import { BootService } from '../boot.service';
-import { ThemeService } from './theme.service';
+import { ThemeService } from '@opus/design-system';
 
 @Component({
   selector: 'opus-root',
@@ -85,11 +85,16 @@ import { ThemeService } from './theme.service';
 
       <button
         mat-icon-button
-        [matTooltip]="theme.label()"
+        [matTooltip]="theme.nextLabel()"
         [attr.aria-label]="theme.label()"
         (click)="theme.cycle()"
       >
-        <mat-icon>{{ theme.icon() }}</mat-icon>
+        <!--
+          The Material ligature name is mapped here rather than published by the service. The service
+          is shared with the page builder, which draws CODA strokes and has no Material font, so a
+          service that named a glyph would make one of its two consumers import the wrong vocabulary.
+        -->
+        <mat-icon>{{ themeIcon() }}</mat-icon>
       </button>
 
       <button mat-button [matMenuTriggerFor]="personaMenu" class="persona">
@@ -385,6 +390,12 @@ export class ShellComponent {
   protected readonly navOpen = signal(window.innerWidth >= 1100);
 
   protected readonly ready = computed(() => this.boot.status() === 'ready');
+
+  /** Theme mode → Material ligature. The mapping belongs to the surface that draws the glyph. */
+  protected readonly themeIcon = computed(() => {
+    const mode = this.theme.mode();
+    return mode === 'light' ? 'light_mode' : mode === 'dark' ? 'dark_mode' : 'brightness_auto';
+  });
 
   constructor() {
     void this.boot.start();

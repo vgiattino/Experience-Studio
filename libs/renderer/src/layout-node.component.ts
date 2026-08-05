@@ -369,7 +369,7 @@ import { WidgetHostComponent } from './widget-host.component';
     .tab[aria-selected='true'] {
       color: var(--opus-text);
       font-weight: var(--opus-weight-medium);
-      border-block-end-color: var(--opus-emphasis-info);
+      border-block-end-color: var(--opus-accent);
     }
 
     .tab-badge {
