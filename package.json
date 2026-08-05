@@ -1,15 +1,18 @@
 {
   "name": "opus-experience-studio",
   "version": "0.1.0",
-  "description": "AI-native experience platform for Opus EDM — Milestone 1 runtime proof of concept",
+  "description": "AI-native experience platform for Opus EDM \u2014 Milestone 1 runtime proof of concept",
   "private": true,
   "scripts": {
-    "start": "ng serve",
-    "build": "ng build",
+    "start": "ng serve viewer",
+    "build": "ng build viewer && ng build studio",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
     "validate": "node tools/validate-metadata.mjs",
-    "verify": "npm run validate && npm run test -- --watch=false && npm run build"
+    "verify": "npm run validate && npm run test -- --watch=false && npm run build",
+    "studio": "ng serve studio",
+    "build:viewer": "ng build viewer",
+    "build:studio": "ng build studio"
   },
   "packageManager": "npm@10.9.7",
   "dependencies": {

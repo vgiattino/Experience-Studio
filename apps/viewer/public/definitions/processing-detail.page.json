@@ -44,7 +44,7 @@
       "select": {
         "measures": [
           {
-            "measure": "row-count",
+            "measure": "rows-processed",
             "aggregation": "sum",
             "alias": "total-rows"
           }

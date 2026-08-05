@@ -94,23 +94,33 @@ export class PageLoaderService {
   }
 
   /**
-   * Load a definition already in memory — an AI generation, or a Studio draft.
+   * Load a definition already in memory — an AI generation, or a page open in the builder.
    *
    * Deliberately the SAME path as a fetched definition: migrate → validate → compile, with
    * the same validator and the same telemetry. A generated page that renders here but would
    * be rejected on reload would be the worst kind of bug, and routing generation through a
    * shortcut is how that bug gets written.
+   *
+   * THE COMPILE CACHE IS BYPASSED, and not merely for drafts. The cache is keyed on
+   * `(id, artifactVersion)` and is sound only when that pair identifies the content — which is
+   * true of a published artifact fetched from a store and NOT true of any object handed over in
+   * memory, because the caller is free to mutate it while keeping both. `compilePage` already
+   * refuses to cache a definition marked `immutable: false`; that check is necessary but not
+   * sufficient, because an editor can open a *published* definition and edit the working copy. The
+   * symptom was precise and misleading: the builder's JSON view and the Viewer both showed an
+   * added widget while the canvas kept rendering the version first loaded — which reads as the
+   * builder having a model of its own.
    */
   async loadDefinition(
     definition: unknown,
     options: { validate?: boolean } = {},
   ): Promise<LoadOutcome> {
-    return this.processDefinition(definition, options);
+    return this.processDefinition(definition, { ...options, useCache: false });
   }
 
   private async processDefinition(
     raw: unknown,
-    options: { validate?: boolean },
+    options: { validate?: boolean; useCache?: boolean },
   ): Promise<LoadOutcome> {
     if (raw === null || typeof raw !== 'object') {
       return { ok: false, stage: 'fetch', detail: 'Definition is not a JSON object' };
@@ -186,7 +196,7 @@ export class PageLoaderService {
 
     // ── compile
     try {
-      const { page, cacheHit } = compilePage(definition);
+      const { page, cacheHit } = compilePage(definition, { useCache: options.useCache });
       this.telemetry.recordRender({
         pageId: definition.id,
         definitionVersion: definition.version.artifactVersion,

@@ -228,6 +228,14 @@ Advanced JSON edit  ─┘                     │
 - Undo is the inverse patch. It works identically across manual and AI changes, which is what makes the AI feel safe to use.
 - The patch log yields diffs for review, provenance for audit, and a natural basis for future multi-author collaboration.
 
+**[implemented]** Built in `libs/studio-core` and `libs/studio-ui`; see [`../docs/VISUAL-BUILDER.md`](../docs/VISUAL-BUILDER.md). Three details this section did not anticipate, each of which the implementation had to settle:
+
+1. **One command is one patch, even when it touches several places.** Deleting a widget removes its layout node, its component instance and its now-unreferenced data source together, so a single undo reverses what the user thinks of as a single action. Emitting a patch per touched location makes undo count in units the user does not recognise.
+2. **Inversion must be computed op-by-op against the intermediate state**, not against the pre-patch document. Inverting a whole list against the original is correct for single-op patches and silently wrong for every structural edit — which is all of them.
+3. **Selection does not belong in the store.** It is not an edit, and putting it in the patch log makes undo step backwards through clicks.
+
+**[revised by implementation] `(id, artifactVersion)` is not content identity.** It identifies a *published, immutable* artifact and nothing else, and it had been used as content identity in four places — the compile cache, the loader, the renderer's attach guard, and the Studio's own working copy. Each reuse failed differently and quietly: a canvas frozen at the version first loaded, a data source added mid-session never queried. Any component that caches or guards on that pair must first establish that the artifact cannot change beneath it; an in-memory definition never satisfies that.
+
 **Why not NgRx.** NgRx models many entity slices with independent reducers. This domain is one document mutated by patches, plus three tiers that are explicitly not global. A document store with a patch log is a closer fit, an order of magnitude less code, and does not tempt developers to promote page runtime state into a global store — which is the failure mode a global store library invites here.
 
 ### 4.4 Server data
@@ -337,4 +345,4 @@ The **reference definition corpus** is shared with the AI evaluation harness ([`
 | F10 | WCAG 2.2 AA and i18n as component acceptance criteria | Cross-cutting retrofit across the entire library |
 | F11 | Mobile-first breakpoint cascade | Every stored placement resolves differently; panels move |
 
-**Implementation status:** F2–F10 are implemented in the M1 runtime. F1 (two apps) awaits Studio, and F3's registry is hand-maintained pending generation. See [`../docs/M1-IMPLEMENTATION.md`](../docs/M1-IMPLEMENTATION.md) §3 for the full list of deviations.
+**Implementation status:** F1–F10 are implemented. F1 (two apps sharing one renderer) landed with the visual builder — `apps/studio` boots the same `PageRendererComponent` the Viewer does, and F5's definition store is `libs/studio-core`. F3's registry is still hand-maintained pending generation. See [`../docs/M1-IMPLEMENTATION.md`](../docs/M1-IMPLEMENTATION.md) §3 for the full list of deviations.

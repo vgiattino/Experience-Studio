@@ -31,6 +31,22 @@ import { WidgetHostComponent } from './widget-host.component';
 @Component({
   selector: 'opus-layout-node',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  /**
+   * Every rendered node publishes its layout id and kind.
+   *
+   * This is the ONLY concession the renderer makes to the Studio, and it is deliberately a
+   * one-way one: the renderer states what it rendered, and an editor may interpret that.
+   * The alternative — an `editing` mode input threaded through the renderer — would put
+   * selection, hover and drop-target concerns inside the component whose whole value is that
+   * preview and production share one code path (frontend-architecture.md §2.2).
+   *
+   * It is also how end-to-end tests address a widget, which is why it ships in the runtime
+   * rather than behind a flag.
+   */
+  host: {
+    '[attr.data-node]': 'node().id',
+    '[attr.data-node-kind]': 'node().kind',
+  },
   // The recursive template — a container renders its children through the same
   // interpreter — needs the component in its own imports. forwardRef is required:
   // a direct self-reference is evaluated while the class binding is still

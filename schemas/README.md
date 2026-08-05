@@ -292,6 +292,7 @@ if amendments to it are visible.
 | M1 | Documented `gridPlacement.breakpoints` as resolving **mobile-first** | Clarification, no shape change | The direction was unstated, and the M1 definitions were accidentally written in both directions — four quarter-width cards rendered as halves and wrapped. See `docs/M1-IMPLEMENTATION.md` §4.1 |
 | M6 | Level 3 (semantic) reclassified from *Server* to *Client + server* | Clarification, no shape change | AI generation supplies the catalog level 3 needs, and cannot be honest without it. See the note under §5 |
 | M6 | `cost.requiresFilter` given an enforceable meaning: at least one filter clause that **always** constrains | Clarification of an existing field | The flag existed but nothing checked it, and the first generated page scanned a `requiresFilter` entity with no filter at all. A clause whose value is a page-state wrapper does not satisfy it, because `skipWhenEmpty` means it may constrain nothing |
+| M4 | Added `duration` to `attribute.semanticType` | **Breaking** by §7 — a member added to a closed enum | `measure.valueType` and `formatSpec.style` both admit `duration`, and the platform formatter implements it, while attributes had no such member — so a stored numeric column could not be described consistently as both a displayable attribute and an aggregatable measure. Found by level 3 rejecting a shipped page. Amended in place because v1.0 remains pre-release |
 
 ## 8. Evolution
 

@@ -7,8 +7,24 @@
  */
 
 import type { DataRow } from '@opus/contracts';
-import type { MockEntityTable } from '@opus/data-client';
-import type { CatalogService } from '@opus/catalog';
+
+import type { MockEntityTable } from './mock-gateway';
+
+/**
+ * How to resolve an entity's physical mapping.
+ *
+ * A CALLBACK RATHER THAN THE CATALOG SERVICE, so this library does not depend on `@opus/catalog`.
+ * The dependency would be the wrong way round: the catalog must stay usable on both sides of the
+ * network, and the gateway is the one component that legitimately holds both vocabularies. The
+ * caller — which is playing the part of the server — supplies the map it already has.
+ */
+export interface PhysicalResolver {
+  (entity: string): {
+    fields?: Readonly<Record<string, string>>;
+    measureFields?: Readonly<Record<string, string | null>>;
+    primaryKey?: readonly string[];
+  } | undefined;
+}
 
 interface FixtureFile {
   entity: string;
@@ -70,6 +86,10 @@ const FIXTURES: readonly {
 /**
  * Build the gateway's tables, carrying each entity's logical→physical map.
  *
+ * Shared by the Viewer and the Studio: the builder's canvas renders live data through the same
+ * gateway the runtime uses, so both need the same tables, and a second copy of this loader would
+ * be a second definition of what the demo data is.
+ *
  * This function plays the part of the server. It is the only place in the codebase that
  * holds both vocabularies at once: it reads the catalog's `physical` blocks — which the
  * client projection strips and the model never sees — and hands them to the gateway, which
@@ -83,22 +103,22 @@ const FIXTURES: readonly {
  */
 export async function loadFixtureTables(
   baseUrl: string,
-  catalog?: CatalogService,
+  resolvePhysical?: PhysicalResolver,
 ): Promise<MockEntityTable[]> {
   const loaded = await Promise.all(
     FIXTURES.map(async (fixture) => {
       const response = await fetch(`${baseUrl}/${fixture.file}`);
       if (!response.ok) throw new Error(`Could not load fixture ${fixture.file}: ${response.status}`);
       const data = (await response.json()) as FixtureFile;
-      const physical = catalog?.physicalMapFor(data.entity);
+      const physical = resolvePhysical?.(data.entity);
       return {
         entity: data.entity,
         rows: rebase(data),
         restrictedAttributes: fixture.restrictedAttributes,
         rowCapability: fixture.rowCapability,
-        fields: physical?.attributes,
-        measureFields: physical?.measures,
-        primaryKey: catalog?.primaryKeyFor(data.entity),
+        fields: physical?.fields,
+        measureFields: physical?.measureFields,
+        primaryKey: physical?.primaryKey,
       } satisfies MockEntityTable;
     }),
   );

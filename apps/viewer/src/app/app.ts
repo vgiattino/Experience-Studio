@@ -18,7 +18,7 @@ import {
   inject,
   signal,
 } from '@angular/core';
-import { GatewayService } from '@opus/data-client';
+import { GatewayService, loadFixtureTables, type PhysicalResolver } from '@opus/data-client';
 import { NavigationComponent, type NavigationSelection } from '@opus/components/navigation';
 import { PageLoaderService, PageRendererComponent, type CompiledPage, type NavigationRequest } from '@opus/renderer';
 import { StateShellComponent } from '@opus/design-system';
@@ -29,7 +29,6 @@ import { CatalogService, type CatalogSnapshot } from '@opus/catalog';
 
 import { DevPanelComponent } from './dev-panel.component';
 import { GenerationStudioComponent } from './generation-studio.component';
-import { loadFixtureTables } from './fixture-loader';
 import { PERSONAS, readSessionOptions, type SessionOptions } from './session';
 
 const DEFINITIONS_BASE = 'definitions';
@@ -392,7 +391,7 @@ export class App {
       await this.catalog.load(CATALOG_URL);
       this.snapshot.set(this.catalog.projectionFor(this.generationUser()));
 
-      const tables = await loadFixtureTables(DATA_BASE, this.catalog);
+      const tables = await loadFixtureTables(DATA_BASE, physicalResolver(this.catalog));
       // Data entitlements are simulated on the *data*, resolved against the caller.
       this.gateway.configure({
         tables,
@@ -574,4 +573,22 @@ export class App {
     else url.searchParams.set(key, value);
     window.history.replaceState({}, '', url);
   }
+}
+
+/**
+ * The gateway's view of the catalog's server-only `physical` blocks.
+ *
+ * Assembled here because this is the "server" half of the demo: the client projection never
+ * carries these, and the gateway is the only place the two vocabularies may meet.
+ */
+function physicalResolver(catalog: CatalogService): PhysicalResolver {
+  return (entity) => {
+    const map = catalog.physicalMapFor(entity);
+    if (!map) return undefined;
+    return {
+      fields: map.attributes,
+      measureFields: map.measures,
+      primaryKey: catalog.primaryKeyFor(entity),
+    };
+  };
 }

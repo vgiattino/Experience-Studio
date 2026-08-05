@@ -1,0 +1,32 @@
+@use '../../../libs/design-system/styles/tokens';
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--opus-canvas);
+  color: var(--opus-text);
+  font-family: var(--opus-font-sans);
+  font-size: var(--opus-text-md);
+  line-height: var(--opus-leading-normal);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* The page never scrolls horizontally; wide content scrolls inside its own container. */
+body {
+  overflow-x: hidden;
+}
+
+:focus-visible {
+  outline: 2px solid var(--opus-focus-ring);
+  outline-offset: 2px;
+}

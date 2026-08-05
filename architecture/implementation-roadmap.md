@@ -111,6 +111,34 @@ component category, and the breakpoint cascade direction, which the schema had l
 - Version history supports diff and restore.
 - Templates round-trip: instantiate → modify → re-save without loss.
 
+**Status: LARGELY DELIVERED.** The canvas builder, the definition store with a JSON Patch log and
+undo/redo, catalog-driven binding, and the schema-validated advanced editing path are all built —
+see [`../docs/VISUAL-BUILDER.md`](../docs/VISUAL-BUILDER.md). The second exit criterion holds by
+construction rather than by discipline: there is no editor-side model, so every builder mutation
+*is* a diff against the definition.
+
+Building it produced the milestone's most useful finding, and it was not about the builder. The
+pair `(id, artifactVersion)` had been used as content identity in four places — the compile cache,
+the page loader, the renderer's attach guard, and the working copy the editor opens — and it is a
+valid identity only for a published, immutable artifact. Each reuse failed differently and
+silently. An editor is what surfaces that class of bug, because it is the first component that
+mutates a definition in place.
+
+It also found two defects in artifacts that had already shipped, because it is the first component
+to validate continuously *with a catalog*: `processing-detail` aggregated an attribute as a
+measure, and `security-master-operations` selected a measure as an attribute. Both had rendered
+correctly throughout M1. `libs/validator/src/shipped-artifacts.spec.ts` now gates that in CI.
+
+Still outstanding for M4:
+
+- **The Definition Service.** Drafts live in `localStorage`, so there is no version history, no
+  diff-and-restore, no concurrency, and no server-side validation before write.
+- **Template library v1** — save-as-template, browse, instantiate. The AI side already has a
+  template corpus the builder cannot yet contribute to.
+- **Tabs, repeaters, filters, actions and overlays in the inspector.** All expressible in the
+  definition and reachable through the JSON view, none yet in the visual UI.
+- **Direct canvas resize.** Column span is edited numerically rather than by dragging an edge.
+
 ---
 
 ## Milestone 5 — Semantic Catalog Service and Stewardship

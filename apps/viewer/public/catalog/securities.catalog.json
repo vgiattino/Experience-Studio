@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0",
-  "catalogVersion": 7,
+  "catalogVersion": 8,
   "tenantId": "demo-tenant",
   "name": "Securities Operations Catalog",
   "description": "Runtime semantic catalog for the M1 proof of concept. Physical blocks are SERVER ONLY and are stripped from the client projection.",
@@ -594,6 +594,22 @@
           "sensitivity": "internal",
           "physical": {
             "ref": "detected-at"
+          }
+        },
+        "age-hours": {
+          "id": "age-hours",
+          "businessName": "Age (hours)",
+          "description": "Hours since detection. Exposed as an attribute for per-row display and as a measure for aggregation \u2014 a stored numeric column is legitimately both.",
+          "dataType": "decimal",
+          "semanticType": "duration",
+          "unit": "hour",
+          "groupable": false,
+          "sensitivity": "internal",
+          "physical": {
+            "ref": "age-hours"
+          },
+          "format": {
+            "style": "duration"
           }
         },
         "assigned-to": {

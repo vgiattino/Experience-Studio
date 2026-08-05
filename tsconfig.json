@@ -25,6 +25,8 @@
       "@opus/renderer": ["libs/renderer/src/index.ts"],
       "@opus/catalog": ["libs/catalog/src/index.ts"],
       "@opus/generation": ["libs/generation/src/index.ts"],
+      "@opus/studio-core": ["libs/studio-core/src/index.ts"],
+      "@opus/studio-ui": ["libs/studio-ui/src/index.ts"],
       "@opus/components/*": ["libs/components/*/index.ts"],
       "@opus/schemas/*": ["schemas/*"]
     }

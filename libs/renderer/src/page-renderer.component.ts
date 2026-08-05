@@ -25,7 +25,7 @@ import {
 } from '@angular/core';
 import { GatewayService } from '@opus/data-client';
 import { breakpointForWidth } from '@opus/platform';
-import { text, type ExperienceNavigation, type UserContext } from '@opus/contracts';
+import { text, type Breakpoint, type ExperienceNavigation, type UserContext } from '@opus/contracts';
 
 import type { CompiledPage } from './compile-page';
 import { LayoutNodeComponent } from './layout-node.component';
@@ -164,6 +164,16 @@ export class PageRendererComponent {
   readonly navigationRequested = output<NavigationRequest>();
   readonly exportRequested = output<{ dataSource: string; format: string; reason?: string }>();
 
+  /**
+   * The page breakpoint the renderer resolved, as it resolves it.
+   *
+   * Published because `data-breakpoint` on the host was already there for the same purpose, and
+   * an observer reading it back off the DOM cannot know when Angular has finished writing it —
+   * the Studio's responsive preview read the *previous* value on every width change. A typed
+   * output removes the race and the DOM dependency at once.
+   */
+  readonly breakpointChange = output<Breakpoint>();
+
   private readonly host = inject(ElementRef<HTMLElement>);
   private readonly destroyRef = inject(DestroyRef);
   private readonly gateway = inject(GatewayService);
@@ -172,7 +182,19 @@ export class PageRendererComponent {
   private readonly orchestrator = inject(QueryOrchestratorService);
   private readonly dispatcher = inject(ActionDispatcherService);
 
-  private attachedFor = signal<string | null>(null);
+  /**
+   * The compiled page currently attached, held BY REFERENCE.
+   *
+   * Not by `cacheKey`: that is `id@artifactVersion`, which is identical for every edit of a
+   * mutable document, so a builder adding a data source would never see it queried — the widget
+   * sat at "—" forever while the definition was correct. Object identity is exactly the right
+   * test, because `compilePage` returns the same object for a cache hit and a new one for a
+   * recompile, which is the distinction this guard is trying to make.
+   *
+   * This was the third place `(id, artifactVersion)` had been used as content identity. It is a
+   * valid identity for a published, immutable artifact and for nothing else.
+   */
+  private attachedTo = signal<CompiledPage | null>(null);
 
   protected readonly breakpoint = this.context.breakpoint;
   protected readonly density = computed(
@@ -203,8 +225,8 @@ export class PageRendererComponent {
     effect(() => {
       const page = this.page();
       const user = this.user();
-      if (this.attachedFor() === page.cacheKey) return;
-      this.attachedFor.set(page.cacheKey);
+      if (this.attachedTo() === page) return;
+      this.attachedTo.set(page);
 
       this.context.initialize(page.definition, user, this.initialParams());
       this.orchestrator.attach(page);
@@ -241,7 +263,11 @@ export class PageRendererComponent {
     // Page breakpoint from the element's own width, not the viewport.
     const observer = new ResizeObserver((entries) => {
       const width = entries[0]?.contentRect.width ?? 0;
-      if (width > 0) this.context.setBreakpoint(breakpointForWidth(width));
+      if (width <= 0) return;
+      const next = breakpointForWidth(width);
+      const changed = this.context.breakpoint() !== next;
+      this.context.setBreakpoint(next);
+      if (changed) this.breakpointChange.emit(next);
     });
     observer.observe(this.host.nativeElement);
     this.destroyRef.onDestroy(() => observer.disconnect());
