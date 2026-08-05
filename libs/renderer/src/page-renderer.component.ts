@@ -115,6 +115,10 @@ import { ActionDispatcherService, type NavigationRequest } from './action-dispat
     .page-actions {
       display: flex;
       gap: var(--opus-space-2);
+      /* Wraps, because the header itself wrapping is not enough: four actions on a phone form one
+         429px row inside a 406px content box, and the 23px it cannot fit becomes horizontal
+         scrolling for the WHOLE PAGE — the one thing a mobile-first layout must never produce. */
+      flex-wrap: wrap;
     }
 
     .page-action {

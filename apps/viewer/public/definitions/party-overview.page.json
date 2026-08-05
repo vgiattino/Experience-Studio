@@ -1,0 +1,1431 @@
+{
+  "schemaVersion": "1.0",
+  "id": "party-overview",
+  "name": "Party Overview",
+  "description": "One legal entity: its identifiers and LEI standing, what it has issued, and the data quality it carries.",
+  "kind": "detail",
+  "tags": [
+    "template",
+    "parties",
+    "counterparty",
+    "edm"
+  ],
+  "parameters": {
+    "party-id": {
+      "label": "Party",
+      "dataType": "identifier",
+      "scope": "page",
+      "required": true,
+      "syncToUrl": true,
+      "boundToAttribute": "parties.party.party-id",
+      "description": "The legal entity this page is about, supplied by the drill-down that opened it."
+    },
+    "as-of": {
+      "label": "As Of",
+      "dataType": "date",
+      "scope": "experience",
+      "syncToUrl": true,
+      "default": {
+        "$expr": "today()"
+      }
+    }
+  },
+  "filters": {
+    "issued-query": {
+      "label": "Search issued",
+      "dataType": "string",
+      "boundToAttribute": "securities.security.name",
+      "syncToUrl": true,
+      "clearable": true
+    },
+    "issued-class": {
+      "label": "Asset Class",
+      "dataType": "enum",
+      "multiValued": true,
+      "boundToAttribute": "securities.security.asset-class",
+      "syncToUrl": true,
+      "clearable": true
+    },
+    "active-instrument": {
+      "label": "Active Instrument",
+      "dataType": "identifier",
+      "boundToAttribute": "securities.security.security-id",
+      "syncToUrl": true,
+      "clearable": false,
+      "description": "Holds the active instrument tab. The tab template\u2019s sources read it, so one set of widgets serves every generated tab."
+    }
+  },
+  "selections": {
+    "focused-issue": {
+      "label": "Focused Issue",
+      "mode": "single",
+      "entity": "securities.security",
+      "keyFields": [
+        "security-id"
+      ]
+    }
+  },
+  "dataSources": {
+    "party-header": {
+      "id": "party-header",
+      "name": "Party",
+      "entity": "parties.party",
+      "kind": "single",
+      "select": {
+        "key": {
+          "party-id": {
+            "$param": "party-id"
+          }
+        },
+        "attributes": [
+          {
+            "attribute": "legal-name",
+            "alias": "legal-name"
+          },
+          {
+            "attribute": "lei",
+            "alias": "lei"
+          },
+          {
+            "attribute": "lei-status",
+            "alias": "lei-status"
+          },
+          {
+            "attribute": "country",
+            "alias": "country"
+          },
+          {
+            "attribute": "sector",
+            "alias": "sector"
+          },
+          {
+            "attribute": "party-role",
+            "alias": "party-role"
+          },
+          {
+            "attribute": "party-status",
+            "alias": "party-status"
+          },
+          {
+            "attribute": "parent-party-id",
+            "alias": "parent-party-id"
+          },
+          {
+            "attribute": "onboarded-at",
+            "alias": "onboarded-at"
+          }
+        ]
+      },
+      "filter": {
+        "all": [
+          {
+            "target": "party-id",
+            "operator": "eq",
+            "value": {
+              "$param": "party-id"
+            },
+            "skipWhenEmpty": false
+          }
+        ]
+      },
+      "loadPolicy": "eager",
+      "cacheTtlHintSeconds": 600
+    },
+    "issued-count": {
+      "id": "issued-count",
+      "name": "Issued Securities",
+      "entity": "securities.security",
+      "kind": "aggregate",
+      "select": {
+        "measures": [
+          {
+            "measure": "security-count",
+            "aggregation": "count",
+            "alias": "issued"
+          }
+        ]
+      },
+      "filter": {
+        "all": [
+          {
+            "target": "issuer-id",
+            "operator": "eq",
+            "value": {
+              "$param": "party-id"
+            },
+            "skipWhenEmpty": false
+          },
+          {
+            "target": "status",
+            "operator": "in",
+            "value": [
+              "ACTIVE",
+              "PENDING",
+              "MATURED"
+            ],
+            "skipWhenEmpty": false
+          }
+        ]
+      },
+      "loadPolicy": "eager",
+      "cacheTtlHintSeconds": 300
+    },
+    "party-pending": {
+      "id": "party-pending",
+      "name": "Pending Review",
+      "entity": "securities.security",
+      "kind": "aggregate",
+      "select": {
+        "measures": [
+          {
+            "measure": "pending-review-count",
+            "aggregation": "count",
+            "alias": "pending"
+          }
+        ]
+      },
+      "filter": {
+        "all": [
+          {
+            "target": "issuer-id",
+            "operator": "eq",
+            "value": {
+              "$param": "party-id"
+            },
+            "skipWhenEmpty": false
+          },
+          {
+            "target": "status",
+            "operator": "in",
+            "value": [
+              "ACTIVE",
+              "PENDING",
+              "MATURED"
+            ],
+            "skipWhenEmpty": false
+          },
+          {
+            "target": "review-status",
+            "operator": "in",
+            "value": [
+              "PENDING",
+              "ESCALATED"
+            ],
+            "skipWhenEmpty": false
+          }
+        ]
+      },
+      "loadPolicy": "eager",
+      "cacheTtlHintSeconds": 300
+    },
+    "party-exception-count": {
+      "id": "party-exception-count",
+      "name": "Open Exceptions",
+      "entity": "dq.exception",
+      "kind": "aggregate",
+      "select": {
+        "measures": [
+          {
+            "measure": "exception-count",
+            "aggregation": "count",
+            "alias": "open"
+          }
+        ]
+      },
+      "filter": {
+        "all": [
+          {
+            "target": "issuer-id",
+            "operator": "eq",
+            "value": {
+              "$param": "party-id"
+            },
+            "skipWhenEmpty": false
+          },
+          {
+            "target": "exception-status",
+            "operator": "in",
+            "value": [
+              "OPEN",
+              "IN_PROGRESS"
+            ],
+            "skipWhenEmpty": false
+          }
+        ]
+      },
+      "loadPolicy": "eager",
+      "cacheTtlHintSeconds": 120
+    },
+    "party-oldest-break": {
+      "id": "party-oldest-break",
+      "name": "Oldest Break",
+      "entity": "dq.exception",
+      "kind": "aggregate",
+      "select": {
+        "measures": [
+          {
+            "measure": "age-hours",
+            "aggregation": "max",
+            "alias": "oldest"
+          }
+        ]
+      },
+      "filter": {
+        "all": [
+          {
+            "target": "issuer-id",
+            "operator": "eq",
+            "value": {
+              "$param": "party-id"
+            },
+            "skipWhenEmpty": false
+          },
+          {
+            "target": "exception-status",
+            "operator": "in",
+            "value": [
+              "OPEN",
+              "IN_PROGRESS"
+            ],
+            "skipWhenEmpty": false
+          }
+        ]
+      },
+      "loadPolicy": "eager",
+      "cacheTtlHintSeconds": 120
+    },
+    "by-class": {
+      "id": "by-class",
+      "name": "Issuance by Asset Class",
+      "entity": "securities.security",
+      "kind": "aggregate",
+      "select": {
+        "measures": [
+          {
+            "measure": "security-count",
+            "aggregation": "count",
+            "alias": "count"
+          }
+        ],
+        "dimensions": [
+          {
+            "attribute": "asset-class",
+            "alias": "asset-class",
+            "label": "Asset Class"
+          },
+          {
+            "attribute": "currency",
+            "alias": "currency",
+            "label": "Currency"
+          }
+        ]
+      },
+      "filter": {
+        "all": [
+          {
+            "target": "issuer-id",
+            "operator": "eq",
+            "value": {
+              "$param": "party-id"
+            },
+            "skipWhenEmpty": false
+          },
+          {
+            "target": "status",
+            "operator": "in",
+            "value": [
+              "ACTIVE",
+              "PENDING",
+              "MATURED"
+            ],
+            "skipWhenEmpty": false
+          }
+        ]
+      },
+      "sort": [
+        {
+          "field": "count",
+          "direction": "desc"
+        }
+      ],
+      "loadPolicy": "eager",
+      "cacheTtlHintSeconds": 300
+    },
+    "issued-securities": {
+      "id": "issued-securities",
+      "name": "Issued Securities",
+      "entity": "securities.security",
+      "kind": "list",
+      "select": {
+        "attributes": [
+          {
+            "attribute": "name",
+            "alias": "name",
+            "label": "Security Name"
+          },
+          {
+            "attribute": "isin",
+            "alias": "isin",
+            "label": "ISIN"
+          },
+          {
+            "attribute": "asset-class",
+            "alias": "asset-class",
+            "label": "Asset Class"
+          },
+          {
+            "attribute": "currency",
+            "alias": "currency",
+            "label": "Ccy"
+          },
+          {
+            "attribute": "coupon-rate",
+            "alias": "coupon-rate",
+            "label": "Coupon"
+          },
+          {
+            "attribute": "maturity-date",
+            "alias": "maturity-date",
+            "label": "Maturity"
+          },
+          {
+            "attribute": "review-status",
+            "alias": "review-status",
+            "label": "Review"
+          },
+          {
+            "attribute": "security-id",
+            "alias": "security-id"
+          }
+        ]
+      },
+      "filter": {
+        "all": [
+          {
+            "target": "issuer-id",
+            "operator": "eq",
+            "value": {
+              "$param": "party-id"
+            },
+            "skipWhenEmpty": false
+          },
+          {
+            "target": "status",
+            "operator": "in",
+            "value": [
+              "ACTIVE",
+              "PENDING",
+              "MATURED"
+            ],
+            "skipWhenEmpty": false
+          },
+          {
+            "target": "name",
+            "operator": "contains",
+            "value": {
+              "$filter": "issued-query"
+            },
+            "caseSensitive": false
+          },
+          {
+            "target": "asset-class",
+            "operator": "in",
+            "value": {
+              "$filter": "issued-class"
+            }
+          }
+        ]
+      },
+      "sort": [
+        {
+          "field": "name",
+          "direction": "asc"
+        }
+      ],
+      "paging": {
+        "mode": "offset",
+        "pageSize": 25,
+        "maxRows": 2000
+      },
+      "loadPolicy": "eager",
+      "cacheTtlHintSeconds": 300
+    },
+    "instrument-tabs": {
+      "id": "instrument-tabs",
+      "name": "Instruments",
+      "entity": "securities.security",
+      "kind": "list",
+      "select": {
+        "attributes": [
+          {
+            "attribute": "security-id",
+            "alias": "security-id"
+          },
+          {
+            "attribute": "name",
+            "alias": "name"
+          },
+          {
+            "attribute": "asset-class",
+            "alias": "asset-class"
+          }
+        ]
+      },
+      "filter": {
+        "all": [
+          {
+            "target": "issuer-id",
+            "operator": "eq",
+            "value": {
+              "$param": "party-id"
+            },
+            "skipWhenEmpty": false
+          },
+          {
+            "target": "status",
+            "operator": "in",
+            "value": [
+              "ACTIVE",
+              "PENDING",
+              "MATURED"
+            ],
+            "skipWhenEmpty": false
+          },
+          {
+            "target": "name",
+            "operator": "contains",
+            "value": {
+              "$filter": "issued-query"
+            },
+            "caseSensitive": false
+          },
+          {
+            "target": "asset-class",
+            "operator": "in",
+            "value": {
+              "$filter": "issued-class"
+            }
+          }
+        ]
+      },
+      "sort": [
+        {
+          "field": "name",
+          "direction": "asc"
+        }
+      ],
+      "paging": {
+        "mode": "offset",
+        "pageSize": 12,
+        "maxRows": 12
+      },
+      "loadPolicy": "eager",
+      "cacheTtlHintSeconds": 300
+    },
+    "instrument-exceptions": {
+      "id": "instrument-exceptions",
+      "name": "Instrument Exceptions",
+      "entity": "dq.exception",
+      "kind": "list",
+      "select": {
+        "attributes": [
+          {
+            "attribute": "rule-name",
+            "alias": "rule-name",
+            "label": "Rule"
+          },
+          {
+            "attribute": "severity",
+            "alias": "severity",
+            "label": "Severity"
+          },
+          {
+            "attribute": "exception-status",
+            "alias": "exception-status",
+            "label": "Status"
+          },
+          {
+            "attribute": "age-hours",
+            "alias": "age-hours",
+            "label": "Age"
+          },
+          {
+            "attribute": "detected-at",
+            "alias": "detected-at",
+            "label": "Detected"
+          },
+          {
+            "attribute": "exception-id",
+            "alias": "exception-id"
+          },
+          {
+            "attribute": "security-id",
+            "alias": "security-id"
+          }
+        ]
+      },
+      "filter": {
+        "all": [
+          {
+            "target": "security-id",
+            "operator": "eq",
+            "value": {
+              "$filter": "active-instrument"
+            },
+            "skipWhenEmpty": false
+          }
+        ]
+      },
+      "sort": [
+        {
+          "field": "age-hours",
+          "direction": "desc"
+        }
+      ],
+      "paging": {
+        "mode": "offset",
+        "pageSize": 20,
+        "maxRows": 200
+      },
+      "loadPolicy": "deferred",
+      "cacheTtlHintSeconds": 120
+    }
+  },
+  "components": {
+    "party-heading": {
+      "id": "party-heading",
+      "type": "content.text",
+      "typeVersion": "1.0.0",
+      "dataSource": "party-header",
+      "config": {
+        "variant": "heading",
+        "body": "{name}",
+        "tokens": {
+          "name": {
+            "$expr": "$data.party-header.legal-name ?? 'Party'"
+          }
+        }
+      }
+    },
+    "party-summary": {
+      "id": "party-summary",
+      "type": "content.text",
+      "typeVersion": "1.0.0",
+      "dataSource": "party-header",
+      "config": {
+        "variant": "body",
+        "body": "{role} \u00b7 {sector} \u00b7 domiciled {country} \u00b7 LEI {lei} ({leiStatus}) \u00b7 onboarded {onboarded}. Entity status: {status}.",
+        "tokens": {
+          "role": {
+            "$expr": "$data.party-header.party-role"
+          },
+          "sector": {
+            "$expr": "$data.party-header.sector"
+          },
+          "country": {
+            "$expr": "$data.party-header.country"
+          },
+          "lei": {
+            "$expr": "$data.party-header.lei ?? 'not registered'"
+          },
+          "leiStatus": {
+            "$expr": "$data.party-header.lei-status"
+          },
+          "onboarded": {
+            "$expr": "$data.party-header.onboarded-at"
+          },
+          "status": {
+            "$expr": "$data.party-header.party-status"
+          }
+        }
+      }
+    },
+    "kpi-issued": {
+      "id": "kpi-issued",
+      "type": "analytics.kpi-card",
+      "typeVersion": "1.4.0",
+      "title": "Issued Instruments",
+      "dataSource": "issued-count",
+      "config": {
+        "size": "md",
+        "showThresholdBand": false
+      },
+      "bindings": {
+        "value": {
+          "field": "issued",
+          "format": {
+            "style": "integer"
+          }
+        }
+      },
+      "description": "Securities where this party is the issuer."
+    },
+    "kpi-party-pending": {
+      "id": "kpi-party-pending",
+      "type": "analytics.kpi-card",
+      "typeVersion": "1.4.0",
+      "title": "Pending Review",
+      "dataSource": "party-pending",
+      "config": {
+        "size": "md",
+        "showThresholdBand": true
+      },
+      "bindings": {
+        "value": {
+          "field": "pending",
+          "format": {
+            "style": "integer"
+          }
+        }
+      },
+      "description": "Issues awaiting steward approval."
+    },
+    "kpi-party-exceptions": {
+      "id": "kpi-party-exceptions",
+      "type": "analytics.kpi-card",
+      "typeVersion": "1.4.0",
+      "title": "Open Exceptions",
+      "dataSource": "party-exception-count",
+      "config": {
+        "size": "md",
+        "showThresholdBand": true
+      },
+      "bindings": {
+        "value": {
+          "field": "open",
+          "format": {
+            "style": "integer"
+          }
+        }
+      },
+      "description": "Unresolved breaks across this party\u2019s issuance."
+    },
+    "kpi-oldest": {
+      "id": "kpi-oldest",
+      "type": "analytics.kpi-card",
+      "typeVersion": "1.4.0",
+      "title": "Oldest Break",
+      "dataSource": "party-oldest-break",
+      "config": {
+        "size": "md",
+        "showThresholdBand": false
+      },
+      "bindings": {
+        "value": {
+          "field": "oldest",
+          "format": {
+            "style": "duration"
+          }
+        }
+      },
+      "description": "Age of the longest-outstanding open exception."
+    },
+    "issued-search": {
+      "id": "issued-search",
+      "type": "input.filter-bar",
+      "typeVersion": "1.0.0",
+      "title": "Find an issue",
+      "config": {
+        "searchChannel": "issued-query",
+        "searchPlaceholder": "Search this party\u2019s instruments",
+        "debounceMs": 250,
+        "density": "compact",
+        "facets": [
+          {
+            "channel": "issued-class",
+            "label": "Asset Class",
+            "multi": true,
+            "options": [
+              {
+                "value": "EQUITY",
+                "label": "Equity"
+              },
+              {
+                "value": "BOND",
+                "label": "Bond"
+              },
+              {
+                "value": "FUND",
+                "label": "Fund"
+              },
+              {
+                "value": "DERIVATIVE",
+                "label": "Derivative"
+              }
+            ]
+          }
+        ],
+        "showClearAll": true,
+        "summary": "Narrows the issuance table, the chart and the generated instrument tabs together."
+      },
+      "eventActions": {
+        "searchChanged": "set-issued-query",
+        "facetChanged": "set-issued-class",
+        "cleared": "clear-issued-filters"
+      },
+      "writesTo": {
+        "filters": [
+          "issued-query",
+          "issued-class"
+        ]
+      }
+    },
+    "class-chart": {
+      "id": "class-chart",
+      "type": "analytics.chart",
+      "typeVersion": "1.0.0",
+      "title": "Issuance by asset class and currency",
+      "description": "Click a bar to narrow the page to that asset class.",
+      "dataSource": "by-class",
+      "config": {
+        "mark": "bar",
+        "stacking": "stacked",
+        "legend": {
+          "position": "bottom"
+        },
+        "gridlines": true
+      },
+      "encodings": [
+        {
+          "channel": "x",
+          "binding": {
+            "field": "asset-class",
+            "label": "Asset Class"
+          },
+          "axis": {
+            "title": "Asset Class",
+            "gridlines": false
+          }
+        },
+        {
+          "channel": "y",
+          "binding": {
+            "field": "count",
+            "label": "Instruments",
+            "format": {
+              "style": "integer"
+            }
+          },
+          "scale": {
+            "zero": true
+          },
+          "axis": {
+            "title": "Instruments"
+          }
+        },
+        {
+          "channel": "series",
+          "binding": {
+            "field": "currency",
+            "label": "Currency"
+          }
+        }
+      ],
+      "eventActions": {
+        "segmentActivated": "filter-issued-class"
+      }
+    },
+    "issued-table": {
+      "id": "issued-table",
+      "type": "data.table",
+      "typeVersion": "1.0.0",
+      "title": "Issued instruments",
+      "dataSource": "issued-securities",
+      "config": {
+        "density": "compact",
+        "maxHeight": "400px",
+        "zebra": true,
+        "selectionMode": "single",
+        "showRowCount": true
+      },
+      "bindings": {
+        "columns": [
+          {
+            "field": "name",
+            "label": "Security Name",
+            "renderAs": "link"
+          },
+          {
+            "field": "isin",
+            "label": "ISIN"
+          },
+          {
+            "field": "asset-class",
+            "label": "Asset Class"
+          },
+          {
+            "field": "currency",
+            "label": "Ccy"
+          },
+          {
+            "field": "coupon-rate",
+            "label": "Coupon",
+            "format": {
+              "style": "percent",
+              "decimals": 3
+            },
+            "align": "end",
+            "emptyValue": "\u2014"
+          },
+          {
+            "field": "maturity-date",
+            "label": "Maturity",
+            "format": {
+              "style": "date"
+            },
+            "emptyValue": "\u2014"
+          },
+          {
+            "field": "review-status",
+            "label": "Review"
+          },
+          {
+            "field": "security-id",
+            "hidden": true
+          }
+        ]
+      },
+      "eventActions": {
+        "rowActivated": "drill-to-security",
+        "selectionChanged": "set-focused-issue"
+      },
+      "stateOverrides": {
+        "empty": {
+          "title": "Nothing issued",
+          "message": "No instrument matches the current search for this party."
+        }
+      }
+    },
+    "instrument-exceptions-table": {
+      "id": "instrument-exceptions-table",
+      "type": "data.table",
+      "typeVersion": "1.0.0",
+      "title": "Exceptions on this instrument",
+      "description": "One definition, rendered inside whichever instrument tab is active.",
+      "dataSource": "instrument-exceptions",
+      "config": {
+        "density": "compact",
+        "maxHeight": "300px",
+        "zebra": true
+      },
+      "bindings": {
+        "columns": [
+          {
+            "field": "rule-name",
+            "label": "Rule"
+          },
+          {
+            "field": "severity",
+            "label": "Severity"
+          },
+          {
+            "field": "exception-status",
+            "label": "Status"
+          },
+          {
+            "field": "age-hours",
+            "label": "Age",
+            "format": {
+              "style": "duration"
+            },
+            "align": "end"
+          },
+          {
+            "field": "detected-at",
+            "label": "Detected",
+            "format": {
+              "style": "datetime"
+            }
+          },
+          {
+            "field": "exception-id",
+            "hidden": true
+          },
+          {
+            "field": "security-id",
+            "hidden": true
+          }
+        ]
+      },
+      "eventActions": {
+        "rowActivated": "go-to-exceptions"
+      },
+      "stateOverrides": {
+        "empty": {
+          "title": "Clean",
+          "message": "This instrument has no data quality breaks."
+        }
+      }
+    }
+  },
+  "layout": {
+    "kind": "container",
+    "id": "root",
+    "container": {
+      "type": "grid",
+      "columns": 12,
+      "gap": "lg",
+      "children": [
+        {
+          "kind": "widget",
+          "id": "w-party-heading",
+          "component": "party-heading",
+          "placement": {
+            "colStart": 1,
+            "colSpan": 12
+          }
+        },
+        {
+          "kind": "widget",
+          "id": "w-party-summary",
+          "component": "party-summary",
+          "placement": {
+            "colStart": 1,
+            "colSpan": 12
+          }
+        },
+        {
+          "kind": "container",
+          "id": "kpi-row",
+          "placement": {
+            "colStart": 1,
+            "colSpan": 12
+          },
+          "container": {
+            "type": "stack",
+            "direction": "row",
+            "wrap": true,
+            "gap": "md",
+            "directionByBreakpoint": {
+              "xs": "column"
+            },
+            "children": [
+              {
+                "kind": "widget",
+                "id": "w-kpi-issued",
+                "component": "kpi-issued",
+                "placement": {
+                  "colSpan": 12,
+                  "breakpoints": {
+                    "sm": {
+                      "colSpan": 6
+                    },
+                    "lg": {
+                      "colSpan": 3
+                    }
+                  }
+                }
+              },
+              {
+                "kind": "widget",
+                "id": "w-kpi-party-pending",
+                "component": "kpi-party-pending",
+                "placement": {
+                  "colSpan": 12,
+                  "breakpoints": {
+                    "sm": {
+                      "colSpan": 6
+                    },
+                    "lg": {
+                      "colSpan": 3
+                    }
+                  }
+                }
+              },
+              {
+                "kind": "widget",
+                "id": "w-kpi-party-exceptions",
+                "component": "kpi-party-exceptions",
+                "placement": {
+                  "colSpan": 12,
+                  "breakpoints": {
+                    "sm": {
+                      "colSpan": 6
+                    },
+                    "lg": {
+                      "colSpan": 3
+                    }
+                  }
+                }
+              },
+              {
+                "kind": "widget",
+                "id": "w-kpi-oldest",
+                "component": "kpi-oldest",
+                "placement": {
+                  "colSpan": 12,
+                  "breakpoints": {
+                    "sm": {
+                      "colSpan": 6
+                    },
+                    "lg": {
+                      "colSpan": 3
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "kind": "widget",
+          "id": "w-issued-search",
+          "component": "issued-search",
+          "placement": {
+            "colStart": 1,
+            "colSpan": 12
+          }
+        },
+        {
+          "kind": "container",
+          "id": "chart-panel",
+          "placement": {
+            "colStart": 1,
+            "colSpan": 12,
+            "minHeight": "320px",
+            "breakpoints": {
+              "xl": {
+                "colSpan": 5
+              }
+            }
+          },
+          "container": {
+            "type": "panel",
+            "title": "Issuance profile",
+            "variant": "bordered",
+            "children": [
+              {
+                "kind": "widget",
+                "id": "w-class-chart",
+                "component": "class-chart",
+                "placement": {
+                  "colSpan": 12,
+                  "minHeight": "240px"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "kind": "container",
+          "id": "issued-panel",
+          "placement": {
+            "colStart": 1,
+            "colSpan": 12,
+            "breakpoints": {
+              "xl": {
+                "colSpan": 7
+              }
+            }
+          },
+          "container": {
+            "type": "panel",
+            "title": "Issued instruments",
+            "variant": "bordered",
+            "headerActions": [
+              "export-issued",
+              "refresh-page"
+            ],
+            "children": [
+              {
+                "kind": "widget",
+                "id": "w-issued-table",
+                "component": "issued-table",
+                "placement": {
+                  "colStart": 1,
+                  "colSpan": 12
+                }
+              }
+            ]
+          }
+        },
+        {
+          "kind": "container",
+          "id": "instrument-panel",
+          "placement": {
+            "colStart": 1,
+            "colSpan": 12
+          },
+          "container": {
+            "type": "panel",
+            "title": "Instrument detail",
+            "variant": "bordered",
+            "subtitle": "One tab per instrument this party issued, generated from the data and capped at twelve.",
+            "children": [
+              {
+                "kind": "container",
+                "id": "instrument-tabs-container",
+                "placement": {
+                  "colStart": 1,
+                  "colSpan": 12
+                },
+                "container": {
+                  "type": "tabs",
+                  "variant": "pill",
+                  "overflow": "menu",
+                  "selectedTabChannel": "active-instrument",
+                  "deferContent": true,
+                  "keepAliveOnSwitch": true,
+                  "source": {
+                    "mode": "dataDriven",
+                    "source": "instrument-tabs",
+                    "idField": "security-id",
+                    "labelField": "name",
+                    "orderField": "name",
+                    "maxTabs": 12,
+                    "emptyBehaviour": "showEmptyState",
+                    "template": [
+                      {
+                        "kind": "widget",
+                        "id": "t-instrument-exceptions",
+                        "component": "instrument-exceptions-table",
+                        "placement": {
+                          "colStart": 1,
+                          "colSpan": 12
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "actions": {
+    "set-issued-query": {
+      "id": "set-issued-query",
+      "kind": "setFilter",
+      "label": "Search",
+      "channel": "issued-query",
+      "value": {
+        "$context": "$event.value"
+      },
+      "mode": "replace"
+    },
+    "set-issued-class": {
+      "id": "set-issued-class",
+      "kind": "setFilter",
+      "label": "Filter by asset class",
+      "channel": "issued-class",
+      "value": {
+        "$context": "$event.value"
+      },
+      "mode": "replace",
+      "enabled": {
+        "$expr": "$event.channel == 'issued-class'"
+      }
+    },
+    "filter-issued-class": {
+      "id": "filter-issued-class",
+      "kind": "setFilter",
+      "label": "Filter by asset class",
+      "channel": "issued-class",
+      "value": {
+        "$context": "$event.x"
+      },
+      "mode": "toggle"
+    },
+    "set-focused-issue": {
+      "id": "set-focused-issue",
+      "kind": "setSelection",
+      "channel": "focused-issue",
+      "value": {
+        "$context": "$event.security-id"
+      }
+    },
+    "clear-issued-filters": {
+      "id": "clear-issued-filters",
+      "kind": "clearFilters",
+      "label": "Clear",
+      "channels": [
+        "issued-query",
+        "issued-class"
+      ]
+    },
+    "refresh-page": {
+      "id": "refresh-page",
+      "kind": "refresh",
+      "label": "Refresh",
+      "icon": "refresh",
+      "bypassCache": true
+    },
+    "drill-to-security": {
+      "id": "drill-to-security",
+      "kind": "drilldown",
+      "label": "Open security",
+      "entity": "securities.security",
+      "key": {
+        "security-id": {
+          "$context": "$event.security-id"
+        }
+      },
+      "carryContext": true,
+      "openIn": "self"
+    },
+    "drill-to-parent": {
+      "id": "drill-to-parent",
+      "kind": "drilldown",
+      "label": "Parent party",
+      "entity": "parties.party",
+      "key": {
+        "party-id": {
+          "$expr": "$data.party-header.parent-party-id"
+        }
+      },
+      "carryContext": true,
+      "openIn": "self",
+      "enabled": {
+        "$expr": "$data.party-header.parent-party-id != null"
+      }
+    },
+    "back-to-master": {
+      "id": "back-to-master",
+      "kind": "navigate",
+      "label": "Security master",
+      "target": {
+        "page": "security-master-dashboard"
+      },
+      "carryContext": true
+    },
+    "go-to-exceptions": {
+      "id": "go-to-exceptions",
+      "kind": "navigate",
+      "label": "Exception management",
+      "target": {
+        "page": "exception-management"
+      },
+      "carryContext": true
+    },
+    "open-lei-record": {
+      "id": "open-lei-record",
+      "kind": "openUrl",
+      "label": "GLEIF record",
+      "icon": "external",
+      "urlTemplate": "https://search.gleif.org/#/record/{lei}",
+      "params": {
+        "lei": {
+          "$expr": "$data.party-header.lei"
+        }
+      },
+      "target": "newTab",
+      "description": "The public LEI register entry for this entity. External, so it opens in a new tab and is not treated as navigation within the experience.",
+      "enabled": {
+        "$expr": "$data.party-header.lei != null"
+      }
+    },
+    "export-issued": {
+      "id": "export-issued",
+      "kind": "export",
+      "label": "Export",
+      "icon": "download",
+      "dataSource": "issued-securities",
+      "scope": "all",
+      "format": "csv",
+      "includeMetadata": true,
+      "auditProfile": "elevated",
+      "security": {
+        "requiredCapabilities": [
+          "export.data"
+        ]
+      },
+      "confirm": {
+        "message": "Export this party\u2019s issuance? The export carries your entitlements and is recorded in the audit trail.",
+        "requiresReason": true
+      }
+    }
+  },
+  "navigation": {
+    "breadcrumbs": {
+      "mode": "auto"
+    },
+    "pageActions": [
+      "drill-to-parent",
+      "open-lei-record",
+      "back-to-master",
+      "go-to-exceptions",
+      "refresh-page"
+    ],
+    "relatedLinks": [
+      {
+        "id": "parent-link",
+        "label": "Parent party",
+        "action": "drill-to-parent"
+      },
+      {
+        "id": "lei-link",
+        "label": "GLEIF record",
+        "action": "open-lei-record"
+      }
+    ]
+  },
+  "security": {
+    "intendedAudience": "Reference data stewards and client onboarding.",
+    "requiredCapabilities": [
+      "experience.view"
+    ],
+    "workspaceScope": "tenant",
+    "deniedDataPolicy": "showDeniedState",
+    "sensitivityDeclaration": {
+      "maxSensitivity": "internal",
+      "contributingRefs": [],
+      "computedAt": "2026-08-05T12:00:00Z",
+      "computedFromCatalogVersion": 9
+    },
+    "exportPolicy": {
+      "allowed": true,
+      "formats": [
+        "csv"
+      ],
+      "maxRows": 50000,
+      "requiresReason": true,
+      "watermark": true
+    },
+    "auditProfile": "standard"
+  },
+  "presentation": {
+    "themeRef": "opus.default",
+    "density": "comfortable",
+    "maxWidth": "full",
+    "showPageHeader": true
+  },
+  "performance": {
+    "renderBudgetMs": 2500,
+    "maxEagerDataSources": 8
+  },
+  "version": {
+    "schemaVersion": "1.0",
+    "artifactVersion": 1,
+    "lifecycleState": "published",
+    "immutable": true,
+    "pins": {
+      "catalogVersion": 9,
+      "registryVersion": "1.1.0"
+    },
+    "provenance": {
+      "origin": "human",
+      "actorId": "platform-team@demo-tenant",
+      "createdAt": "2026-08-05T12:00:00Z",
+      "editSummary": {
+        "summary": "Third EDM business template: the party master record with its issuance, its group parent and one data-driven tab per instrument issued."
+      }
+    },
+    "validation": {
+      "status": "valid",
+      "stagesPassed": [
+        "structural",
+        "component",
+        "semantic",
+        "binding",
+        "layout"
+      ],
+      "validatedAt": "2026-08-05T12:00:00Z"
+    },
+    "audit": {
+      "createdBy": "platform-team@demo-tenant",
+      "createdAt": "2026-08-05T12:00:00Z"
+    }
+  }
+}

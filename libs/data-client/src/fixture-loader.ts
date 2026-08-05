@@ -81,6 +81,10 @@ const FIXTURES: readonly {
     // column removed from the projection rather than blanked in the UI.
     restrictedAttributes: { 'assigned-to': 'edm.dq.assignee.read' },
   },
+  { file: 'parties.json', rowCapability: 'edm.party.read' },
+  // Vendor contributions carry the same row entitlement as the securities they describe: the
+  // provenance of a value is as sensitive as the value.
+  { file: 'source-values.json', rowCapability: 'edm.security.read' },
 ];
 
 /**

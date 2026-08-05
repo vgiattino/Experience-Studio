@@ -16,7 +16,12 @@
       "status": "ACTIVE",
       "created-at": "2026-08-04T03:42:00Z",
       "maturity-date": null,
-      "coupon-rate": null
+      "coupon-rate": null,
+      "issuer-id": "PTY00018",
+      "issuer-name": "Vodafone Group PLC",
+      "sector": "Telecommunications",
+      "country-of-risk": "NL",
+      "review-status": "APPROVED"
     },
     {
       "security_id": "SEC00002",
@@ -28,7 +33,12 @@
       "status": "MATURED",
       "created-at": "2026-08-01T01:06:00Z",
       "maturity-date": null,
-      "coupon-rate": null
+      "coupon-rate": null,
+      "issuer-id": "PTY00011",
+      "issuer-name": "HSBC Holdings PLC",
+      "sector": "Telecommunications",
+      "country-of-risk": "JP",
+      "review-status": "APPROVED"
     },
     {
       "security_id": "SEC00003",
@@ -40,7 +50,12 @@
       "status": "ACTIVE",
       "created-at": "2026-08-04T02:06:00Z",
       "maturity-date": null,
-      "coupon-rate": null
+      "coupon-rate": null,
+      "issuer-id": "PTY00014",
+      "issuer-name": "Siemens AG",
+      "sector": "Banking",
+      "country-of-risk": "FR",
+      "review-status": "PENDING"
     },
     {
       "security_id": "SEC00004",
@@ -52,7 +67,12 @@
       "status": "ACTIVE",
       "created-at": "2026-08-04T07:15:00Z",
       "maturity-date": null,
-      "coupon-rate": null
+      "coupon-rate": null,
+      "issuer-id": "PTY00001",
+      "issuer-name": "Apple Inc",
+      "sector": "Banking",
+      "country-of-risk": "US",
+      "review-status": "PENDING"
     },
     {
       "security_id": "SEC00005",
@@ -64,7 +84,12 @@
       "status": "ACTIVE",
       "created-at": "2026-08-04T02:25:00Z",
       "maturity-date": null,
-      "coupon-rate": null
+      "coupon-rate": null,
+      "issuer-id": "PTY00012",
+      "issuer-name": "Nestle SA",
+      "sector": "Banking",
+      "country-of-risk": "IT",
+      "review-status": "APPROVED"
     },
     {
       "security_id": "SEC00006",
@@ -76,7 +101,12 @@
       "status": "ACTIVE",
       "created-at": "2026-08-04T07:50:00Z",
       "maturity-date": null,
-      "coupon-rate": null
+      "coupon-rate": null,
+      "issuer-id": "PTY00015",
+      "issuer-name": "Toyota Motor Corp",
+      "sector": "Banking",
+      "country-of-risk": "IT",
+      "review-status": "PENDING"
     },
     {
       "security_id": "SEC00007",
@@ -88,7 +118,12 @@
       "status": "ACTIVE",
       "created-at": "2026-07-05T08:11:00Z",
       "maturity-date": "2034-09-28",
-      "coupon-rate": 1.494
+      "coupon-rate": 1.494,
+      "issuer-id": "PTY00016",
+      "issuer-name": "UK Treasury 4.25",
+      "sector": "Industrials",
+      "country-of-risk": "GB",
+      "review-status": "ESCALATED"
     },
     {
       "security_id": "SEC00008",
@@ -100,7 +135,12 @@
       "status": "ACTIVE",
       "created-at": "2025-06-30T05:29:00Z",
       "maturity-date": "2029-09-13",
-      "coupon-rate": 2.371
+      "coupon-rate": 2.371,
+      "issuer-id": "PTY00004",
+      "issuer-name": "Bund 2.6",
+      "sector": "Utilities",
+      "country-of-risk": "JP",
+      "review-status": "APPROVED"
     },
     {
       "security_id": "SEC00009",
@@ -112,7 +152,12 @@
       "status": "ACTIVE",
       "created-at": "2026-08-04T01:10:00Z",
       "maturity-date": "2029-10-03",
-      "coupon-rate": 0.857
+      "coupon-rate": 0.857,
+      "issuer-id": "PTY00017",
+      "issuer-name": "US Treasury 4.0",
+      "sector": "Energy",
+      "country-of-risk": "ES",
+      "review-status": "APPROVED"
     },
     {
       "security_id": "SEC00010",
@@ -124,7 +169,12 @@
       "status": "ACTIVE",
       "created-at": "2026-04-06T07:07:00Z",
       "maturity-date": "2029-12-26",
-      "coupon-rate": 1.221
+      "coupon-rate": 1.221,
+      "issuer-id": "PTY00002",
+      "issuer-name": "BP Capital 3.8",
+      "sector": "Insurance",
+      "country-of-risk": "ES",
+      "review-status": "PENDING"
     },
     {
       "security_id": "SEC00011",
@@ -136,7 +186,12 @@
       "status": "ACTIVE",
       "created-at": "2025-06-30T02:44:00Z",
       "maturity-date": "2030-11-05",
-      "coupon-rate": 4.83
+      "coupon-rate": 4.83,
+      "issuer-id": "PTY00013",
+      "issuer-name": "Rio Tinto 4.1",
+      "sector": "Telecommunications",
+      "country-of-risk": "CH",
+      "review-status": "APPROVED"
     },
     {
       "security_id": "SEC00012",
@@ -148,7 +203,12 @@
       "status": "ACTIVE",
       "created-at": "2026-08-04T06:43:00Z",
       "maturity-date": "2029-09-26",
-      "coupon-rate": 1.07
+      "coupon-rate": 1.07,
+      "issuer-id": "PTY00007",
+      "issuer-name": "Enel SpA 3.375",
+      "sector": "Mining",
+      "country-of-risk": "GB",
+      "review-status": "APPROVED"
     },
     {
       "security_id": "SEC00013",
@@ -160,7 +220,12 @@
       "status": "ACTIVE",
       "created-at": "2026-08-04T02:32:00Z",
       "maturity-date": null,
-      "coupon-rate": null
+      "coupon-rate": null,
+      "issuer-id": "PTY00010",
+      "issuer-name": "Global Equity Income",
+      "sector": "Sovereign",
+      "country-of-risk": "FR",
+      "review-status": "PENDING"
     },
     {
       "security_id": "SEC00014",
@@ -172,7 +237,12 @@
       "status": "ACTIVE",
       "created-at": "2026-08-03T01:09:00Z",
       "maturity-date": null,
-      "coupon-rate": null
+      "coupon-rate": null,
+      "issuer-id": "PTY00008",
+      "issuer-name": "European Bond",
+      "sector": "Energy",
+      "country-of-risk": "JP",
+      "review-status": "APPROVED"
     },
     {
       "security_id": "SEC00015",
@@ -184,7 +254,12 @@
       "status": "ACTIVE",
       "created-at": "2026-08-01T04:17:00Z",
       "maturity-date": null,
-      "coupon-rate": null
+      "coupon-rate": null,
+      "issuer-id": "PTY00006",
+      "issuer-name": "Emerging Markets",
+      "sector": "Banking",
+      "country-of-risk": "US",
+      "review-status": "APPROVED"
     },
     {
       "security_id": "SEC00016",
@@ -196,7 +271,12 @@
       "status": "ACTIVE",
       "created-at": "2026-08-01T06:27:00Z",
       "maturity-date": null,
-      "coupon-rate": null
+      "coupon-rate": null,
+      "issuer-id": "PTY00009",
+      "issuer-name": "FTSE 100",
+      "sector": "Insurance",
+      "country-of-risk": "ES",
+      "review-status": "APPROVED"
     },
     {
       "security_id": "SEC00017",
@@ -208,7 +288,12 @@
       "status": "ACTIVE",
       "created-at": "2026-08-04T07:08:00Z",
       "maturity-date": null,
-      "coupon-rate": null
+      "coupon-rate": null,
+      "issuer-id": "PTY00005",
+      "issuer-name": "EUR/USD",
+      "sector": "Telecommunications",
+      "country-of-risk": "GB",
+      "review-status": "APPROVED"
     },
     {
       "security_id": "SEC00018",
@@ -220,7 +305,12 @@
       "status": "ACTIVE",
       "created-at": "2026-04-06T03:31:00Z",
       "maturity-date": null,
-      "coupon-rate": null
+      "coupon-rate": null,
+      "issuer-id": "PTY00003",
+      "issuer-name": "Brent Crude Option Nov26",
+      "sector": "Mining",
+      "country-of-risk": "JP",
+      "review-status": "PENDING"
     },
     {
       "security_id": "SEC00019",
@@ -232,7 +322,12 @@
       "status": "ACTIVE",
       "created-at": "2025-06-30T01:37:00Z",
       "maturity-date": null,
-      "coupon-rate": null
+      "coupon-rate": null,
+      "issuer-id": "PTY00018",
+      "issuer-name": "Vodafone Group PLC",
+      "sector": "Telecommunications",
+      "country-of-risk": "NL",
+      "review-status": "PENDING"
     },
     {
       "security_id": "SEC00020",
@@ -244,7 +339,12 @@
       "status": "ACTIVE",
       "created-at": "2026-08-04T06:29:00Z",
       "maturity-date": null,
-      "coupon-rate": null
+      "coupon-rate": null,
+      "issuer-id": "PTY00011",
+      "issuer-name": "HSBC Holdings PLC",
+      "sector": "Telecommunications",
+      "country-of-risk": "JP",
+      "review-status": "ESCALATED"
     },
     {
       "security_id": "SEC00021",
@@ -256,7 +356,12 @@
       "status": "ACTIVE",
       "created-at": "2026-07-26T08:10:00Z",
       "maturity-date": null,
-      "coupon-rate": null
+      "coupon-rate": null,
+      "issuer-id": "PTY00014",
+      "issuer-name": "Siemens AG",
+      "sector": "Banking",
+      "country-of-risk": "FR",
+      "review-status": "APPROVED"
     },
     {
       "security_id": "SEC00022",
@@ -268,7 +373,12 @@
       "status": "ACTIVE",
       "created-at": "2026-08-04T06:44:00Z",
       "maturity-date": null,
-      "coupon-rate": null
+      "coupon-rate": null,
+      "issuer-id": "PTY00001",
+      "issuer-name": "Apple Inc",
+      "sector": "Banking",
+      "country-of-risk": "US",
+      "review-status": "APPROVED"
     },
     {
       "security_id": "SEC00023",
@@ -280,7 +390,12 @@
       "status": "ACTIVE",
       "created-at": "2026-08-03T04:35:00Z",
       "maturity-date": null,
-      "coupon-rate": null
+      "coupon-rate": null,
+      "issuer-id": "PTY00012",
+      "issuer-name": "Nestle SA",
+      "sector": "Banking",
+      "country-of-risk": "IT",
+      "review-status": "PENDING"
     },
     {
       "security_id": "SEC00024",
@@ -292,7 +407,12 @@
       "status": "ACTIVE",
       "created-at": "2026-08-04T03:52:00Z",
       "maturity-date": null,
-      "coupon-rate": null
+      "coupon-rate": null,
+      "issuer-id": "PTY00015",
+      "issuer-name": "Toyota Motor Corp",
+      "sector": "Banking",
+      "country-of-risk": "IT",
+      "review-status": "APPROVED"
     },
     {
       "security_id": "SEC00025",
@@ -304,7 +424,12 @@
       "status": "ACTIVE",
       "created-at": "2026-08-04T06:07:00Z",
       "maturity-date": "2028-09-09",
-      "coupon-rate": 2.483
+      "coupon-rate": 2.483,
+      "issuer-id": "PTY00016",
+      "issuer-name": "UK Treasury 4.25",
+      "sector": "Industrials",
+      "country-of-risk": "GB",
+      "review-status": "APPROVED"
     },
     {
       "security_id": "SEC00026",
@@ -316,7 +441,12 @@
       "status": "ACTIVE",
       "created-at": "2026-08-01T03:17:00Z",
       "maturity-date": "2033-06-24",
-      "coupon-rate": 1.177
+      "coupon-rate": 1.177,
+      "issuer-id": "PTY00004",
+      "issuer-name": "Bund 2.6",
+      "sector": "Utilities",
+      "country-of-risk": "JP",
+      "review-status": "APPROVED"
     },
     {
       "security_id": "SEC00027",
@@ -328,7 +458,12 @@
       "status": "ACTIVE",
       "created-at": "2025-06-30T06:00:00Z",
       "maturity-date": "2029-05-06",
-      "coupon-rate": 5.971
+      "coupon-rate": 5.971,
+      "issuer-id": "PTY00017",
+      "issuer-name": "US Treasury 4.0",
+      "sector": "Energy",
+      "country-of-risk": "ES",
+      "review-status": "APPROVED"
     },
     {
       "security_id": "SEC00028",
@@ -340,7 +475,12 @@
       "status": "ACTIVE",
       "created-at": "2026-07-05T02:17:00Z",
       "maturity-date": "2034-07-23",
-      "coupon-rate": 6.114
+      "coupon-rate": 6.114,
+      "issuer-id": "PTY00002",
+      "issuer-name": "BP Capital 3.8",
+      "sector": "Insurance",
+      "country-of-risk": "ES",
+      "review-status": "APPROVED"
     },
     {
       "security_id": "SEC00029",
@@ -352,7 +492,12 @@
       "status": "ACTIVE",
       "created-at": "2026-07-26T08:56:00Z",
       "maturity-date": "2034-09-27",
-      "coupon-rate": 4.222
+      "coupon-rate": 4.222,
+      "issuer-id": "PTY00013",
+      "issuer-name": "Rio Tinto 4.1",
+      "sector": "Telecommunications",
+      "country-of-risk": "CH",
+      "review-status": "APPROVED"
     },
     {
       "security_id": "SEC00030",
@@ -364,7 +509,12 @@
       "status": "ACTIVE",
       "created-at": "2026-08-04T03:19:00Z",
       "maturity-date": "2029-10-10",
-      "coupon-rate": 4.146
+      "coupon-rate": 4.146,
+      "issuer-id": "PTY00007",
+      "issuer-name": "Enel SpA 3.375",
+      "sector": "Mining",
+      "country-of-risk": "GB",
+      "review-status": "APPROVED"
     },
     {
       "security_id": "SEC00031",
@@ -376,7 +526,12 @@
       "status": "ACTIVE",
       "created-at": "2026-07-26T08:15:00Z",
       "maturity-date": null,
-      "coupon-rate": null
+      "coupon-rate": null,
+      "issuer-id": "PTY00010",
+      "issuer-name": "Global Equity Income",
+      "sector": "Sovereign",
+      "country-of-risk": "FR",
+      "review-status": "APPROVED"
     },
     {
       "security_id": "SEC00032",
@@ -388,7 +543,12 @@
       "status": "ACTIVE",
       "created-at": "2026-08-01T02:31:00Z",
       "maturity-date": null,
-      "coupon-rate": null
+      "coupon-rate": null,
+      "issuer-id": "PTY00008",
+      "issuer-name": "European Bond",
+      "sector": "Energy",
+      "country-of-risk": "JP",
+      "review-status": "APPROVED"
     },
     {
       "security_id": "SEC00033",
@@ -400,7 +560,12 @@
       "status": "ACTIVE",
       "created-at": "2026-08-04T05:26:00Z",
       "maturity-date": null,
-      "coupon-rate": null
+      "coupon-rate": null,
+      "issuer-id": "PTY00006",
+      "issuer-name": "Emerging Markets",
+      "sector": "Banking",
+      "country-of-risk": "US",
+      "review-status": "PENDING"
     },
     {
       "security_id": "SEC00034",
@@ -412,7 +577,12 @@
       "status": "ACTIVE",
       "created-at": "2026-07-05T03:15:00Z",
       "maturity-date": null,
-      "coupon-rate": null
+      "coupon-rate": null,
+      "issuer-id": "PTY00009",
+      "issuer-name": "FTSE 100",
+      "sector": "Insurance",
+      "country-of-risk": "ES",
+      "review-status": "APPROVED"
     },
     {
       "security_id": "SEC00035",
@@ -424,7 +594,12 @@
       "status": "ACTIVE",
       "created-at": "2026-07-26T01:10:00Z",
       "maturity-date": null,
-      "coupon-rate": null
+      "coupon-rate": null,
+      "issuer-id": "PTY00005",
+      "issuer-name": "EUR/USD",
+      "sector": "Telecommunications",
+      "country-of-risk": "GB",
+      "review-status": "APPROVED"
     },
     {
       "security_id": "SEC00036",
@@ -436,7 +611,12 @@
       "status": "MATURED",
       "created-at": "2026-08-04T02:27:00Z",
       "maturity-date": null,
-      "coupon-rate": null
+      "coupon-rate": null,
+      "issuer-id": "PTY00003",
+      "issuer-name": "Brent Crude Option Nov26",
+      "sector": "Mining",
+      "country-of-risk": "JP",
+      "review-status": "PENDING"
     },
     {
       "security_id": "SEC00037",
@@ -448,7 +628,12 @@
       "status": "ACTIVE",
       "created-at": "2026-08-04T05:09:00Z",
       "maturity-date": null,
-      "coupon-rate": null
+      "coupon-rate": null,
+      "issuer-id": "PTY00018",
+      "issuer-name": "Vodafone Group PLC",
+      "sector": "Telecommunications",
+      "country-of-risk": "NL",
+      "review-status": "APPROVED"
     },
     {
       "security_id": "SEC00038",
@@ -460,7 +645,12 @@
       "status": "ACTIVE",
       "created-at": "2026-04-06T06:06:00Z",
       "maturity-date": null,
-      "coupon-rate": null
+      "coupon-rate": null,
+      "issuer-id": "PTY00011",
+      "issuer-name": "HSBC Holdings PLC",
+      "sector": "Telecommunications",
+      "country-of-risk": "JP",
+      "review-status": "APPROVED"
     },
     {
       "security_id": "SEC00039",
@@ -472,7 +662,12 @@
       "status": "ACTIVE",
       "created-at": "2026-08-04T07:20:00Z",
       "maturity-date": null,
-      "coupon-rate": null
+      "coupon-rate": null,
+      "issuer-id": "PTY00014",
+      "issuer-name": "Siemens AG",
+      "sector": "Banking",
+      "country-of-risk": "FR",
+      "review-status": "APPROVED"
     },
     {
       "security_id": "SEC00040",
@@ -484,7 +679,12 @@
       "status": "ACTIVE",
       "created-at": "2026-08-01T05:04:00Z",
       "maturity-date": null,
-      "coupon-rate": null
+      "coupon-rate": null,
+      "issuer-id": "PTY00001",
+      "issuer-name": "Apple Inc",
+      "sector": "Banking",
+      "country-of-risk": "US",
+      "review-status": "APPROVED"
     },
     {
       "security_id": "SEC00041",
@@ -496,7 +696,12 @@
       "status": "ACTIVE",
       "created-at": "2026-07-05T06:40:00Z",
       "maturity-date": null,
-      "coupon-rate": null
+      "coupon-rate": null,
+      "issuer-id": "PTY00012",
+      "issuer-name": "Nestle SA",
+      "sector": "Banking",
+      "country-of-risk": "IT",
+      "review-status": "PENDING"
     },
     {
       "security_id": "SEC00042",
@@ -508,7 +713,12 @@
       "status": "ACTIVE",
       "created-at": "2025-06-30T06:33:00Z",
       "maturity-date": null,
-      "coupon-rate": null
+      "coupon-rate": null,
+      "issuer-id": "PTY00015",
+      "issuer-name": "Toyota Motor Corp",
+      "sector": "Banking",
+      "country-of-risk": "IT",
+      "review-status": "APPROVED"
     },
     {
       "security_id": "SEC00043",
@@ -520,7 +730,12 @@
       "status": "ACTIVE",
       "created-at": "2026-04-06T08:32:00Z",
       "maturity-date": "2028-11-16",
-      "coupon-rate": 2.687
+      "coupon-rate": 2.687,
+      "issuer-id": "PTY00016",
+      "issuer-name": "UK Treasury 4.25",
+      "sector": "Industrials",
+      "country-of-risk": "GB",
+      "review-status": "APPROVED"
     },
     {
       "security_id": "SEC00044",
@@ -532,7 +747,12 @@
       "status": "PENDING",
       "created-at": "2026-08-04T03:12:00Z",
       "maturity-date": "2029-04-16",
-      "coupon-rate": 3.873
+      "coupon-rate": 3.873,
+      "issuer-id": "PTY00004",
+      "issuer-name": "Bund 2.6",
+      "sector": "Utilities",
+      "country-of-risk": "JP",
+      "review-status": "ESCALATED"
     },
     {
       "security_id": "SEC00045",
@@ -544,7 +764,12 @@
       "status": "ACTIVE",
       "created-at": "2026-08-01T03:30:00Z",
       "maturity-date": "2033-10-17",
-      "coupon-rate": 0.889
+      "coupon-rate": 0.889,
+      "issuer-id": "PTY00017",
+      "issuer-name": "US Treasury 4.0",
+      "sector": "Energy",
+      "country-of-risk": "ES",
+      "review-status": "PENDING"
     },
     {
       "security_id": "SEC00046",
@@ -556,7 +781,12 @@
       "status": "ACTIVE",
       "created-at": "2026-04-06T08:36:00Z",
       "maturity-date": "2033-04-13",
-      "coupon-rate": 3.324
+      "coupon-rate": 3.324,
+      "issuer-id": "PTY00002",
+      "issuer-name": "BP Capital 3.8",
+      "sector": "Insurance",
+      "country-of-risk": "ES",
+      "review-status": "APPROVED"
     },
     {
       "security_id": "SEC00047",
@@ -568,7 +798,12 @@
       "status": "PENDING",
       "created-at": "2026-08-04T02:50:00Z",
       "maturity-date": "2029-01-08",
-      "coupon-rate": 4.648
+      "coupon-rate": 4.648,
+      "issuer-id": "PTY00013",
+      "issuer-name": "Rio Tinto 4.1",
+      "sector": "Telecommunications",
+      "country-of-risk": "CH",
+      "review-status": "PENDING"
     },
     {
       "security_id": "SEC00048",
@@ -580,7 +815,12 @@
       "status": "MATURED",
       "created-at": "2026-08-04T03:05:00Z",
       "maturity-date": "2027-11-17",
-      "coupon-rate": 2.398
+      "coupon-rate": 2.398,
+      "issuer-id": "PTY00007",
+      "issuer-name": "Enel SpA 3.375",
+      "sector": "Mining",
+      "country-of-risk": "GB",
+      "review-status": "APPROVED"
     },
     {
       "security_id": "SEC00049",
@@ -592,7 +832,12 @@
       "status": "ACTIVE",
       "created-at": "2026-07-05T06:30:00Z",
       "maturity-date": null,
-      "coupon-rate": null
+      "coupon-rate": null,
+      "issuer-id": "PTY00010",
+      "issuer-name": "Global Equity Income",
+      "sector": "Sovereign",
+      "country-of-risk": "FR",
+      "review-status": "APPROVED"
     },
     {
       "security_id": "SEC00050",
@@ -604,7 +849,12 @@
       "status": "ACTIVE",
       "created-at": "2026-08-04T04:45:00Z",
       "maturity-date": null,
-      "coupon-rate": null
+      "coupon-rate": null,
+      "issuer-id": "PTY00008",
+      "issuer-name": "European Bond",
+      "sector": "Energy",
+      "country-of-risk": "JP",
+      "review-status": "APPROVED"
     },
     {
       "security_id": "SEC00051",
@@ -616,7 +866,12 @@
       "status": "ACTIVE",
       "created-at": "2026-08-04T04:45:00Z",
       "maturity-date": null,
-      "coupon-rate": null
+      "coupon-rate": null,
+      "issuer-id": "PTY00006",
+      "issuer-name": "Emerging Markets",
+      "sector": "Banking",
+      "country-of-risk": "US",
+      "review-status": "PENDING"
     },
     {
       "security_id": "SEC00052",
@@ -628,7 +883,12 @@
       "status": "ACTIVE",
       "created-at": "2026-08-04T05:52:00Z",
       "maturity-date": null,
-      "coupon-rate": null
+      "coupon-rate": null,
+      "issuer-id": "PTY00009",
+      "issuer-name": "FTSE 100",
+      "sector": "Insurance",
+      "country-of-risk": "ES",
+      "review-status": "PENDING"
     },
     {
       "security_id": "SEC00053",
@@ -640,7 +900,12 @@
       "status": "PENDING",
       "created-at": "2026-04-06T02:01:00Z",
       "maturity-date": null,
-      "coupon-rate": null
+      "coupon-rate": null,
+      "issuer-id": "PTY00005",
+      "issuer-name": "EUR/USD",
+      "sector": "Telecommunications",
+      "country-of-risk": "GB",
+      "review-status": "APPROVED"
     },
     {
       "security_id": "SEC00054",
@@ -652,7 +917,12 @@
       "status": "ACTIVE",
       "created-at": "2026-08-04T02:04:00Z",
       "maturity-date": null,
-      "coupon-rate": null
+      "coupon-rate": null,
+      "issuer-id": "PTY00003",
+      "issuer-name": "Brent Crude Option Nov26",
+      "sector": "Mining",
+      "country-of-risk": "JP",
+      "review-status": "ESCALATED"
     }
   ]
 }

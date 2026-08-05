@@ -6,16 +6,57 @@
   "icon": "securities",
   "kind": "application",
   "workspaceId": "ops-securities",
-
   "pages": {
-    "security-master-operations": { "$pageRef": "security-master-operations.page.json" },
-    "processing-detail": { "$pageRef": "processing-detail.page.json" }
+    "security-master-operations": {
+      "$pageRef": "security-master-operations.page.json"
+    },
+    "processing-detail": {
+      "$pageRef": "processing-detail.page.json"
+    },
+    "security-master-dashboard": {
+      "$pageRef": "security-master-dashboard.page.json"
+    },
+    "security-overview": {
+      "$pageRef": "security-overview.page.json"
+    },
+    "party-overview": {
+      "$pageRef": "party-overview.page.json"
+    },
+    "exception-management": {
+      "$pageRef": "exception-management.page.json"
+    }
   },
-
   "navigation": {
     "mode": "sidebar",
-    "homePage": "security-master-operations",
+    "homePage": "security-master-dashboard",
     "items": [
+      {
+        "kind": "group",
+        "id": "nav-master-group",
+        "label": "Master Data",
+        "icon": "database",
+        "children": [
+          {
+            "kind": "page",
+            "id": "nav-security-master",
+            "label": "Security Master Dashboard",
+            "icon": "dashboard",
+            "page": "security-master-dashboard"
+          },
+          {
+            "kind": "page",
+            "id": "nav-exceptions",
+            "label": "Exception Management",
+            "icon": "alert",
+            "page": "exception-management",
+            "badge": {
+              "source": "nav-attention-count",
+              "field": "attention-count",
+              "emphasis": "negative"
+            }
+          }
+        ]
+      },
       {
         "kind": "group",
         "id": "nav-operations-group",
@@ -35,11 +76,18 @@
             "label": "File Processing",
             "icon": "pipeline",
             "page": "processing-detail",
-            "badge": { "source": "nav-attention-count", "field": "attention-count", "emphasis": "warning" }
+            "badge": {
+              "source": "nav-attention-count",
+              "field": "attention-count",
+              "emphasis": "warning"
+            }
           }
         ]
       },
-      { "kind": "divider", "id": "nav-divider" },
+      {
+        "kind": "divider",
+        "id": "nav-divider"
+      },
       {
         "kind": "external",
         "id": "nav-runbook",
@@ -49,21 +97,36 @@
       }
     ],
     "drilldownTargets": {
-      "processing.file-load": { "page": "processing-detail", "openIn": "self" }
+      "processing.file-load": {
+        "page": "processing-detail",
+        "openIn": "self"
+      },
+      "securities.security": {
+        "page": "security-overview",
+        "openIn": "self"
+      },
+      "parties.party": {
+        "page": "party-overview",
+        "openIn": "self"
+      },
+      "dq.exception": {
+        "page": "exception-management",
+        "openIn": "self"
+      }
     }
   },
-
   "parameters": {
     "as-of": {
       "label": "As Of",
       "dataType": "date",
-      "default": { "$expr": "today()" },
+      "default": {
+        "$expr": "today()"
+      },
       "required": true,
       "exposedInShell": false,
       "persist": "session"
     }
   },
-
   "dataSources": {
     "nav-attention-count": {
       "id": "nav-attention-count",
@@ -72,12 +135,28 @@
       "entity": "processing.file-load",
       "kind": "aggregate",
       "select": {
-        "measures": [{ "measure": "late-file-count", "aggregation": "count", "alias": "attention-count" }]
+        "measures": [
+          {
+            "measure": "late-file-count",
+            "aggregation": "count",
+            "alias": "attention-count"
+          }
+        ]
       },
       "filter": {
         "all": [
-          { "target": "load-status", "operator": "in", "value": ["LATE", "FAILED"] },
-          { "target": "business-date", "operator": "onOrAfterToday" }
+          {
+            "target": "load-status",
+            "operator": "in",
+            "value": [
+              "LATE",
+              "FAILED"
+            ]
+          },
+          {
+            "target": "business-date",
+            "operator": "onOrAfterToday"
+          }
         ]
       },
       "loadPolicy": "eager",
@@ -85,55 +164,86 @@
       "expectedCostClass": "low"
     }
   },
-
   "security": {
     "intendedAudience": "Securities operations team and data stewards.",
-    "requiredCapabilities": ["experience.view"],
+    "requiredCapabilities": [
+      "experience.view"
+    ],
     "workspaceScope": "tenant",
     "deniedDataPolicy": "showDeniedState",
     "exportPolicy": {
       "allowed": true,
-      "formats": ["csv"],
+      "formats": [
+        "csv"
+      ],
       "maxRows": 50000,
       "requiresReason": true,
       "watermark": true
     },
     "auditProfile": "standard",
-    "sharingPolicy": { "allowCopy": true, "allowTemplate": true, "allowCrossTenantExemplar": false }
+    "sharingPolicy": {
+      "allowCopy": true,
+      "allowTemplate": true,
+      "allowCrossTenantExemplar": false
+    }
   },
-
-  "presentation": { "themeRef": "opus.default", "density": "comfortable", "showShellHeader": true },
-
+  "presentation": {
+    "themeRef": "opus.default",
+    "density": "comfortable",
+    "showShellHeader": true
+  },
   "localization": {
     "defaultLocale": "en-GB",
-    "supportedLocales": ["en-GB", "en-US", "de-DE"]
+    "supportedLocales": [
+      "en-GB",
+      "en-US",
+      "de-DE"
+    ]
   },
-
-  "environments": ["dev"],
-
+  "environments": [
+    "dev"
+  ],
   "version": {
     "schemaVersion": "1.0",
     "artifactVersion": 1,
     "lifecycleState": "published",
     "immutable": true,
-    "pins": { "catalogVersion": 7, "registryVersion": "1.0.0" },
+    "pins": {
+      "catalogVersion": 9,
+      "registryVersion": "1.1.0"
+    },
     "provenance": {
       "origin": "human",
       "actorId": "platform-team@demo-tenant",
-      "createdAt": "2026-08-04T09:00:00Z"
+      "createdAt": "2026-08-04T09:00:00Z",
+      "editSummary": {
+        "summary": "Added the four EDM business templates and the drill-down graph that links them: the security master dashboard drills to an instrument, an instrument to its issuer, and any break to the remediation workbench."
+      }
     },
     "validation": {
       "status": "valid",
-      "stagesPassed": ["structural"],
+      "stagesPassed": [
+        "structural"
+      ],
       "validatedAt": "2026-08-04T09:00:00Z"
     },
     "governance": {
       "publishedBy": "platform-team@demo-tenant",
       "publishedAt": "2026-08-04T09:00:00Z",
-      "publishedEnvironments": ["dev"]
+      "publishedEnvironments": [
+        "dev"
+      ]
     },
-    "audit": { "createdBy": "platform-team@demo-tenant", "createdAt": "2026-08-04T09:00:00Z" }
+    "audit": {
+      "createdBy": "platform-team@demo-tenant",
+      "createdAt": "2026-08-04T09:00:00Z"
+    }
   },
-
-  "tags": ["operations", "securities", "m1-reference"]
+  "tags": [
+    "edm",
+    "m1-reference",
+    "operations",
+    "securities",
+    "templates"
+  ]
 }

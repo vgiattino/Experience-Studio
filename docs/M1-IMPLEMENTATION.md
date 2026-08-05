@@ -92,7 +92,7 @@ Stated plainly, because a PoC that silently diverges is worse than one that repo
 | D5 | Level-1 validation is server-side; Viewer trusts published definitions | Validates in the browser, validator lazily loaded | There is no server. It makes the loader honest and the failure modes visible; ajv + schemas land in a separate chunk |
 | D6 | Data Gateway enforces entitlements from caller identity | Mock gateway; "entitlements" are fixture configuration | **This is the one deviation that is not a shortcut but a substitution.** The mock reproduces the gateway's *shape* — single enforcement point, per-query status, server-decided TTL, scope hash — but proves nothing about enforcement. Real enforcement is M3 |
 | D7 | Export is a server-side audited egress event | Records an audit-shaped telemetry entry, no file | Writing a CSV client-side would misrepresent the control. The seam is visible instead |
-| D8 | Grid, stack, panel, tabs, split, drawer, repeater, data-driven tabs | grid, stack, panel, static tabs rendered; the rest compile and render a stated placeholder | An unimplemented container is *visible*, never silently empty |
+| D8 | Grid, stack, panel, tabs, split, drawer, repeater, data-driven tabs | grid, stack, panel, static tabs rendered; the rest compile and render a stated placeholder. **Data-driven tabs now render** — added with the EDM business templates, see [`EDM-TEMPLATES.md`](EDM-TEMPLATES.md) | An unimplemented container is *visible*, never silently empty |
 | D9 | Virtualized grids with server-side paging (frontend §5.6) | Client-side sort over the returned page; `virtualized: false` in the manifest | The manifest does not claim what the component does not do |
 
 ---
@@ -187,7 +187,7 @@ page carrying `as-of` → focus note appears via a `visible` expression.
 |---|---|---|
 | Real Data Gateway and EDM connection | Entitlement enforcement is simulated, and therefore unproven | M3 |
 | ~~Semantic catalog service~~ | **Superseded.** A mocked catalog service, entitlement-scoped retrieval and level-3 validation were built with the AI generation workflow — see [`AI-GENERATION-WORKFLOW.md`](AI-GENERATION-WORKFLOW.md). Levels 5, 6 and 8 still do not run | M5 |
-| Split, drawer, repeater, data-driven tabs | Detail pages with per-record tabs are not yet expressible in the runtime | M2/M3 |
+| Split, drawer, repeater, ~~data-driven tabs~~ | **Partly superseded.** Data-driven tabs are implemented, so detail pages with per-record tabs are expressible — see [`EDM-TEMPLATES.md`](EDM-TEMPLATES.md). Split, drawer and repeater still render a stated placeholder | M2/M3 |
 | Grid virtualization, server-side sort and paging | Will not meet the security-universe scale target | M2 |
 | Visual builder, definition store, patch log | Definitions are hand-authored files; no undo, no versions at rest | M4 |
 | ~~AI generation~~ | **Superseded.** The pipeline is built and generates a validated draft from a natural-language prompt — see [`AI-GENERATION-WORKFLOW.md`](AI-GENERATION-WORKFLOW.md). The renderer-first sequencing paid off exactly as intended: the generator aims at a target already proven to render | M6 |
@@ -209,8 +209,9 @@ Ordered by value, all small:
 3. **Add axe to the component tests** and gate CI on it, so accessibility is measured rather
    than asserted.
 4. **Wire `npm run verify` into CI**, so metadata validation and the sandbox tests gate merges.
-5. **Implement the repeater and data-driven tabs**, the two containers that block the
-   security-detail journey.
+5. ~~**Implement the repeater and data-driven tabs**, the two containers that block the
+   security-detail journey.~~ Data-driven tabs are done ([`EDM-TEMPLATES.md`](EDM-TEMPLATES.md));
+   the repeater remains.
 
 ---
 

@@ -1,0 +1,1604 @@
+{
+  "schemaVersion": "1.0",
+  "id": "exception-management",
+  "name": "Exception Management",
+  "description": "The data quality remediation queue: what is broken, how badly, how long it has been broken, and which rule broke it.",
+  "kind": "workspace",
+  "tags": [
+    "template",
+    "data-quality",
+    "remediation",
+    "edm"
+  ],
+  "parameters": {
+    "as-of": {
+      "label": "As Of",
+      "dataType": "date",
+      "scope": "experience",
+      "syncToUrl": true,
+      "default": {
+        "$expr": "today()"
+      }
+    },
+    "age-threshold-hours": {
+      "label": "Ageing Threshold (hours)",
+      "dataType": "integer",
+      "scope": "page",
+      "syncToUrl": true,
+      "default": 48,
+      "description": "Breaks older than this count as ageing. A parameter rather than a constant, so a team can tune its own tolerance without a new page."
+    }
+  },
+  "filters": {
+    "query": {
+      "label": "Search",
+      "dataType": "string",
+      "boundToAttribute": "dq.exception.security-name",
+      "syncToUrl": true,
+      "clearable": true,
+      "description": "Free-text search over the security the break was raised against."
+    },
+    "severity": {
+      "label": "Severity",
+      "dataType": "enum",
+      "multiValued": true,
+      "boundToAttribute": "dq.exception.severity",
+      "syncToUrl": true,
+      "clearable": true
+    },
+    "status": {
+      "label": "Status",
+      "dataType": "enum",
+      "multiValued": true,
+      "boundToAttribute": "dq.exception.exception-status",
+      "syncToUrl": true,
+      "clearable": true
+    },
+    "asset-class": {
+      "label": "Asset Class",
+      "dataType": "enum",
+      "multiValued": true,
+      "boundToAttribute": "dq.exception.asset-class",
+      "syncToUrl": true,
+      "clearable": true
+    },
+    "active-rule": {
+      "label": "Active Rule",
+      "dataType": "string",
+      "boundToAttribute": "dq.exception.rule-name",
+      "syncToUrl": true,
+      "clearable": false,
+      "description": "Holds the active rule tab. The per-rule queue reads it, which is how one table serves every generated tab."
+    }
+  },
+  "selections": {
+    "focused-exception": {
+      "label": "Focused Exception",
+      "mode": "single",
+      "entity": "dq.exception",
+      "keyFields": [
+        "exception-id"
+      ]
+    }
+  },
+  "dataSources": {
+    "open-total": {
+      "id": "open-total",
+      "name": "Open",
+      "entity": "dq.exception",
+      "kind": "aggregate",
+      "select": {
+        "measures": [
+          {
+            "measure": "exception-count",
+            "aggregation": "count",
+            "alias": "open"
+          }
+        ]
+      },
+      "filter": {
+        "all": [
+          {
+            "target": "security-name",
+            "operator": "contains",
+            "value": {
+              "$filter": "query"
+            },
+            "caseSensitive": false
+          },
+          {
+            "target": "severity",
+            "operator": "in",
+            "value": {
+              "$filter": "severity"
+            }
+          },
+          {
+            "target": "exception-status",
+            "operator": "in",
+            "value": {
+              "$filter": "status"
+            }
+          },
+          {
+            "target": "asset-class",
+            "operator": "in",
+            "value": {
+              "$filter": "asset-class"
+            }
+          },
+          {
+            "target": "exception-status",
+            "operator": "in",
+            "value": [
+              "OPEN",
+              "IN_PROGRESS"
+            ],
+            "skipWhenEmpty": false
+          }
+        ]
+      },
+      "loadPolicy": "eager",
+      "cacheTtlHintSeconds": 60
+    },
+    "high-severity": {
+      "id": "high-severity",
+      "name": "High Severity",
+      "entity": "dq.exception",
+      "kind": "aggregate",
+      "select": {
+        "measures": [
+          {
+            "measure": "exception-count",
+            "aggregation": "count",
+            "alias": "high"
+          }
+        ]
+      },
+      "filter": {
+        "all": [
+          {
+            "target": "security-name",
+            "operator": "contains",
+            "value": {
+              "$filter": "query"
+            },
+            "caseSensitive": false
+          },
+          {
+            "target": "severity",
+            "operator": "in",
+            "value": {
+              "$filter": "severity"
+            }
+          },
+          {
+            "target": "exception-status",
+            "operator": "in",
+            "value": {
+              "$filter": "status"
+            }
+          },
+          {
+            "target": "asset-class",
+            "operator": "in",
+            "value": {
+              "$filter": "asset-class"
+            }
+          },
+          {
+            "target": "severity",
+            "operator": "eq",
+            "value": "HIGH",
+            "skipWhenEmpty": false
+          },
+          {
+            "target": "exception-status",
+            "operator": "in",
+            "value": [
+              "OPEN",
+              "IN_PROGRESS"
+            ],
+            "skipWhenEmpty": false
+          }
+        ]
+      },
+      "loadPolicy": "eager",
+      "cacheTtlHintSeconds": 60
+    },
+    "ageing": {
+      "id": "ageing",
+      "name": "Ageing",
+      "entity": "dq.exception",
+      "kind": "aggregate",
+      "select": {
+        "measures": [
+          {
+            "measure": "exception-count",
+            "aggregation": "count",
+            "alias": "ageing"
+          }
+        ]
+      },
+      "filter": {
+        "all": [
+          {
+            "target": "security-name",
+            "operator": "contains",
+            "value": {
+              "$filter": "query"
+            },
+            "caseSensitive": false
+          },
+          {
+            "target": "severity",
+            "operator": "in",
+            "value": {
+              "$filter": "severity"
+            }
+          },
+          {
+            "target": "exception-status",
+            "operator": "in",
+            "value": {
+              "$filter": "status"
+            }
+          },
+          {
+            "target": "asset-class",
+            "operator": "in",
+            "value": {
+              "$filter": "asset-class"
+            }
+          },
+          {
+            "target": "age-hours",
+            "operator": "gte",
+            "value": {
+              "$param": "age-threshold-hours"
+            },
+            "skipWhenEmpty": false
+          },
+          {
+            "target": "exception-status",
+            "operator": "in",
+            "value": [
+              "OPEN",
+              "IN_PROGRESS"
+            ],
+            "skipWhenEmpty": false
+          }
+        ]
+      },
+      "loadPolicy": "eager",
+      "cacheTtlHintSeconds": 60
+    },
+    "oldest": {
+      "id": "oldest",
+      "name": "Oldest",
+      "entity": "dq.exception",
+      "kind": "aggregate",
+      "select": {
+        "measures": [
+          {
+            "measure": "age-hours",
+            "aggregation": "max",
+            "alias": "oldest"
+          }
+        ]
+      },
+      "filter": {
+        "all": [
+          {
+            "target": "security-name",
+            "operator": "contains",
+            "value": {
+              "$filter": "query"
+            },
+            "caseSensitive": false
+          },
+          {
+            "target": "severity",
+            "operator": "in",
+            "value": {
+              "$filter": "severity"
+            }
+          },
+          {
+            "target": "exception-status",
+            "operator": "in",
+            "value": {
+              "$filter": "status"
+            }
+          },
+          {
+            "target": "asset-class",
+            "operator": "in",
+            "value": {
+              "$filter": "asset-class"
+            }
+          },
+          {
+            "target": "exception-status",
+            "operator": "in",
+            "value": [
+              "OPEN",
+              "IN_PROGRESS"
+            ],
+            "skipWhenEmpty": false
+          }
+        ]
+      },
+      "loadPolicy": "eager",
+      "cacheTtlHintSeconds": 60
+    },
+    "by-severity": {
+      "id": "by-severity",
+      "name": "Breaks by Severity",
+      "entity": "dq.exception",
+      "kind": "aggregate",
+      "select": {
+        "measures": [
+          {
+            "measure": "exception-count",
+            "aggregation": "count",
+            "alias": "count"
+          }
+        ],
+        "dimensions": [
+          {
+            "attribute": "detected-at",
+            "alias": "detected-at",
+            "label": "Detected",
+            "granularity": "day"
+          },
+          {
+            "attribute": "severity",
+            "alias": "severity",
+            "label": "Severity"
+          }
+        ]
+      },
+      "filter": {
+        "all": [
+          {
+            "target": "security-name",
+            "operator": "contains",
+            "value": {
+              "$filter": "query"
+            },
+            "caseSensitive": false
+          },
+          {
+            "target": "severity",
+            "operator": "in",
+            "value": {
+              "$filter": "severity"
+            }
+          },
+          {
+            "target": "exception-status",
+            "operator": "in",
+            "value": {
+              "$filter": "status"
+            }
+          },
+          {
+            "target": "asset-class",
+            "operator": "in",
+            "value": {
+              "$filter": "asset-class"
+            }
+          },
+          {
+            "target": "detected-at",
+            "operator": "inLast",
+            "value": 14,
+            "unit": "day",
+            "skipWhenEmpty": false
+          }
+        ]
+      },
+      "sort": [
+        {
+          "field": "detected-at",
+          "direction": "asc"
+        }
+      ],
+      "loadPolicy": "eager",
+      "cacheTtlHintSeconds": 120
+    },
+    "rule-tabs": {
+      "id": "rule-tabs",
+      "name": "Failing Rules",
+      "entity": "dq.exception",
+      "kind": "aggregate",
+      "select": {
+        "measures": [
+          {
+            "measure": "exception-count",
+            "aggregation": "count",
+            "alias": "count"
+          }
+        ],
+        "dimensions": [
+          {
+            "attribute": "rule-name",
+            "alias": "rule-name",
+            "label": "Rule"
+          }
+        ]
+      },
+      "filter": {
+        "all": [
+          {
+            "target": "security-name",
+            "operator": "contains",
+            "value": {
+              "$filter": "query"
+            },
+            "caseSensitive": false
+          },
+          {
+            "target": "severity",
+            "operator": "in",
+            "value": {
+              "$filter": "severity"
+            }
+          },
+          {
+            "target": "exception-status",
+            "operator": "in",
+            "value": {
+              "$filter": "status"
+            }
+          },
+          {
+            "target": "asset-class",
+            "operator": "in",
+            "value": {
+              "$filter": "asset-class"
+            }
+          },
+          {
+            "target": "exception-status",
+            "operator": "in",
+            "value": [
+              "OPEN",
+              "IN_PROGRESS"
+            ],
+            "skipWhenEmpty": false
+          }
+        ]
+      },
+      "sort": [
+        {
+          "field": "count",
+          "direction": "desc"
+        }
+      ],
+      "loadPolicy": "eager",
+      "cacheTtlHintSeconds": 120
+    },
+    "rule-queue": {
+      "id": "rule-queue",
+      "name": "Queue for Rule",
+      "entity": "dq.exception",
+      "kind": "list",
+      "select": {
+        "attributes": [
+          {
+            "attribute": "security-name",
+            "alias": "security-name",
+            "label": "Security"
+          },
+          {
+            "attribute": "asset-class",
+            "alias": "asset-class",
+            "label": "Asset Class"
+          },
+          {
+            "attribute": "issuer-name",
+            "alias": "issuer-name",
+            "label": "Issuer"
+          },
+          {
+            "attribute": "severity",
+            "alias": "severity",
+            "label": "Severity"
+          },
+          {
+            "attribute": "exception-status",
+            "alias": "exception-status",
+            "label": "Status"
+          },
+          {
+            "attribute": "age-hours",
+            "alias": "age-hours",
+            "label": "Age"
+          },
+          {
+            "attribute": "assigned-to",
+            "alias": "assigned-to",
+            "label": "Assigned To"
+          },
+          {
+            "attribute": "exception-id",
+            "alias": "exception-id"
+          },
+          {
+            "attribute": "security-id",
+            "alias": "security-id"
+          },
+          {
+            "attribute": "issuer-id",
+            "alias": "issuer-id"
+          }
+        ]
+      },
+      "filter": {
+        "all": [
+          {
+            "target": "security-name",
+            "operator": "contains",
+            "value": {
+              "$filter": "query"
+            },
+            "caseSensitive": false
+          },
+          {
+            "target": "severity",
+            "operator": "in",
+            "value": {
+              "$filter": "severity"
+            }
+          },
+          {
+            "target": "exception-status",
+            "operator": "in",
+            "value": {
+              "$filter": "status"
+            }
+          },
+          {
+            "target": "asset-class",
+            "operator": "in",
+            "value": {
+              "$filter": "asset-class"
+            }
+          },
+          {
+            "target": "rule-name",
+            "operator": "eq",
+            "value": {
+              "$filter": "active-rule"
+            }
+          },
+          {
+            "target": "exception-status",
+            "operator": "in",
+            "value": [
+              "OPEN",
+              "IN_PROGRESS"
+            ],
+            "skipWhenEmpty": false
+          }
+        ]
+      },
+      "sort": [
+        {
+          "field": "age-hours",
+          "direction": "desc"
+        }
+      ],
+      "paging": {
+        "mode": "offset",
+        "pageSize": 50,
+        "maxRows": 5000
+      },
+      "loadPolicy": "deferred",
+      "cacheTtlHintSeconds": 60
+    },
+    "all-exceptions": {
+      "id": "all-exceptions",
+      "name": "All Exceptions",
+      "entity": "dq.exception",
+      "kind": "list",
+      "select": {
+        "attributes": [
+          {
+            "attribute": "security-name",
+            "alias": "security-name",
+            "label": "Security"
+          },
+          {
+            "attribute": "rule-name",
+            "alias": "rule-name",
+            "label": "Rule"
+          },
+          {
+            "attribute": "severity",
+            "alias": "severity",
+            "label": "Severity"
+          },
+          {
+            "attribute": "exception-status",
+            "alias": "exception-status",
+            "label": "Status"
+          },
+          {
+            "attribute": "age-hours",
+            "alias": "age-hours",
+            "label": "Age"
+          },
+          {
+            "attribute": "assigned-to",
+            "alias": "assigned-to",
+            "label": "Assigned To"
+          },
+          {
+            "attribute": "detected-at",
+            "alias": "detected-at",
+            "label": "Detected"
+          },
+          {
+            "attribute": "exception-id",
+            "alias": "exception-id"
+          },
+          {
+            "attribute": "security-id",
+            "alias": "security-id"
+          }
+        ]
+      },
+      "filter": {
+        "all": [
+          {
+            "target": "security-name",
+            "operator": "contains",
+            "value": {
+              "$filter": "query"
+            },
+            "caseSensitive": false
+          },
+          {
+            "target": "severity",
+            "operator": "in",
+            "value": {
+              "$filter": "severity"
+            }
+          },
+          {
+            "target": "exception-status",
+            "operator": "in",
+            "value": {
+              "$filter": "status"
+            }
+          },
+          {
+            "target": "asset-class",
+            "operator": "in",
+            "value": {
+              "$filter": "asset-class"
+            }
+          }
+        ]
+      },
+      "sort": [
+        {
+          "field": "age-hours",
+          "direction": "desc"
+        }
+      ],
+      "paging": {
+        "mode": "offset",
+        "pageSize": 50,
+        "maxRows": 20000
+      },
+      "loadPolicy": "eager",
+      "cacheTtlHintSeconds": 60
+    }
+  },
+  "components": {
+    "page-intro": {
+      "id": "page-intro",
+      "type": "content.text",
+      "typeVersion": "1.0.0",
+      "title": "Remediation queue",
+      "config": {
+        "variant": "body",
+        "body": "Reporting for {asOf}. {open} breaks outstanding, {high} of them high severity and {ageing} older than {threshold} hours. The oldest has been open {oldest}.",
+        "tokens": {
+          "asOf": {
+            "$expr": "$params.as-of"
+          },
+          "open": {
+            "$expr": "$data.open-total.open ?? 0"
+          },
+          "high": {
+            "$expr": "$data.high-severity.high ?? 0"
+          },
+          "ageing": {
+            "$expr": "$data.ageing.ageing ?? 0"
+          },
+          "threshold": {
+            "$expr": "$params.age-threshold-hours"
+          },
+          "oldest": {
+            "$expr": "round($data.oldest.oldest ?? 0, 0)"
+          }
+        }
+      }
+    },
+    "search-bar": {
+      "id": "search-bar",
+      "type": "input.filter-bar",
+      "typeVersion": "1.0.0",
+      "title": "Narrow the queue",
+      "config": {
+        "searchChannel": "query",
+        "searchPlaceholder": "Search by security name",
+        "debounceMs": 250,
+        "facets": [
+          {
+            "channel": "severity",
+            "label": "Severity",
+            "multi": true,
+            "options": [
+              {
+                "value": "HIGH",
+                "label": "High"
+              },
+              {
+                "value": "MEDIUM",
+                "label": "Medium"
+              },
+              {
+                "value": "LOW",
+                "label": "Low"
+              }
+            ]
+          },
+          {
+            "channel": "status",
+            "label": "Status",
+            "multi": true,
+            "options": [
+              {
+                "value": "OPEN",
+                "label": "Open"
+              },
+              {
+                "value": "IN_PROGRESS",
+                "label": "In Progress"
+              },
+              {
+                "value": "RESOLVED",
+                "label": "Resolved"
+              },
+              {
+                "value": "SUPPRESSED",
+                "label": "Suppressed"
+              }
+            ]
+          },
+          {
+            "channel": "asset-class",
+            "label": "Asset Class",
+            "multi": true,
+            "options": [
+              {
+                "value": "EQUITY",
+                "label": "Equity"
+              },
+              {
+                "value": "BOND",
+                "label": "Bond"
+              },
+              {
+                "value": "FUND",
+                "label": "Fund"
+              },
+              {
+                "value": "DERIVATIVE",
+                "label": "Derivative"
+              }
+            ]
+          }
+        ],
+        "showClearAll": true,
+        "summary": "Every figure, the trend, the rule tabs and both queues read these channels, so the page always answers one question."
+      },
+      "eventActions": {
+        "searchChanged": "set-query",
+        "facetChanged": [
+          "set-severity-facet",
+          "set-status-facet",
+          "set-class-facet"
+        ],
+        "cleared": "clear-filters"
+      },
+      "writesTo": {
+        "filters": [
+          "query",
+          "severity",
+          "status",
+          "asset-class"
+        ]
+      }
+    },
+    "kpi-open": {
+      "id": "kpi-open",
+      "type": "analytics.kpi-card",
+      "typeVersion": "1.4.0",
+      "title": "Open Breaks",
+      "dataSource": "open-total",
+      "config": {
+        "size": "md",
+        "showThresholdBand": true
+      },
+      "bindings": {
+        "value": {
+          "field": "open",
+          "format": {
+            "style": "integer"
+          }
+        }
+      },
+      "description": "Unresolved exceptions matching the current narrowing."
+    },
+    "kpi-high": {
+      "id": "kpi-high",
+      "type": "analytics.kpi-card",
+      "typeVersion": "1.4.0",
+      "title": "High Severity",
+      "dataSource": "high-severity",
+      "config": {
+        "size": "md",
+        "showThresholdBand": true
+      },
+      "bindings": {
+        "value": {
+          "field": "high",
+          "format": {
+            "style": "integer"
+          }
+        }
+      },
+      "description": "Open breaks the rules classify as high severity."
+    },
+    "kpi-ageing": {
+      "id": "kpi-ageing",
+      "type": "analytics.kpi-card",
+      "typeVersion": "1.4.0",
+      "title": "Ageing",
+      "dataSource": "ageing",
+      "config": {
+        "size": "md",
+        "showThresholdBand": true
+      },
+      "bindings": {
+        "value": {
+          "field": "ageing",
+          "format": {
+            "style": "integer"
+          }
+        }
+      },
+      "description": "Open breaks past the team\u2019s ageing threshold."
+    },
+    "kpi-oldest": {
+      "id": "kpi-oldest",
+      "type": "analytics.kpi-card",
+      "typeVersion": "1.4.0",
+      "title": "Oldest Break",
+      "dataSource": "oldest",
+      "config": {
+        "size": "md",
+        "showThresholdBand": false
+      },
+      "bindings": {
+        "value": {
+          "field": "oldest",
+          "format": {
+            "style": "duration"
+          }
+        }
+      }
+    },
+    "severity-trend": {
+      "id": "severity-trend",
+      "type": "analytics.chart",
+      "typeVersion": "1.0.0",
+      "title": "Breaks detected, last 14 days",
+      "description": "Click a segment to narrow the page to that severity.",
+      "dataSource": "by-severity",
+      "config": {
+        "mark": "bar",
+        "stacking": "stacked",
+        "legend": {
+          "position": "bottom"
+        },
+        "gridlines": true
+      },
+      "encodings": [
+        {
+          "channel": "x",
+          "binding": {
+            "field": "detected-at",
+            "label": "Detected",
+            "format": {
+              "style": "date"
+            }
+          },
+          "axis": {
+            "title": "Detected",
+            "gridlines": false
+          }
+        },
+        {
+          "channel": "y",
+          "binding": {
+            "field": "count",
+            "label": "Breaks",
+            "format": {
+              "style": "integer"
+            }
+          },
+          "scale": {
+            "zero": true
+          },
+          "axis": {
+            "title": "Breaks"
+          }
+        },
+        {
+          "channel": "series",
+          "binding": {
+            "field": "severity",
+            "label": "Severity"
+          }
+        }
+      ],
+      "eventActions": {
+        "segmentActivated": "filter-by-severity"
+      }
+    },
+    "rule-queue-table": {
+      "id": "rule-queue-table",
+      "type": "data.table",
+      "typeVersion": "1.0.0",
+      "title": "Breaks for this rule",
+      "description": "One definition, rendered inside whichever rule tab is active.",
+      "dataSource": "rule-queue",
+      "config": {
+        "density": "compact",
+        "maxHeight": "420px",
+        "zebra": true,
+        "selectionMode": "single",
+        "showRowCount": true
+      },
+      "bindings": {
+        "columns": [
+          {
+            "field": "security-name",
+            "label": "Security",
+            "renderAs": "link"
+          },
+          {
+            "field": "asset-class",
+            "label": "Asset Class"
+          },
+          {
+            "field": "issuer-name",
+            "label": "Issuer",
+            "renderAs": "link"
+          },
+          {
+            "field": "severity",
+            "label": "Severity"
+          },
+          {
+            "field": "exception-status",
+            "label": "Status"
+          },
+          {
+            "field": "age-hours",
+            "label": "Age",
+            "format": {
+              "style": "duration"
+            },
+            "align": "end"
+          },
+          {
+            "field": "assigned-to",
+            "label": "Assigned To",
+            "emptyValue": "unassigned"
+          },
+          {
+            "field": "exception-id",
+            "hidden": true
+          },
+          {
+            "field": "security-id",
+            "hidden": true
+          },
+          {
+            "field": "issuer-id",
+            "hidden": true
+          }
+        ]
+      },
+      "eventActions": {
+        "rowActivated": "drill-to-security",
+        "selectionChanged": "set-focused-exception"
+      },
+      "stateOverrides": {
+        "empty": {
+          "title": "Nothing for this rule",
+          "message": "No open break for this rule matches the current narrowing."
+        },
+        "partial": {
+          "title": "Assignee hidden",
+          "message": "You are not entitled to see who a break is assigned to. Everything else is shown."
+        }
+      }
+    },
+    "all-table": {
+      "id": "all-table",
+      "type": "data.table",
+      "typeVersion": "1.0.0",
+      "title": "Full queue",
+      "dataSource": "all-exceptions",
+      "config": {
+        "density": "compact",
+        "maxHeight": "460px",
+        "zebra": true
+      },
+      "bindings": {
+        "columns": [
+          {
+            "field": "security-name",
+            "label": "Security",
+            "renderAs": "link"
+          },
+          {
+            "field": "rule-name",
+            "label": "Rule"
+          },
+          {
+            "field": "severity",
+            "label": "Severity"
+          },
+          {
+            "field": "exception-status",
+            "label": "Status"
+          },
+          {
+            "field": "age-hours",
+            "label": "Age",
+            "format": {
+              "style": "duration"
+            },
+            "align": "end"
+          },
+          {
+            "field": "assigned-to",
+            "label": "Assigned To",
+            "emptyValue": "unassigned"
+          },
+          {
+            "field": "detected-at",
+            "label": "Detected",
+            "format": {
+              "style": "datetime"
+            }
+          },
+          {
+            "field": "exception-id",
+            "hidden": true
+          },
+          {
+            "field": "security-id",
+            "hidden": true
+          }
+        ]
+      },
+      "eventActions": {
+        "rowActivated": "drill-to-security"
+      },
+      "stateOverrides": {
+        "empty": {
+          "title": "Queue is clear",
+          "message": "No exception matches the current narrowing."
+        },
+        "partial": {
+          "title": "Assignee hidden",
+          "message": "You are not entitled to see who a break is assigned to."
+        }
+      }
+    }
+  },
+  "layout": {
+    "kind": "container",
+    "id": "root",
+    "container": {
+      "type": "grid",
+      "columns": 12,
+      "gap": "lg",
+      "children": [
+        {
+          "kind": "widget",
+          "id": "w-page-intro",
+          "component": "page-intro",
+          "placement": {
+            "colStart": 1,
+            "colSpan": 12
+          }
+        },
+        {
+          "kind": "widget",
+          "id": "w-search-bar",
+          "component": "search-bar",
+          "placement": {
+            "colStart": 1,
+            "colSpan": 12
+          }
+        },
+        {
+          "kind": "container",
+          "id": "kpi-row",
+          "placement": {
+            "colStart": 1,
+            "colSpan": 12
+          },
+          "container": {
+            "type": "stack",
+            "direction": "row",
+            "wrap": true,
+            "gap": "md",
+            "directionByBreakpoint": {
+              "xs": "column"
+            },
+            "children": [
+              {
+                "kind": "widget",
+                "id": "w-kpi-open",
+                "component": "kpi-open",
+                "placement": {
+                  "colSpan": 12,
+                  "breakpoints": {
+                    "sm": {
+                      "colSpan": 6
+                    },
+                    "lg": {
+                      "colSpan": 3
+                    }
+                  }
+                }
+              },
+              {
+                "kind": "widget",
+                "id": "w-kpi-high",
+                "component": "kpi-high",
+                "placement": {
+                  "colSpan": 12,
+                  "breakpoints": {
+                    "sm": {
+                      "colSpan": 6
+                    },
+                    "lg": {
+                      "colSpan": 3
+                    }
+                  }
+                }
+              },
+              {
+                "kind": "widget",
+                "id": "w-kpi-ageing",
+                "component": "kpi-ageing",
+                "placement": {
+                  "colSpan": 12,
+                  "breakpoints": {
+                    "sm": {
+                      "colSpan": 6
+                    },
+                    "lg": {
+                      "colSpan": 3
+                    }
+                  }
+                }
+              },
+              {
+                "kind": "widget",
+                "id": "w-kpi-oldest",
+                "component": "kpi-oldest",
+                "placement": {
+                  "colSpan": 12,
+                  "breakpoints": {
+                    "sm": {
+                      "colSpan": 6
+                    },
+                    "lg": {
+                      "colSpan": 3
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "kind": "container",
+          "id": "trend-panel",
+          "placement": {
+            "colStart": 1,
+            "colSpan": 12,
+            "minHeight": "320px",
+            "breakpoints": {
+              "xl": {
+                "colSpan": 5
+              }
+            }
+          },
+          "container": {
+            "type": "panel",
+            "title": "Detection trend",
+            "variant": "bordered",
+            "children": [
+              {
+                "kind": "widget",
+                "id": "w-severity-trend",
+                "component": "severity-trend",
+                "placement": {
+                  "colSpan": 12,
+                  "minHeight": "240px"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "kind": "container",
+          "id": "rule-panel",
+          "placement": {
+            "colStart": 1,
+            "colSpan": 12,
+            "breakpoints": {
+              "xl": {
+                "colSpan": 7
+              }
+            }
+          },
+          "container": {
+            "type": "panel",
+            "title": "By rule",
+            "variant": "bordered",
+            "subtitle": "One tab per failing rule, generated from the data and badged with its open count \u2014 a remediation team works rule by rule.",
+            "headerActions": [
+              "export-rule-queue"
+            ],
+            "children": [
+              {
+                "kind": "container",
+                "id": "rule-tabs-container",
+                "placement": {
+                  "colStart": 1,
+                  "colSpan": 12
+                },
+                "container": {
+                  "type": "tabs",
+                  "variant": "underline",
+                  "overflow": "menu",
+                  "selectedTabChannel": "active-rule",
+                  "deferContent": true,
+                  "keepAliveOnSwitch": true,
+                  "source": {
+                    "mode": "dataDriven",
+                    "source": "rule-tabs",
+                    "idField": "rule-name",
+                    "labelField": "rule-name",
+                    "badgeField": "count",
+                    "orderField": "count",
+                    "maxTabs": 10,
+                    "emptyBehaviour": "showEmptyState",
+                    "template": [
+                      {
+                        "kind": "widget",
+                        "id": "t-rule-queue",
+                        "component": "rule-queue-table",
+                        "placement": {
+                          "colStart": 1,
+                          "colSpan": 12
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "kind": "container",
+          "id": "all-panel",
+          "placement": {
+            "colStart": 1,
+            "colSpan": 12
+          },
+          "container": {
+            "type": "panel",
+            "title": "Full queue",
+            "variant": "bordered",
+            "headerActions": [
+              "export-all",
+              "refresh-page"
+            ],
+            "children": [
+              {
+                "kind": "widget",
+                "id": "w-all-table",
+                "component": "all-table",
+                "placement": {
+                  "colStart": 1,
+                  "colSpan": 12
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "actions": {
+    "set-query": {
+      "id": "set-query",
+      "kind": "setFilter",
+      "label": "Search",
+      "channel": "query",
+      "value": {
+        "$context": "$event.value"
+      },
+      "mode": "replace"
+    },
+    "set-severity-facet": {
+      "id": "set-severity-facet",
+      "kind": "setFilter",
+      "label": "Filter by severity",
+      "channel": "severity",
+      "value": {
+        "$context": "$event.value"
+      },
+      "mode": "replace",
+      "enabled": {
+        "$expr": "$event.channel == 'severity'"
+      }
+    },
+    "set-status-facet": {
+      "id": "set-status-facet",
+      "kind": "setFilter",
+      "label": "Filter by status",
+      "channel": "status",
+      "value": {
+        "$context": "$event.value"
+      },
+      "mode": "replace",
+      "enabled": {
+        "$expr": "$event.channel == 'status'"
+      }
+    },
+    "set-class-facet": {
+      "id": "set-class-facet",
+      "kind": "setFilter",
+      "label": "Filter by asset class",
+      "channel": "asset-class",
+      "value": {
+        "$context": "$event.value"
+      },
+      "mode": "replace",
+      "enabled": {
+        "$expr": "$event.channel == 'asset-class'"
+      }
+    },
+    "filter-by-severity": {
+      "id": "filter-by-severity",
+      "kind": "setFilter",
+      "label": "Filter by severity",
+      "channel": "severity",
+      "value": {
+        "$context": "$event.series"
+      },
+      "mode": "toggle"
+    },
+    "set-focused-exception": {
+      "id": "set-focused-exception",
+      "kind": "setSelection",
+      "channel": "focused-exception",
+      "value": {
+        "$context": "$event.exception-id"
+      }
+    },
+    "clear-filters": {
+      "id": "clear-filters",
+      "kind": "clearFilters",
+      "label": "Clear filters",
+      "channels": [
+        "query",
+        "severity",
+        "status",
+        "asset-class"
+      ]
+    },
+    "refresh-page": {
+      "id": "refresh-page",
+      "kind": "refresh",
+      "label": "Refresh",
+      "icon": "refresh",
+      "bypassCache": true
+    },
+    "raise-threshold": {
+      "id": "raise-threshold",
+      "kind": "setParameter",
+      "label": "Ageing at 24h",
+      "parameter": "age-threshold-hours",
+      "value": 24,
+      "description": "Retunes what counts as ageing. A parameter change re-queries only the sources that read it \u2014 the trend and the queues are untouched."
+    },
+    "drill-to-security": {
+      "id": "drill-to-security",
+      "kind": "drilldown",
+      "label": "Open security",
+      "entity": "securities.security",
+      "key": {
+        "security-id": {
+          "$context": "$event.security-id"
+        }
+      },
+      "carryContext": true,
+      "openIn": "self"
+    },
+    "drill-to-issuer": {
+      "id": "drill-to-issuer",
+      "kind": "drilldown",
+      "label": "Open issuer",
+      "entity": "parties.party",
+      "key": {
+        "party-id": {
+          "$context": "$event.issuer-id"
+        }
+      },
+      "carryContext": true,
+      "openIn": "self"
+    },
+    "go-to-master": {
+      "id": "go-to-master",
+      "kind": "navigate",
+      "label": "Security master",
+      "target": {
+        "page": "security-master-dashboard"
+      },
+      "carryContext": true
+    },
+    "export-rule-queue": {
+      "id": "export-rule-queue",
+      "kind": "export",
+      "label": "Export rule",
+      "icon": "download",
+      "dataSource": "rule-queue",
+      "scope": "all",
+      "format": "csv",
+      "includeMetadata": true,
+      "auditProfile": "elevated",
+      "security": {
+        "requiredCapabilities": [
+          "export.data"
+        ]
+      },
+      "confirm": {
+        "message": "Export the queue for this rule? The export carries your entitlements and is recorded in the audit trail.",
+        "requiresReason": true
+      }
+    },
+    "export-all": {
+      "id": "export-all",
+      "kind": "export",
+      "label": "Export",
+      "icon": "download",
+      "dataSource": "all-exceptions",
+      "scope": "all",
+      "format": "csv",
+      "includeMetadata": true,
+      "auditProfile": "elevated",
+      "security": {
+        "requiredCapabilities": [
+          "export.data"
+        ]
+      },
+      "confirm": {
+        "message": "Export the full remediation queue?",
+        "requiresReason": true
+      }
+    }
+  },
+  "navigation": {
+    "breadcrumbs": {
+      "mode": "auto"
+    },
+    "pageActions": [
+      "clear-filters",
+      "raise-threshold",
+      "go-to-master",
+      "export-all",
+      "refresh-page"
+    ]
+  },
+  "security": {
+    "intendedAudience": "Data quality analysts and stewards working the remediation queue.",
+    "requiredCapabilities": [
+      "experience.view"
+    ],
+    "workspaceScope": "tenant",
+    "deniedDataPolicy": "showDeniedState",
+    "sensitivityDeclaration": {
+      "maxSensitivity": "pii",
+      "contributingRefs": [
+        "dq.exception.assigned-to"
+      ],
+      "computedAt": "2026-08-05T12:00:00Z",
+      "computedFromCatalogVersion": 9
+    },
+    "exportPolicy": {
+      "allowed": true,
+      "formats": [
+        "csv"
+      ],
+      "maxRows": 50000,
+      "requiresReason": true,
+      "watermark": true
+    },
+    "auditProfile": "elevated"
+  },
+  "presentation": {
+    "themeRef": "opus.default",
+    "density": "compact",
+    "maxWidth": "full",
+    "showPageHeader": true
+  },
+  "performance": {
+    "renderBudgetMs": 2500,
+    "maxEagerDataSources": 8
+  },
+  "version": {
+    "schemaVersion": "1.0",
+    "artifactVersion": 1,
+    "lifecycleState": "published",
+    "immutable": true,
+    "pins": {
+      "catalogVersion": 9,
+      "registryVersion": "1.1.0"
+    },
+    "provenance": {
+      "origin": "human",
+      "actorId": "platform-team@demo-tenant",
+      "createdAt": "2026-08-05T12:00:00Z",
+      "editSummary": {
+        "summary": "Fourth EDM business template: the remediation workbench, with search, faceting, a detection trend, one data-driven tab per failing rule, and governed export."
+      }
+    },
+    "validation": {
+      "status": "valid",
+      "stagesPassed": [
+        "structural",
+        "component",
+        "semantic",
+        "binding",
+        "layout"
+      ],
+      "validatedAt": "2026-08-05T12:00:00Z"
+    },
+    "audit": {
+      "createdBy": "platform-team@demo-tenant",
+      "createdAt": "2026-08-05T12:00:00Z"
+    }
+  }
+}

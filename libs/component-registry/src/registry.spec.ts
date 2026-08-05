@@ -9,12 +9,15 @@ import { isRegistered, loadAllManifests, registeredTypes, resolveComponent } fro
  * generation step — they are what stops the two sides drifting.
  */
 describe('component registry', () => {
-  it('registers the M1 component set', () => {
+  it('registers the component vocabulary', () => {
     expect(registeredTypes().sort()).toEqual([
       'analytics.chart',
       'analytics.kpi-card',
       'content.text',
       'data.table',
+      // Added with the EDM business templates: search was the one journey the vocabulary could
+      // not express, so the templates could not have demonstrated it without a component.
+      'input.filter-bar',
     ]);
   });
 

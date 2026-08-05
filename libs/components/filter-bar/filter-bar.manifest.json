@@ -1,0 +1,211 @@
+{
+  "schemaVersion": "1.0",
+  "type": "input.filter-bar",
+  "version": "1.0.0",
+  "name": "Filter Bar",
+  "category": "input",
+  "description": "Search box and faceted filters that drive the rest of the page through declared actions.",
+  "icon": "search",
+  "generation": {
+    "purpose": "Let a reader narrow a page by free-text search and by a small number of categorical facets, so one page serves a search journey as well as a fixed report.",
+    "whenToUse": "At the top of any page whose main content is a record list the user needs to find something in. Declare one facet per catalog attribute with a small enumeration \u2014 asset class, status, severity \u2014 and take the option values from that attribute's enumValues.",
+    "whenNotToUse": "Do not use for a date range that every widget on the page shares; that belongs in a page parameter shown in the chrome. Do not declare a facet over a high-cardinality attribute \u2014 a thousand options is a search problem, not a facet.",
+    "keyProperties": [
+      "searchChannel",
+      "searchPlaceholder",
+      "facets"
+    ],
+    "eligible": true,
+    "exampleConfig": {
+      "searchChannel": "query",
+      "searchPlaceholder": "Search by name, ISIN or SEDOL",
+      "facets": [
+        {
+          "channel": "asset-class",
+          "label": "Asset Class",
+          "multi": true,
+          "options": [
+            {
+              "value": "EQUITY",
+              "label": "Equity"
+            },
+            {
+              "value": "BOND",
+              "label": "Bond"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "properties": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "searchChannel": {
+        "description": "Filter channel the search text is written to. Omit to render facets only.",
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+      },
+      "searchPlaceholder": {
+        "type": "string",
+        "maxLength": 80
+      },
+      "debounceMs": {
+        "description": "Quiet period before a search change is emitted. A keystroke-per-query search box costs one round trip per widget per letter.",
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 2000,
+        "default": 300
+      },
+      "facets": {
+        "type": "array",
+        "maxItems": 6,
+        "items": {
+          "type": "object",
+          "properties": {
+            "channel": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+            },
+            "label": {
+              "type": "string",
+              "maxLength": 40
+            },
+            "multi": {
+              "type": "boolean",
+              "default": false
+            },
+            "options": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 24,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "value": {
+                    "type": "string"
+                  },
+                  "label": {
+                    "type": "string",
+                    "maxLength": 40
+                  }
+                },
+                "required": [
+                  "value"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "channel",
+            "label",
+            "options"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "showClearAll": {
+        "type": "boolean",
+        "default": true
+      },
+      "summary": {
+        "type": "string",
+        "maxLength": 160
+      },
+      "density": {
+        "type": "string",
+        "enum": [
+          "comfortable",
+          "compact"
+        ],
+        "default": "comfortable"
+      }
+    },
+    "additionalProperties": false
+  },
+  "dataRequirement": {
+    "shape": "none"
+  },
+  "events": {
+    "searchChanged": {
+      "label": "Search changed",
+      "description": "Emitted after the debounce period when the search text settles. Map to a setFilter action whose value reads $event.value.",
+      "payload": {
+        "channel": {
+          "dataType": "identifier",
+          "description": "The configured search channel."
+        },
+        "value": {
+          "dataType": "string",
+          "description": "Current search text; empty when cleared."
+        }
+      }
+    },
+    "facetChanged": {
+      "label": "Facet changed",
+      "description": "Emitted when a facet selection changes. Value is a string for a single-select facet, an array for a multi-select, and null when nothing is selected.",
+      "payload": {
+        "channel": {
+          "dataType": "identifier",
+          "description": "The facet's channel."
+        },
+        "value": {
+          "dataType": "string",
+          "description": "Selected value, array of values, or null."
+        }
+      }
+    },
+    "cleared": {
+      "label": "Cleared",
+      "description": "Emitted when Clear All is activated. Map to a clearFilters action listing every channel this bar writes.",
+      "payload": {}
+    }
+  },
+  "states": [
+    "ready"
+  ],
+  "breakpoints": {
+    "xs": {
+      "supported": true,
+      "minColSpan": 12,
+      "behaviour": "full"
+    },
+    "sm": {
+      "supported": true,
+      "minColSpan": 12,
+      "behaviour": "full"
+    },
+    "md": {
+      "supported": true,
+      "minColSpan": 12,
+      "behaviour": "full"
+    },
+    "lg": {
+      "supported": true,
+      "minColSpan": 12,
+      "behaviour": "full"
+    },
+    "xl": {
+      "supported": true,
+      "minColSpan": 12,
+      "behaviour": "full"
+    }
+  },
+  "accessibility": {
+    "wcagLevel": "AA",
+    "keyboardContract": "The search input is a standard text field. Multi-select facets are toggle buttons exposing aria-pressed; single-select facets are native selects. Every control is labelled by its facet label. Clear All is a button, reachable in sequence.",
+    "requiredLabels": [],
+    "colourIndependent": true,
+    "notes": "Selected multi-select chips carry aria-pressed as well as a colour change, so selection is not conveyed by colour alone."
+  },
+  "lifecycle": {
+    "stability": "stable",
+    "since": "1.1.0"
+  },
+  "bundle": {
+    "libraryPath": "@opus/components/filter-bar",
+    "exportName": "FilterBarComponent"
+  }
+}

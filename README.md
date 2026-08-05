@@ -22,6 +22,12 @@ line of Angular.
 the runtime loads, undo is the inverse patch, and the canvas is the production renderer. A page
 built there, saved, and handed to the Viewer renders identically — because there is only one model.
 
+**And the JSON describes real EDM work.** Four business templates ship as definitions: a Security
+Master Dashboard, a Security Overview comparing every vendor's contribution against the golden copy,
+a Party Overview with LEI standing and group hierarchy, and an Exception Management workspace. They
+drill into one another through the catalog's entities rather than hard-coded links, and their tabs
+are generated from data — one tab per contributing vendor, per issued instrument, per failing rule.
+
 **And that JSON can be written from a sentence.** In **Create with AI**, typing
 
 > *"Create a Security Master dashboard showing today's processing status, failed files, late
@@ -40,6 +46,7 @@ Delivered:
 | Experience runtime | Shell, page compiler, component framework, JSON loader, five components — [`docs/M1-IMPLEMENTATION.md`](./docs/M1-IMPLEMENTATION.md) |
 | AI page generation | Intent → grounded retrieval → template → plan → validated page JSON → render — [`docs/AI-GENERATION-WORKFLOW.md`](./docs/AI-GENERATION-WORKFLOW.md) |
 | Visual page builder | Drag, drop, inspect, re-layout, preview responsively, save — editing the *same* JSON the runtime interprets — [`docs/VISUAL-BUILDER.md`](./docs/VISUAL-BUILDER.md) |
+| EDM business templates | Four templates over governed EDM metadata — master dashboard, security overview, party overview, exception workspace — with drill-down between them and tabs generated from data — [`docs/EDM-TEMPLATES.md`](./docs/EDM-TEMPLATES.md) |
 | Metadata model | Sixteen JSON Schemas, expression grammar, worked examples — [`schemas/README.md`](./schemas/README.md) |
 
 Deliberately **not** built yet: a real LLM behind the provider port, the evaluation harness, a
@@ -64,6 +71,7 @@ Useful URL switches, which make the architecture's claims checkable in the runni
 | `?mode=studio` | Open the AI generation panel |
 | `?persona=analyst\|steward\|restricted` | Change simulated identity and data entitlements |
 | `?simulate=denied\|error\|empty\|slow` | Force gateway outcomes, exercising the six widget states |
+| `?page=security-master-dashboard\|security-overview\|party-overview\|exception-management` | Open one of the EDM business templates (the detail pages take `&security-id=` / `&party-id=`) |
 | `?page=processing-detail` | Open a specific page of the experience |
 | `?theme=dark\|light` | Override the theme |
 
@@ -86,7 +94,8 @@ Start with [`architecture/system-overview.md`](./architecture/system-overview.md
 
 For what was built, what deviated from the design, and what was deliberately left out, read
 [`docs/M1-IMPLEMENTATION.md`](./docs/M1-IMPLEMENTATION.md),
-[`docs/AI-GENERATION-WORKFLOW.md`](./docs/AI-GENERATION-WORKFLOW.md) and
-[`docs/VISUAL-BUILDER.md`](./docs/VISUAL-BUILDER.md). Each records the defects its milestone
+[`docs/AI-GENERATION-WORKFLOW.md`](./docs/AI-GENERATION-WORKFLOW.md),
+[`docs/VISUAL-BUILDER.md`](./docs/VISUAL-BUILDER.md) and
+[`docs/EDM-TEMPLATES.md`](./docs/EDM-TEMPLATES.md). Each records the defects its milestone
 surfaced that document review had not — which is the argument for building the milestones rather
 than only specifying them.

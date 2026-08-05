@@ -28,7 +28,7 @@ export interface RegistryEntry {
 }
 
 /** Registry version. Definitions pin this, so a component change cannot silently alter a live page. */
-export const REGISTRY_VERSION = '1.0.0';
+export const REGISTRY_VERSION = '1.1.0';
 
 const ENTRIES: Readonly<Record<ComponentTypeRef, RegistryEntry>> = {
   'analytics.kpi-card': {
@@ -53,6 +53,12 @@ const ENTRIES: Readonly<Record<ComponentTypeRef, RegistryEntry>> = {
     load: async () => {
       const m = await import('@opus/components/text');
       return { component: m.TextComponent, manifest: m.manifest as unknown as ComponentManifest };
+    },
+  },
+  'input.filter-bar': {
+    load: async () => {
+      const m = await import('@opus/components/filter-bar');
+      return { component: m.FilterBarComponent, manifest: m.manifest as unknown as ComponentManifest };
     },
   },
 };

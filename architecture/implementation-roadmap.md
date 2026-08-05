@@ -73,6 +73,15 @@ component category, and the breakpoint cascade direction, which the schema had l
 - Grid meets its NFR target against a representative security universe.
 - A component contract change is demonstrably caught by the validator against stored definitions.
 
+**Status: PARTIAL.** Tokens, theming, layout primitives and five registered component types are
+built (M1's runtime proof of concept). The fifth, `input.filter-bar`, arrived with the EDM business
+templates — see [`../docs/EDM-TEMPLATES.md`](../docs/EDM-TEMPLATES.md). It is worth recording *why*
+it was missing: the four M1 components could display data and none could accept input, so search —
+one of the three v1 journeys — was not expressible at all. A vocabulary gap does not announce itself
+until something tries to say the sentence. Still outstanding: grid virtualization with server-side
+paging, the wider chart mark family, the automated accessibility gate, and generating the registry
+from the manifests.
+
 ---
 
 ## Milestone 3 — Rendering Engine and Data Gateway (Walking Skeleton)
@@ -91,6 +100,22 @@ component category, and the breakpoint cascade direction, which the schema had l
 - **Entitlement tests pass:** a definition requesting data the caller is not entitled to returns filtered or denied results, never leaked data — verified by adversarial test, including hand-tampered definitions.
 - Dashboard query fan-out is within the agreed limit with caching demonstrably effective.
 - No component reaches EDM other than through the gateway (enforced by architectural test).
+
+**Status: RENDERER DELIVERED, GATEWAY SUBSTITUTED.** The renderer, expression evaluation, shared
+filter state, the invalidation graph, deep-linkable parameters, degradation behaviour and the
+observability panel are built; the gateway is a mock over fixtures, so every entitlement result is
+configuration rather than enforcement (M1 deviation D6).
+
+Four EDM business templates closed the renderer's remaining container gap and found two structural
+defects — [`../docs/EDM-TEMPLATES.md`](../docs/EDM-TEMPLATES.md). **Data-driven tabs** now generate
+from rows, which is what makes detail pages expressible: one tab per contributing vendor, per issued
+instrument, per failing rule. Both defects were about *who* may change page state. `applyChange` had
+only ever been called by the action dispatcher, which made "re-query when state changes" a property
+of the dispatcher rather than of the state — true only while the dispatcher was the sole writer, and
+the renderer writes state too for the chrome it owns. And the resolved active tab was never published
+to its channel, so a tab strip's first tab could highlight one thing while its content showed
+another. Both are the same lesson: an invariant enforced by one caller's discipline is not an
+invariant.
 
 ---
 
@@ -134,7 +159,9 @@ Still outstanding for M4:
 - **The Definition Service.** Drafts live in `localStorage`, so there is no version history, no
   diff-and-restore, no concurrency, and no server-side validation before write.
 - **Template library v1** — save-as-template, browse, instantiate. The AI side already has a
-  template corpus the builder cannot yet contribute to.
+  template corpus the builder cannot yet contribute to. The four EDM business templates
+  ([`../docs/EDM-TEMPLATES.md`](../docs/EDM-TEMPLATES.md)) are the fixtures this needs: they exist
+  as validated pages, but nothing can yet *instantiate* one against a different entity.
 - **Tabs, repeaters, filters, actions and overlays in the inspector.** All expressible in the
   definition and reachable through the JSON view, none yet in the visual UI.
 - **Direct canvas resize.** Column span is edited numerically rather than by dragging an edge.

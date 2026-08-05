@@ -26,21 +26,21 @@ export interface TextConfig {
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="text" [attr.data-variant]="variant()" [attr.data-align]="config().align ?? 'start'">
-      @if (title()) {
+      @if (headingText()) {
         @switch (variant()) {
           @case ('heading') {
-            <h2>{{ title() }}</h2>
+            <h2>{{ headingText() }}</h2>
           }
           @case ('subheading') {
-            <h3>{{ title() }}</h3>
+            <h3>{{ headingText() }}</h3>
           }
           @default {
-            <p class="label">{{ title() }}</p>
+            <p class="label">{{ headingText() }}</p>
           }
         }
       }
-      @if (resolvedBody()) {
-        <p class="body" [attr.data-emphasis]="config().emphasis ?? 'default'">{{ resolvedBody() }}</p>
+      @if (bodyText()) {
+        <p class="body" [attr.data-emphasis]="config().emphasis ?? 'default'">{{ bodyText() }}</p>
       }
     </div>
   `,
@@ -101,6 +101,33 @@ export class TextComponent {
   readonly title = input<string>('');
 
   protected readonly variant = computed(() => this.config().variant ?? 'body');
+
+  private readonly isHeading = computed(() => {
+    const variant = this.variant();
+    return variant === 'heading' || variant === 'subheading';
+  });
+
+  /**
+   * What goes in the heading element.
+   *
+   * `variant` declares the text's ROLE in the page; where the words come from should not change the
+   * element that carries them. A detail page's heading is the record's name, which is only knowable
+   * from data — so it arrives through `body` + `tokens`, not through the static `title`. Rendering
+   * that as a `<p>` would leave every drill-down page without an `<h2>`, which is both an outline
+   * defect for screen readers and visually wrong.
+   *
+   * So: a static title still wins (it is the more specific declaration), and otherwise a heading
+   * variant promotes its resolved body into the heading.
+   */
+  protected readonly headingText = computed(() => {
+    if (this.title()) return this.title();
+    return this.isHeading() ? this.resolvedBody() : '';
+  });
+
+  /** The body paragraph — empty when the resolved text was promoted into the heading above. */
+  protected readonly bodyText = computed(() =>
+    this.isHeading() && !this.title() ? '' : this.resolvedBody(),
+  );
 
   protected readonly resolvedBody = computed(() => {
     const template = this.config().body;

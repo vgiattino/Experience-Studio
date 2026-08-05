@@ -268,3 +268,103 @@ describe('layout compilation', () => {
     expect(child.visible?.test({ filters: { severity: ['LOW'] } })).toBe(false);
   });
 });
+
+/**
+ * A data-driven tabs container is the shape every detail page uses: one tab per contributing
+ * vendor, per issued instrument, per failing rule. What makes it work is that the tab's identity
+ * travels through `selectedTabChannel` into the template's OWN data source — so the compiled
+ * artifact has to keep both halves of that link, and the dependency graph has to see it.
+ */
+function dataDrivenTabsPage(): PageDefinition {
+  return page({
+    filters: { 'active-vendor': { dataType: 'enum' } },
+    dataSources: {
+      'vendor-tabs': {
+        id: 'vendor-tabs',
+        entity: 'securities.source-value',
+        kind: 'aggregate',
+        select: {
+          measures: [{ measure: 'source-value-count', aggregation: 'count', alias: 'count' }],
+          dimensions: [{ attribute: 'source-system', alias: 'source-system' }],
+        },
+      },
+      'vendor-rows': {
+        id: 'vendor-rows',
+        entity: 'securities.source-value',
+        kind: 'list',
+        select: { attributes: [{ attribute: 'field-label', alias: 'field' }] },
+        filter: {
+          all: [
+            {
+              target: 'source-system',
+              operator: 'eq',
+              value: { $filter: 'active-vendor' },
+              skipWhenEmpty: false,
+            },
+          ],
+        },
+      },
+    },
+    components: {
+      tabs: { id: 'tabs', type: 'data.table', typeVersion: '1.0.0', dataSource: 'vendor-tabs' },
+      rows: { id: 'rows', type: 'data.table', typeVersion: '1.0.0', dataSource: 'vendor-rows' },
+    },
+    layout: {
+      kind: 'container',
+      id: 'root',
+      container: {
+        type: 'grid',
+        children: [
+          {
+            kind: 'container',
+            id: 'vendors',
+            container: {
+              type: 'tabs',
+              selectedTabChannel: 'active-vendor',
+              deferContent: true,
+              source: {
+                mode: 'dataDriven',
+                source: 'vendor-tabs',
+                idField: 'source-system',
+                labelField: 'source-system',
+                badgeField: 'count',
+                template: [{ kind: 'widget', id: 't-rows', component: 'rows' }],
+              },
+            },
+          },
+        ],
+      },
+    },
+  });
+}
+
+describe('data-driven tabs', () => {
+  it('keeps the template and the channel that feeds it', () => {
+    const { page: compiled } = compilePage(dataDrivenTabsPage());
+    const root = compiled.layout;
+    if (root.kind !== 'container') throw new Error('expected a container');
+    const tabs = root.container.children[0]!;
+    if (tabs.kind !== 'container') throw new Error('expected the tabs container');
+    // One compiled template serves every generated tab — twelve vendors cost one template.
+    expect(tabs.container.template).toHaveLength(1);
+    expect(tabs.container.tabs).toHaveLength(0);
+    const spec = tabs.container.spec;
+    if (spec.type !== 'tabs') throw new Error('expected a tabs spec');
+    expect(spec.selectedTabChannel).toBe('active-vendor');
+  });
+
+  it('sees the tab channel as a dependency of the template source', () => {
+    const { page: compiled } = compilePage(dataDrivenTabsPage());
+    // Without this the tab strip changes its highlight and the rows below it do not change:
+    // switching tabs writes the channel, and only the graph turns that write into a re-query.
+    expect(sourcesAffectedBy(compiled, { filters: ['active-vendor'] })).toEqual(['vendor-rows']);
+  });
+
+  it('defers the template source and keeps the tab-generating source eager', () => {
+    const { page: compiled } = compilePage(dataDrivenTabsPage());
+    // The tabs cannot be generated before their source returns, so that one must load eagerly;
+    // the content behind them must not, or a twelve-vendor page issues twelve queries to show one.
+    expect(compiled.eagerSources).toContain('vendor-tabs');
+    expect(compiled.deferredSources).toContain('vendor-rows');
+  });
+});

@@ -15,7 +15,9 @@
       "exception-status": "SUPPRESSED",
       "detected-at": "2026-07-27T21:00:00Z",
       "assigned-to": null,
-      "age-hours": 188.0
+      "age-hours": 188.0,
+      "issuer-id": "PTY00013",
+      "issuer-name": "Rio Tinto 4.1"
     },
     {
       "exception-id": "EXC000002",
@@ -27,7 +29,9 @@
       "exception-status": "RESOLVED",
       "detected-at": "2026-07-30T03:31:00Z",
       "assigned-to": "Tom Okafor",
-      "age-hours": 133.5
+      "age-hours": 133.5,
+      "issuer-id": "PTY00013",
+      "issuer-name": "Rio Tinto 4.1"
     },
     {
       "exception-id": "EXC000003",
@@ -39,7 +43,9 @@
       "exception-status": "SUPPRESSED",
       "detected-at": "2026-07-28T11:27:00Z",
       "assigned-to": null,
-      "age-hours": 173.6
+      "age-hours": 173.6,
+      "issuer-id": "PTY00007",
+      "issuer-name": "Enel SpA 3.375"
     },
     {
       "exception-id": "EXC000004",
@@ -51,7 +57,9 @@
       "exception-status": "IN_PROGRESS",
       "detected-at": "2026-08-02T12:14:00Z",
       "assigned-to": "Lena Brandt",
-      "age-hours": 52.8
+      "age-hours": 52.8,
+      "issuer-id": "PTY00014",
+      "issuer-name": "Siemens AG"
     },
     {
       "exception-id": "EXC000005",
@@ -63,7 +71,9 @@
       "exception-status": "OPEN",
       "detected-at": "2026-08-02T09:38:00Z",
       "assigned-to": "Marco Rossi",
-      "age-hours": 55.4
+      "age-hours": 55.4,
+      "issuer-id": "PTY00015",
+      "issuer-name": "Toyota Motor Corp"
     },
     {
       "exception-id": "EXC000006",
@@ -75,7 +85,9 @@
       "exception-status": "RESOLVED",
       "detected-at": "2026-07-30T20:34:00Z",
       "assigned-to": null,
-      "age-hours": 116.4
+      "age-hours": 116.4,
+      "issuer-id": "PTY00008",
+      "issuer-name": "European Bond"
     },
     {
       "exception-id": "EXC000007",
@@ -87,7 +99,9 @@
       "exception-status": "RESOLVED",
       "detected-at": "2026-08-01T16:17:00Z",
       "assigned-to": null,
-      "age-hours": 72.7
+      "age-hours": 72.7,
+      "issuer-id": "PTY00005",
+      "issuer-name": "EUR/USD"
     },
     {
       "exception-id": "EXC000008",
@@ -99,7 +113,9 @@
       "exception-status": "RESOLVED",
       "detected-at": "2026-07-24T09:00:00Z",
       "assigned-to": "Marco Rossi",
-      "age-hours": 272.0
+      "age-hours": 272.0,
+      "issuer-id": "PTY00004",
+      "issuer-name": "Bund 2.6"
     },
     {
       "exception-id": "EXC000009",
@@ -111,7 +127,9 @@
       "exception-status": "OPEN",
       "detected-at": "2026-07-30T09:21:00Z",
       "assigned-to": "Tom Okafor",
-      "age-hours": 127.7
+      "age-hours": 127.7,
+      "issuer-id": "PTY00008",
+      "issuer-name": "European Bond"
     },
     {
       "exception-id": "EXC000010",
@@ -123,7 +141,9 @@
       "exception-status": "OPEN",
       "detected-at": "2026-08-04T14:20:00Z",
       "assigned-to": null,
-      "age-hours": 2.7
+      "age-hours": 2.7,
+      "issuer-id": "PTY00008",
+      "issuer-name": "European Bond"
     },
     {
       "exception-id": "EXC000011",
@@ -135,7 +155,9 @@
       "exception-status": "RESOLVED",
       "detected-at": "2026-07-26T07:43:00Z",
       "assigned-to": null,
-      "age-hours": 225.3
+      "age-hours": 225.3,
+      "issuer-id": "PTY00006",
+      "issuer-name": "Emerging Markets"
     },
     {
       "exception-id": "EXC000012",
@@ -147,7 +169,9 @@
       "exception-status": "IN_PROGRESS",
       "detected-at": "2026-08-02T19:52:00Z",
       "assigned-to": "Priya Nair",
-      "age-hours": 45.1
+      "age-hours": 45.1,
+      "issuer-id": "PTY00002",
+      "issuer-name": "BP Capital 3.8"
     },
     {
       "exception-id": "EXC000013",
@@ -159,7 +183,9 @@
       "exception-status": "OPEN",
       "detected-at": "2026-08-02T12:07:00Z",
       "assigned-to": null,
-      "age-hours": 52.9
+      "age-hours": 52.9,
+      "issuer-id": "PTY00004",
+      "issuer-name": "Bund 2.6"
     },
     {
       "exception-id": "EXC000014",
@@ -171,7 +197,9 @@
       "exception-status": "SUPPRESSED",
       "detected-at": "2026-07-29T21:01:00Z",
       "assigned-to": "Marco Rossi",
-      "age-hours": 140.0
+      "age-hours": 140.0,
+      "issuer-id": "PTY00004",
+      "issuer-name": "Bund 2.6"
     },
     {
       "exception-id": "EXC000015",
@@ -183,7 +211,9 @@
       "exception-status": "RESOLVED",
       "detected-at": "2026-07-31T11:49:00Z",
       "assigned-to": "Tom Okafor",
-      "age-hours": 101.2
+      "age-hours": 101.2,
+      "issuer-id": "PTY00010",
+      "issuer-name": "Global Equity Income"
     },
     {
       "exception-id": "EXC000016",
@@ -195,7 +225,9 @@
       "exception-status": "OPEN",
       "detected-at": "2026-07-22T15:22:00Z",
       "assigned-to": "Lena Brandt",
-      "age-hours": 313.6
+      "age-hours": 313.6,
+      "issuer-id": "PTY00015",
+      "issuer-name": "Toyota Motor Corp"
     },
     {
       "exception-id": "EXC000017",
@@ -207,7 +239,9 @@
       "exception-status": "RESOLVED",
       "detected-at": "2026-08-01T11:04:00Z",
       "assigned-to": "Tom Okafor",
-      "age-hours": 77.9
+      "age-hours": 77.9,
+      "issuer-id": "PTY00006",
+      "issuer-name": "Emerging Markets"
     },
     {
       "exception-id": "EXC000018",
@@ -219,7 +253,9 @@
       "exception-status": "SUPPRESSED",
       "detected-at": "2026-07-23T22:28:00Z",
       "assigned-to": null,
-      "age-hours": 282.5
+      "age-hours": 282.5,
+      "issuer-id": "PTY00012",
+      "issuer-name": "Nestle SA"
     },
     {
       "exception-id": "EXC000019",
@@ -231,7 +267,9 @@
       "exception-status": "IN_PROGRESS",
       "detected-at": "2026-08-02T11:52:00Z",
       "assigned-to": "Lena Brandt",
-      "age-hours": 53.1
+      "age-hours": 53.1,
+      "issuer-id": "PTY00018",
+      "issuer-name": "Vodafone Group PLC"
     },
     {
       "exception-id": "EXC000020",
@@ -243,7 +281,9 @@
       "exception-status": "RESOLVED",
       "detected-at": "2026-08-01T02:14:00Z",
       "assigned-to": "Marco Rossi",
-      "age-hours": 86.8
+      "age-hours": 86.8,
+      "issuer-id": "PTY00014",
+      "issuer-name": "Siemens AG"
     },
     {
       "exception-id": "EXC000021",
@@ -255,7 +295,9 @@
       "exception-status": "OPEN",
       "detected-at": "2026-08-04T06:41:00Z",
       "assigned-to": null,
-      "age-hours": 10.3
+      "age-hours": 10.3,
+      "issuer-id": "PTY00005",
+      "issuer-name": "EUR/USD"
     },
     {
       "exception-id": "EXC000022",
@@ -267,7 +309,9 @@
       "exception-status": "OPEN",
       "detected-at": "2026-07-22T07:03:00Z",
       "assigned-to": "Marco Rossi",
-      "age-hours": 321.9
+      "age-hours": 321.9,
+      "issuer-id": "PTY00014",
+      "issuer-name": "Siemens AG"
     },
     {
       "exception-id": "EXC000023",
@@ -279,7 +323,9 @@
       "exception-status": "IN_PROGRESS",
       "detected-at": "2026-08-02T13:04:00Z",
       "assigned-to": "Priya Nair",
-      "age-hours": 51.9
+      "age-hours": 51.9,
+      "issuer-id": "PTY00011",
+      "issuer-name": "HSBC Holdings PLC"
     },
     {
       "exception-id": "EXC000024",
@@ -291,7 +337,9 @@
       "exception-status": "OPEN",
       "detected-at": "2026-07-27T18:45:00Z",
       "assigned-to": "Tom Okafor",
-      "age-hours": 190.2
+      "age-hours": 190.2,
+      "issuer-id": "PTY00001",
+      "issuer-name": "Apple Inc"
     },
     {
       "exception-id": "EXC000025",
@@ -303,7 +351,9 @@
       "exception-status": "OPEN",
       "detected-at": "2026-08-03T14:15:00Z",
       "assigned-to": null,
-      "age-hours": 26.8
+      "age-hours": 26.8,
+      "issuer-id": "PTY00013",
+      "issuer-name": "Rio Tinto 4.1"
     },
     {
       "exception-id": "EXC000026",
@@ -315,7 +365,9 @@
       "exception-status": "IN_PROGRESS",
       "detected-at": "2026-07-24T16:00:00Z",
       "assigned-to": "Priya Nair",
-      "age-hours": 265.0
+      "age-hours": 265.0,
+      "issuer-id": "PTY00006",
+      "issuer-name": "Emerging Markets"
     },
     {
       "exception-id": "EXC000027",
@@ -327,7 +379,9 @@
       "exception-status": "IN_PROGRESS",
       "detected-at": "2026-07-25T01:30:00Z",
       "assigned-to": "Tom Okafor",
-      "age-hours": 255.5
+      "age-hours": 255.5,
+      "issuer-id": "PTY00017",
+      "issuer-name": "US Treasury 4.0"
     },
     {
       "exception-id": "EXC000028",
@@ -339,7 +393,9 @@
       "exception-status": "IN_PROGRESS",
       "detected-at": "2026-07-22T21:26:00Z",
       "assigned-to": null,
-      "age-hours": 307.6
+      "age-hours": 307.6,
+      "issuer-id": "PTY00014",
+      "issuer-name": "Siemens AG"
     },
     {
       "exception-id": "EXC000029",
@@ -351,7 +407,9 @@
       "exception-status": "RESOLVED",
       "detected-at": "2026-07-28T12:12:00Z",
       "assigned-to": "Tom Okafor",
-      "age-hours": 172.8
+      "age-hours": 172.8,
+      "issuer-id": "PTY00001",
+      "issuer-name": "Apple Inc"
     },
     {
       "exception-id": "EXC000030",
@@ -363,7 +421,9 @@
       "exception-status": "SUPPRESSED",
       "detected-at": "2026-07-27T13:23:00Z",
       "assigned-to": "Lena Brandt",
-      "age-hours": 195.6
+      "age-hours": 195.6,
+      "issuer-id": "PTY00017",
+      "issuer-name": "US Treasury 4.0"
     },
     {
       "exception-id": "EXC000031",
@@ -375,7 +435,9 @@
       "exception-status": "OPEN",
       "detected-at": "2026-07-27T06:54:00Z",
       "assigned-to": null,
-      "age-hours": 202.1
+      "age-hours": 202.1,
+      "issuer-id": "PTY00013",
+      "issuer-name": "Rio Tinto 4.1"
     },
     {
       "exception-id": "EXC000032",
@@ -387,7 +449,9 @@
       "exception-status": "OPEN",
       "detected-at": "2026-07-31T14:35:00Z",
       "assigned-to": null,
-      "age-hours": 98.4
+      "age-hours": 98.4,
+      "issuer-id": "PTY00017",
+      "issuer-name": "US Treasury 4.0"
     },
     {
       "exception-id": "EXC000033",
@@ -399,7 +463,9 @@
       "exception-status": "OPEN",
       "detected-at": "2026-08-01T17:22:00Z",
       "assigned-to": "Marco Rossi",
-      "age-hours": 71.6
+      "age-hours": 71.6,
+      "issuer-id": "PTY00004",
+      "issuer-name": "Bund 2.6"
     },
     {
       "exception-id": "EXC000034",
@@ -411,7 +477,9 @@
       "exception-status": "SUPPRESSED",
       "detected-at": "2026-07-22T20:52:00Z",
       "assigned-to": "Lena Brandt",
-      "age-hours": 308.1
+      "age-hours": 308.1,
+      "issuer-id": "PTY00016",
+      "issuer-name": "UK Treasury 4.25"
     },
     {
       "exception-id": "EXC000035",
@@ -423,7 +491,9 @@
       "exception-status": "OPEN",
       "detected-at": "2026-07-28T23:32:00Z",
       "assigned-to": null,
-      "age-hours": 161.5
+      "age-hours": 161.5,
+      "issuer-id": "PTY00013",
+      "issuer-name": "Rio Tinto 4.1"
     },
     {
       "exception-id": "EXC000036",
@@ -435,7 +505,9 @@
       "exception-status": "RESOLVED",
       "detected-at": "2026-07-25T15:11:00Z",
       "assigned-to": null,
-      "age-hours": 241.8
+      "age-hours": 241.8,
+      "issuer-id": "PTY00004",
+      "issuer-name": "Bund 2.6"
     },
     {
       "exception-id": "EXC000037",
@@ -447,7 +519,9 @@
       "exception-status": "RESOLVED",
       "detected-at": "2026-07-23T07:14:00Z",
       "assigned-to": null,
-      "age-hours": 297.8
+      "age-hours": 297.8,
+      "issuer-id": "PTY00018",
+      "issuer-name": "Vodafone Group PLC"
     },
     {
       "exception-id": "EXC000038",
@@ -459,7 +533,9 @@
       "exception-status": "OPEN",
       "detected-at": "2026-07-28T20:23:00Z",
       "assigned-to": "Tom Okafor",
-      "age-hours": 164.6
+      "age-hours": 164.6,
+      "issuer-id": "PTY00001",
+      "issuer-name": "Apple Inc"
     },
     {
       "exception-id": "EXC000039",
@@ -471,7 +547,9 @@
       "exception-status": "IN_PROGRESS",
       "detected-at": "2026-07-30T11:57:00Z",
       "assigned-to": "Lena Brandt",
-      "age-hours": 125.0
+      "age-hours": 125.0,
+      "issuer-id": "PTY00009",
+      "issuer-name": "FTSE 100"
     },
     {
       "exception-id": "EXC000040",
@@ -483,7 +561,9 @@
       "exception-status": "RESOLVED",
       "detected-at": "2026-07-24T06:52:00Z",
       "assigned-to": "Marco Rossi",
-      "age-hours": 274.1
+      "age-hours": 274.1,
+      "issuer-id": "PTY00018",
+      "issuer-name": "Vodafone Group PLC"
     },
     {
       "exception-id": "EXC000041",
@@ -495,7 +575,9 @@
       "exception-status": "OPEN",
       "detected-at": "2026-07-28T22:54:00Z",
       "assigned-to": null,
-      "age-hours": 162.1
+      "age-hours": 162.1,
+      "issuer-id": "PTY00017",
+      "issuer-name": "US Treasury 4.0"
     },
     {
       "exception-id": "EXC000042",
@@ -507,7 +589,9 @@
       "exception-status": "RESOLVED",
       "detected-at": "2026-07-27T12:40:00Z",
       "assigned-to": null,
-      "age-hours": 196.3
+      "age-hours": 196.3,
+      "issuer-id": "PTY00016",
+      "issuer-name": "UK Treasury 4.25"
     },
     {
       "exception-id": "EXC000043",
@@ -519,7 +603,9 @@
       "exception-status": "IN_PROGRESS",
       "detected-at": "2026-07-22T02:01:00Z",
       "assigned-to": "Marco Rossi",
-      "age-hours": 327.0
+      "age-hours": 327.0,
+      "issuer-id": "PTY00016",
+      "issuer-name": "UK Treasury 4.25"
     },
     {
       "exception-id": "EXC000044",
@@ -531,7 +617,9 @@
       "exception-status": "SUPPRESSED",
       "detected-at": "2026-07-27T19:39:00Z",
       "assigned-to": "Lena Brandt",
-      "age-hours": 189.3
+      "age-hours": 189.3,
+      "issuer-id": "PTY00001",
+      "issuer-name": "Apple Inc"
     },
     {
       "exception-id": "EXC000045",
@@ -543,7 +631,9 @@
       "exception-status": "RESOLVED",
       "detected-at": "2026-07-31T12:27:00Z",
       "assigned-to": "Marco Rossi",
-      "age-hours": 100.5
+      "age-hours": 100.5,
+      "issuer-id": "PTY00012",
+      "issuer-name": "Nestle SA"
     },
     {
       "exception-id": "EXC000046",
@@ -555,7 +645,9 @@
       "exception-status": "OPEN",
       "detected-at": "2026-08-02T01:57:00Z",
       "assigned-to": "Priya Nair",
-      "age-hours": 63.0
+      "age-hours": 63.0,
+      "issuer-id": "PTY00017",
+      "issuer-name": "US Treasury 4.0"
     },
     {
       "exception-id": "EXC000047",
@@ -567,7 +659,9 @@
       "exception-status": "OPEN",
       "detected-at": "2026-08-04T08:14:00Z",
       "assigned-to": null,
-      "age-hours": 8.8
+      "age-hours": 8.8,
+      "issuer-id": "PTY00002",
+      "issuer-name": "BP Capital 3.8"
     },
     {
       "exception-id": "EXC000048",
@@ -579,7 +673,9 @@
       "exception-status": "IN_PROGRESS",
       "detected-at": "2026-07-25T11:41:00Z",
       "assigned-to": "Tom Okafor",
-      "age-hours": 245.3
+      "age-hours": 245.3,
+      "issuer-id": "PTY00015",
+      "issuer-name": "Toyota Motor Corp"
     },
     {
       "exception-id": "EXC000049",
@@ -591,7 +687,9 @@
       "exception-status": "RESOLVED",
       "detected-at": "2026-07-29T01:41:00Z",
       "assigned-to": "Tom Okafor",
-      "age-hours": 159.3
+      "age-hours": 159.3,
+      "issuer-id": "PTY00016",
+      "issuer-name": "UK Treasury 4.25"
     },
     {
       "exception-id": "EXC000050",
@@ -603,7 +701,9 @@
       "exception-status": "RESOLVED",
       "detected-at": "2026-07-27T09:31:00Z",
       "assigned-to": null,
-      "age-hours": 199.5
+      "age-hours": 199.5,
+      "issuer-id": "PTY00015",
+      "issuer-name": "Toyota Motor Corp"
     },
     {
       "exception-id": "EXC000051",
@@ -615,7 +715,9 @@
       "exception-status": "IN_PROGRESS",
       "detected-at": "2026-07-24T05:06:00Z",
       "assigned-to": null,
-      "age-hours": 275.9
+      "age-hours": 275.9,
+      "issuer-id": "PTY00005",
+      "issuer-name": "EUR/USD"
     },
     {
       "exception-id": "EXC000052",
@@ -627,7 +729,9 @@
       "exception-status": "RESOLVED",
       "detected-at": "2026-07-24T01:56:00Z",
       "assigned-to": "Marco Rossi",
-      "age-hours": 279.1
+      "age-hours": 279.1,
+      "issuer-id": "PTY00007",
+      "issuer-name": "Enel SpA 3.375"
     },
     {
       "exception-id": "EXC000053",
@@ -639,7 +743,9 @@
       "exception-status": "RESOLVED",
       "detected-at": "2026-07-22T02:58:00Z",
       "assigned-to": "Marco Rossi",
-      "age-hours": 326.0
+      "age-hours": 326.0,
+      "issuer-id": "PTY00011",
+      "issuer-name": "HSBC Holdings PLC"
     },
     {
       "exception-id": "EXC000054",
@@ -651,7 +757,9 @@
       "exception-status": "IN_PROGRESS",
       "detected-at": "2026-07-23T02:40:00Z",
       "assigned-to": "Priya Nair",
-      "age-hours": 302.3
+      "age-hours": 302.3,
+      "issuer-id": "PTY00011",
+      "issuer-name": "HSBC Holdings PLC"
     },
     {
       "exception-id": "EXC000055",
@@ -663,7 +771,9 @@
       "exception-status": "IN_PROGRESS",
       "detected-at": "2026-08-03T02:03:00Z",
       "assigned-to": "Tom Okafor",
-      "age-hours": 39.0
+      "age-hours": 39.0,
+      "issuer-id": "PTY00018",
+      "issuer-name": "Vodafone Group PLC"
     },
     {
       "exception-id": "EXC000056",
@@ -675,7 +785,9 @@
       "exception-status": "OPEN",
       "detected-at": "2026-08-04T05:48:00Z",
       "assigned-to": "Marco Rossi",
-      "age-hours": 11.2
+      "age-hours": 11.2,
+      "issuer-id": "PTY00003",
+      "issuer-name": "Brent Crude Option Nov26"
     },
     {
       "exception-id": "EXC000057",
@@ -687,7 +799,9 @@
       "exception-status": "OPEN",
       "detected-at": "2026-08-02T15:21:00Z",
       "assigned-to": "Marco Rossi",
-      "age-hours": 49.6
+      "age-hours": 49.6,
+      "issuer-id": "PTY00003",
+      "issuer-name": "Brent Crude Option Nov26"
     },
     {
       "exception-id": "EXC000058",
@@ -699,7 +813,9 @@
       "exception-status": "OPEN",
       "detected-at": "2026-08-04T16:50:00Z",
       "assigned-to": "Marco Rossi",
-      "age-hours": 0.2
+      "age-hours": 0.2,
+      "issuer-id": "PTY00012",
+      "issuer-name": "Nestle SA"
     },
     {
       "exception-id": "EXC000059",
@@ -711,7 +827,9 @@
       "exception-status": "IN_PROGRESS",
       "detected-at": "2026-07-30T13:15:00Z",
       "assigned-to": "Priya Nair",
-      "age-hours": 123.8
+      "age-hours": 123.8,
+      "issuer-id": "PTY00011",
+      "issuer-name": "HSBC Holdings PLC"
     },
     {
       "exception-id": "EXC000060",
@@ -723,7 +841,9 @@
       "exception-status": "SUPPRESSED",
       "detected-at": "2026-07-22T07:18:00Z",
       "assigned-to": null,
-      "age-hours": 321.7
+      "age-hours": 321.7,
+      "issuer-id": "PTY00001",
+      "issuer-name": "Apple Inc"
     },
     {
       "exception-id": "EXC000061",
@@ -735,7 +855,9 @@
       "exception-status": "SUPPRESSED",
       "detected-at": "2026-08-01T05:35:00Z",
       "assigned-to": null,
-      "age-hours": 83.4
+      "age-hours": 83.4,
+      "issuer-id": "PTY00014",
+      "issuer-name": "Siemens AG"
     },
     {
       "exception-id": "EXC000062",
@@ -747,7 +869,9 @@
       "exception-status": "RESOLVED",
       "detected-at": "2026-07-23T01:53:00Z",
       "assigned-to": "Lena Brandt",
-      "age-hours": 303.1
+      "age-hours": 303.1,
+      "issuer-id": "PTY00011",
+      "issuer-name": "HSBC Holdings PLC"
     },
     {
       "exception-id": "EXC000063",
@@ -759,7 +883,9 @@
       "exception-status": "SUPPRESSED",
       "detected-at": "2026-07-31T11:15:00Z",
       "assigned-to": null,
-      "age-hours": 101.8
+      "age-hours": 101.8,
+      "issuer-id": "PTY00006",
+      "issuer-name": "Emerging Markets"
     },
     {
       "exception-id": "EXC000064",
@@ -771,7 +897,9 @@
       "exception-status": "SUPPRESSED",
       "detected-at": "2026-07-26T07:20:00Z",
       "assigned-to": null,
-      "age-hours": 225.7
+      "age-hours": 225.7,
+      "issuer-id": "PTY00014",
+      "issuer-name": "Siemens AG"
     },
     {
       "exception-id": "EXC000065",
@@ -783,7 +911,9 @@
       "exception-status": "OPEN",
       "detected-at": "2026-08-04T14:15:00Z",
       "assigned-to": "Priya Nair",
-      "age-hours": 2.8
+      "age-hours": 2.8,
+      "issuer-id": "PTY00005",
+      "issuer-name": "EUR/USD"
     },
     {
       "exception-id": "EXC000066",
@@ -795,7 +925,9 @@
       "exception-status": "OPEN",
       "detected-at": "2026-08-02T14:08:00Z",
       "assigned-to": "Lena Brandt",
-      "age-hours": 50.9
+      "age-hours": 50.9,
+      "issuer-id": "PTY00006",
+      "issuer-name": "Emerging Markets"
     },
     {
       "exception-id": "EXC000067",
@@ -807,7 +939,9 @@
       "exception-status": "RESOLVED",
       "detected-at": "2026-07-27T06:50:00Z",
       "assigned-to": "Tom Okafor",
-      "age-hours": 202.2
+      "age-hours": 202.2,
+      "issuer-id": "PTY00018",
+      "issuer-name": "Vodafone Group PLC"
     },
     {
       "exception-id": "EXC000068",
@@ -819,7 +953,9 @@
       "exception-status": "RESOLVED",
       "detected-at": "2026-07-25T11:04:00Z",
       "assigned-to": "Marco Rossi",
-      "age-hours": 245.9
+      "age-hours": 245.9,
+      "issuer-id": "PTY00005",
+      "issuer-name": "EUR/USD"
     },
     {
       "exception-id": "EXC000069",
@@ -831,7 +967,9 @@
       "exception-status": "OPEN",
       "detected-at": "2026-07-24T04:21:00Z",
       "assigned-to": "Marco Rossi",
-      "age-hours": 276.6
+      "age-hours": 276.6,
+      "issuer-id": "PTY00015",
+      "issuer-name": "Toyota Motor Corp"
     },
     {
       "exception-id": "EXC000070",
@@ -843,7 +981,9 @@
       "exception-status": "IN_PROGRESS",
       "detected-at": "2026-08-03T05:38:00Z",
       "assigned-to": "Priya Nair",
-      "age-hours": 35.4
+      "age-hours": 35.4,
+      "issuer-id": "PTY00011",
+      "issuer-name": "HSBC Holdings PLC"
     },
     {
       "exception-id": "EXC000071",
@@ -855,7 +995,9 @@
       "exception-status": "OPEN",
       "detected-at": "2026-08-03T16:29:00Z",
       "assigned-to": "Lena Brandt",
-      "age-hours": 24.5
+      "age-hours": 24.5,
+      "issuer-id": "PTY00002",
+      "issuer-name": "BP Capital 3.8"
     },
     {
       "exception-id": "EXC000072",
@@ -867,7 +1009,9 @@
       "exception-status": "IN_PROGRESS",
       "detected-at": "2026-07-25T10:43:00Z",
       "assigned-to": null,
-      "age-hours": 246.3
+      "age-hours": 246.3,
+      "issuer-id": "PTY00002",
+      "issuer-name": "BP Capital 3.8"
     },
     {
       "exception-id": "EXC000073",
@@ -879,7 +1023,9 @@
       "exception-status": "RESOLVED",
       "detected-at": "2026-07-28T00:14:00Z",
       "assigned-to": null,
-      "age-hours": 184.8
+      "age-hours": 184.8,
+      "issuer-id": "PTY00014",
+      "issuer-name": "Siemens AG"
     },
     {
       "exception-id": "EXC000074",
@@ -891,7 +1037,9 @@
       "exception-status": "OPEN",
       "detected-at": "2026-08-02T19:04:00Z",
       "assigned-to": "Lena Brandt",
-      "age-hours": 45.9
+      "age-hours": 45.9,
+      "issuer-id": "PTY00018",
+      "issuer-name": "Vodafone Group PLC"
     },
     {
       "exception-id": "EXC000075",
@@ -903,7 +1051,9 @@
       "exception-status": "IN_PROGRESS",
       "detected-at": "2026-07-22T20:31:00Z",
       "assigned-to": "Marco Rossi",
-      "age-hours": 308.5
+      "age-hours": 308.5,
+      "issuer-id": "PTY00012",
+      "issuer-name": "Nestle SA"
     },
     {
       "exception-id": "EXC000076",
@@ -915,7 +1065,9 @@
       "exception-status": "IN_PROGRESS",
       "detected-at": "2026-08-01T19:49:00Z",
       "assigned-to": null,
-      "age-hours": 69.2
+      "age-hours": 69.2,
+      "issuer-id": "PTY00008",
+      "issuer-name": "European Bond"
     },
     {
       "exception-id": "EXC000077",
@@ -927,7 +1079,9 @@
       "exception-status": "SUPPRESSED",
       "detected-at": "2026-07-22T15:52:00Z",
       "assigned-to": null,
-      "age-hours": 313.1
+      "age-hours": 313.1,
+      "issuer-id": "PTY00012",
+      "issuer-name": "Nestle SA"
     },
     {
       "exception-id": "EXC000078",
@@ -939,7 +1093,9 @@
       "exception-status": "IN_PROGRESS",
       "detected-at": "2026-08-03T16:17:00Z",
       "assigned-to": null,
-      "age-hours": 24.7
+      "age-hours": 24.7,
+      "issuer-id": "PTY00017",
+      "issuer-name": "US Treasury 4.0"
     },
     {
       "exception-id": "EXC000079",
@@ -951,7 +1107,9 @@
       "exception-status": "OPEN",
       "detected-at": "2026-07-31T17:49:00Z",
       "assigned-to": null,
-      "age-hours": 95.2
+      "age-hours": 95.2,
+      "issuer-id": "PTY00008",
+      "issuer-name": "European Bond"
     },
     {
       "exception-id": "EXC000080",
@@ -963,7 +1121,9 @@
       "exception-status": "IN_PROGRESS",
       "detected-at": "2026-07-23T02:47:00Z",
       "assigned-to": "Marco Rossi",
-      "age-hours": 302.2
+      "age-hours": 302.2,
+      "issuer-id": "PTY00010",
+      "issuer-name": "Global Equity Income"
     },
     {
       "exception-id": "EXC000081",
@@ -975,7 +1135,9 @@
       "exception-status": "RESOLVED",
       "detected-at": "2026-07-27T03:33:00Z",
       "assigned-to": "Priya Nair",
-      "age-hours": 205.4
+      "age-hours": 205.4,
+      "issuer-id": "PTY00005",
+      "issuer-name": "EUR/USD"
     },
     {
       "exception-id": "EXC000082",
@@ -987,7 +1149,9 @@
       "exception-status": "OPEN",
       "detected-at": "2026-07-24T05:56:00Z",
       "assigned-to": null,
-      "age-hours": 275.1
+      "age-hours": 275.1,
+      "issuer-id": "PTY00012",
+      "issuer-name": "Nestle SA"
     },
     {
       "exception-id": "EXC000083",
@@ -999,7 +1163,9 @@
       "exception-status": "SUPPRESSED",
       "detected-at": "2026-07-22T04:21:00Z",
       "assigned-to": "Priya Nair",
-      "age-hours": 324.6
+      "age-hours": 324.6,
+      "issuer-id": "PTY00018",
+      "issuer-name": "Vodafone Group PLC"
     },
     {
       "exception-id": "EXC000084",
@@ -1011,7 +1177,9 @@
       "exception-status": "RESOLVED",
       "detected-at": "2026-07-23T02:32:00Z",
       "assigned-to": null,
-      "age-hours": 302.5
+      "age-hours": 302.5,
+      "issuer-id": "PTY00016",
+      "issuer-name": "UK Treasury 4.25"
     },
     {
       "exception-id": "EXC000085",
@@ -1023,7 +1191,9 @@
       "exception-status": "IN_PROGRESS",
       "detected-at": "2026-08-02T13:36:00Z",
       "assigned-to": null,
-      "age-hours": 51.4
+      "age-hours": 51.4,
+      "issuer-id": "PTY00018",
+      "issuer-name": "Vodafone Group PLC"
     },
     {
       "exception-id": "EXC000086",
@@ -1035,7 +1205,9 @@
       "exception-status": "IN_PROGRESS",
       "detected-at": "2026-07-27T13:19:00Z",
       "assigned-to": null,
-      "age-hours": 195.7
+      "age-hours": 195.7,
+      "issuer-id": "PTY00013",
+      "issuer-name": "Rio Tinto 4.1"
     },
     {
       "exception-id": "EXC000087",
@@ -1047,7 +1219,9 @@
       "exception-status": "IN_PROGRESS",
       "detected-at": "2026-08-02T09:50:00Z",
       "assigned-to": null,
-      "age-hours": 55.2
+      "age-hours": 55.2,
+      "issuer-id": "PTY00013",
+      "issuer-name": "Rio Tinto 4.1"
     },
     {
       "exception-id": "EXC000088",
@@ -1059,7 +1233,9 @@
       "exception-status": "RESOLVED",
       "detected-at": "2026-07-22T05:05:00Z",
       "assigned-to": null,
-      "age-hours": 323.9
+      "age-hours": 323.9,
+      "issuer-id": "PTY00001",
+      "issuer-name": "Apple Inc"
     },
     {
       "exception-id": "EXC000089",
@@ -1071,7 +1247,9 @@
       "exception-status": "IN_PROGRESS",
       "detected-at": "2026-07-29T06:10:00Z",
       "assigned-to": null,
-      "age-hours": 154.8
+      "age-hours": 154.8,
+      "issuer-id": "PTY00014",
+      "issuer-name": "Siemens AG"
     },
     {
       "exception-id": "EXC000090",
@@ -1083,7 +1261,9 @@
       "exception-status": "IN_PROGRESS",
       "detected-at": "2026-07-24T12:27:00Z",
       "assigned-to": "Tom Okafor",
-      "age-hours": 268.6
+      "age-hours": 268.6,
+      "issuer-id": "PTY00009",
+      "issuer-name": "FTSE 100"
     },
     {
       "exception-id": "EXC000091",
@@ -1095,7 +1275,9 @@
       "exception-status": "IN_PROGRESS",
       "detected-at": "2026-07-28T12:11:00Z",
       "assigned-to": "Priya Nair",
-      "age-hours": 172.8
+      "age-hours": 172.8,
+      "issuer-id": "PTY00005",
+      "issuer-name": "EUR/USD"
     },
     {
       "exception-id": "EXC000092",
@@ -1107,7 +1289,9 @@
       "exception-status": "OPEN",
       "detected-at": "2026-07-29T21:52:00Z",
       "assigned-to": "Marco Rossi",
-      "age-hours": 139.1
+      "age-hours": 139.1,
+      "issuer-id": "PTY00016",
+      "issuer-name": "UK Treasury 4.25"
     },
     {
       "exception-id": "EXC000093",
@@ -1119,7 +1303,9 @@
       "exception-status": "IN_PROGRESS",
       "detected-at": "2026-07-27T20:25:00Z",
       "assigned-to": "Tom Okafor",
-      "age-hours": 188.6
+      "age-hours": 188.6,
+      "issuer-id": "PTY00004",
+      "issuer-name": "Bund 2.6"
     },
     {
       "exception-id": "EXC000094",
@@ -1131,7 +1317,9 @@
       "exception-status": "IN_PROGRESS",
       "detected-at": "2026-07-22T04:51:00Z",
       "assigned-to": "Marco Rossi",
-      "age-hours": 324.1
+      "age-hours": 324.1,
+      "issuer-id": "PTY00017",
+      "issuer-name": "US Treasury 4.0"
     },
     {
       "exception-id": "EXC000095",
@@ -1143,7 +1331,9 @@
       "exception-status": "IN_PROGRESS",
       "detected-at": "2026-07-24T10:55:00Z",
       "assigned-to": null,
-      "age-hours": 270.1
+      "age-hours": 270.1,
+      "issuer-id": "PTY00006",
+      "issuer-name": "Emerging Markets"
     },
     {
       "exception-id": "EXC000096",
@@ -1155,7 +1345,9 @@
       "exception-status": "IN_PROGRESS",
       "detected-at": "2026-07-24T10:43:00Z",
       "assigned-to": null,
-      "age-hours": 270.3
+      "age-hours": 270.3,
+      "issuer-id": "PTY00007",
+      "issuer-name": "Enel SpA 3.375"
     },
     {
       "exception-id": "EXC000097",
@@ -1167,7 +1359,9 @@
       "exception-status": "IN_PROGRESS",
       "detected-at": "2026-07-30T09:42:00Z",
       "assigned-to": "Marco Rossi",
-      "age-hours": 127.3
+      "age-hours": 127.3,
+      "issuer-id": "PTY00008",
+      "issuer-name": "European Bond"
     },
     {
       "exception-id": "EXC000098",
@@ -1179,7 +1373,9 @@
       "exception-status": "OPEN",
       "detected-at": "2026-08-02T20:17:00Z",
       "assigned-to": "Lena Brandt",
-      "age-hours": 44.7
+      "age-hours": 44.7,
+      "issuer-id": "PTY00006",
+      "issuer-name": "Emerging Markets"
     },
     {
       "exception-id": "EXC000099",
@@ -1191,7 +1387,9 @@
       "exception-status": "SUPPRESSED",
       "detected-at": "2026-07-29T16:59:00Z",
       "assigned-to": null,
-      "age-hours": 144.0
+      "age-hours": 144.0,
+      "issuer-id": "PTY00011",
+      "issuer-name": "HSBC Holdings PLC"
     },
     {
       "exception-id": "EXC000100",
@@ -1203,7 +1401,9 @@
       "exception-status": "SUPPRESSED",
       "detected-at": "2026-07-31T22:58:00Z",
       "assigned-to": "Priya Nair",
-      "age-hours": 90.0
+      "age-hours": 90.0,
+      "issuer-id": "PTY00005",
+      "issuer-name": "EUR/USD"
     },
     {
       "exception-id": "EXC000101",
@@ -1215,7 +1415,9 @@
       "exception-status": "IN_PROGRESS",
       "detected-at": "2026-07-22T18:51:00Z",
       "assigned-to": "Lena Brandt",
-      "age-hours": 310.1
+      "age-hours": 310.1,
+      "issuer-id": "PTY00008",
+      "issuer-name": "European Bond"
     },
     {
       "exception-id": "EXC000102",
@@ -1227,7 +1429,9 @@
       "exception-status": "IN_PROGRESS",
       "detected-at": "2026-08-01T12:11:00Z",
       "assigned-to": "Marco Rossi",
-      "age-hours": 76.8
+      "age-hours": 76.8,
+      "issuer-id": "PTY00002",
+      "issuer-name": "BP Capital 3.8"
     },
     {
       "exception-id": "EXC000103",
@@ -1239,7 +1443,9 @@
       "exception-status": "OPEN",
       "detected-at": "2026-08-02T06:52:00Z",
       "assigned-to": null,
-      "age-hours": 58.1
+      "age-hours": 58.1,
+      "issuer-id": "PTY00010",
+      "issuer-name": "Global Equity Income"
     },
     {
       "exception-id": "EXC000104",
@@ -1251,7 +1457,9 @@
       "exception-status": "RESOLVED",
       "detected-at": "2026-07-31T01:18:00Z",
       "assigned-to": null,
-      "age-hours": 111.7
+      "age-hours": 111.7,
+      "issuer-id": "PTY00010",
+      "issuer-name": "Global Equity Income"
     },
     {
       "exception-id": "EXC000105",
@@ -1263,7 +1471,9 @@
       "exception-status": "SUPPRESSED",
       "detected-at": "2026-07-27T07:44:00Z",
       "assigned-to": "Tom Okafor",
-      "age-hours": 201.3
+      "age-hours": 201.3,
+      "issuer-id": "PTY00007",
+      "issuer-name": "Enel SpA 3.375"
     },
     {
       "exception-id": "EXC000106",
@@ -1275,7 +1485,9 @@
       "exception-status": "IN_PROGRESS",
       "detected-at": "2026-07-22T19:15:00Z",
       "assigned-to": null,
-      "age-hours": 309.8
+      "age-hours": 309.8,
+      "issuer-id": "PTY00015",
+      "issuer-name": "Toyota Motor Corp"
     },
     {
       "exception-id": "EXC000107",
@@ -1287,7 +1499,9 @@
       "exception-status": "RESOLVED",
       "detected-at": "2026-07-27T11:47:00Z",
       "assigned-to": "Priya Nair",
-      "age-hours": 197.2
+      "age-hours": 197.2,
+      "issuer-id": "PTY00014",
+      "issuer-name": "Siemens AG"
     },
     {
       "exception-id": "EXC000108",
@@ -1299,7 +1513,9 @@
       "exception-status": "OPEN",
       "detected-at": "2026-08-04T04:58:00Z",
       "assigned-to": null,
-      "age-hours": 12.0
+      "age-hours": 12.0,
+      "issuer-id": "PTY00015",
+      "issuer-name": "Toyota Motor Corp"
     },
     {
       "exception-id": "EXC000109",
@@ -1311,7 +1527,9 @@
       "exception-status": "RESOLVED",
       "detected-at": "2026-07-31T19:20:00Z",
       "assigned-to": "Lena Brandt",
-      "age-hours": 93.7
+      "age-hours": 93.7,
+      "issuer-id": "PTY00016",
+      "issuer-name": "UK Treasury 4.25"
     },
     {
       "exception-id": "EXC000110",
@@ -1323,7 +1541,9 @@
       "exception-status": "IN_PROGRESS",
       "detected-at": "2026-08-02T00:01:00Z",
       "assigned-to": null,
-      "age-hours": 65.0
+      "age-hours": 65.0,
+      "issuer-id": "PTY00016",
+      "issuer-name": "UK Treasury 4.25"
     },
     {
       "exception-id": "EXC000111",
@@ -1335,7 +1555,9 @@
       "exception-status": "RESOLVED",
       "detected-at": "2026-07-22T15:18:00Z",
       "assigned-to": "Priya Nair",
-      "age-hours": 313.7
+      "age-hours": 313.7,
+      "issuer-id": "PTY00018",
+      "issuer-name": "Vodafone Group PLC"
     },
     {
       "exception-id": "EXC000112",
@@ -1347,7 +1569,9 @@
       "exception-status": "SUPPRESSED",
       "detected-at": "2026-07-29T12:41:00Z",
       "assigned-to": null,
-      "age-hours": 148.3
+      "age-hours": 148.3,
+      "issuer-id": "PTY00004",
+      "issuer-name": "Bund 2.6"
     },
     {
       "exception-id": "EXC000113",
@@ -1359,7 +1583,9 @@
       "exception-status": "RESOLVED",
       "detected-at": "2026-07-31T06:03:00Z",
       "assigned-to": null,
-      "age-hours": 107.0
+      "age-hours": 107.0,
+      "issuer-id": "PTY00005",
+      "issuer-name": "EUR/USD"
     },
     {
       "exception-id": "EXC000114",
@@ -1371,7 +1597,9 @@
       "exception-status": "SUPPRESSED",
       "detected-at": "2026-07-22T03:34:00Z",
       "assigned-to": null,
-      "age-hours": 325.4
+      "age-hours": 325.4,
+      "issuer-id": "PTY00018",
+      "issuer-name": "Vodafone Group PLC"
     },
     {
       "exception-id": "EXC000115",
@@ -1383,7 +1611,9 @@
       "exception-status": "OPEN",
       "detected-at": "2026-08-03T11:30:00Z",
       "assigned-to": "Marco Rossi",
-      "age-hours": 29.5
+      "age-hours": 29.5,
+      "issuer-id": "PTY00005",
+      "issuer-name": "EUR/USD"
     },
     {
       "exception-id": "EXC000116",
@@ -1395,7 +1625,9 @@
       "exception-status": "IN_PROGRESS",
       "detected-at": "2026-07-23T20:07:00Z",
       "assigned-to": "Tom Okafor",
-      "age-hours": 284.9
+      "age-hours": 284.9,
+      "issuer-id": "PTY00003",
+      "issuer-name": "Brent Crude Option Nov26"
     },
     {
       "exception-id": "EXC000117",
@@ -1407,7 +1639,9 @@
       "exception-status": "OPEN",
       "detected-at": "2026-08-04T13:54:00Z",
       "assigned-to": "Marco Rossi",
-      "age-hours": 3.1
+      "age-hours": 3.1,
+      "issuer-id": "PTY00012",
+      "issuer-name": "Nestle SA"
     },
     {
       "exception-id": "EXC000118",
@@ -1419,7 +1653,9 @@
       "exception-status": "IN_PROGRESS",
       "detected-at": "2026-07-27T12:23:00Z",
       "assigned-to": "Priya Nair",
-      "age-hours": 196.6
+      "age-hours": 196.6,
+      "issuer-id": "PTY00011",
+      "issuer-name": "HSBC Holdings PLC"
     },
     {
       "exception-id": "EXC000119",
@@ -1431,7 +1667,9 @@
       "exception-status": "OPEN",
       "detected-at": "2026-08-02T01:38:00Z",
       "assigned-to": "Marco Rossi",
-      "age-hours": 63.4
+      "age-hours": 63.4,
+      "issuer-id": "PTY00009",
+      "issuer-name": "FTSE 100"
     },
     {
       "exception-id": "EXC000120",
@@ -1443,7 +1681,9 @@
       "exception-status": "IN_PROGRESS",
       "detected-at": "2026-07-24T02:41:00Z",
       "assigned-to": "Marco Rossi",
-      "age-hours": 278.3
+      "age-hours": 278.3,
+      "issuer-id": "PTY00012",
+      "issuer-name": "Nestle SA"
     },
     {
       "exception-id": "EXC000121",
@@ -1455,7 +1695,9 @@
       "exception-status": "RESOLVED",
       "detected-at": "2026-07-26T10:44:00Z",
       "assigned-to": "Tom Okafor",
-      "age-hours": 222.3
+      "age-hours": 222.3,
+      "issuer-id": "PTY00005",
+      "issuer-name": "EUR/USD"
     },
     {
       "exception-id": "EXC000122",
@@ -1467,7 +1709,9 @@
       "exception-status": "RESOLVED",
       "detected-at": "2026-07-22T04:22:00Z",
       "assigned-to": "Marco Rossi",
-      "age-hours": 324.6
+      "age-hours": 324.6,
+      "issuer-id": "PTY00012",
+      "issuer-name": "Nestle SA"
     },
     {
       "exception-id": "EXC000123",
@@ -1479,7 +1723,9 @@
       "exception-status": "RESOLVED",
       "detected-at": "2026-08-01T05:07:00Z",
       "assigned-to": "Marco Rossi",
-      "age-hours": 83.9
+      "age-hours": 83.9,
+      "issuer-id": "PTY00018",
+      "issuer-name": "Vodafone Group PLC"
     },
     {
       "exception-id": "EXC000124",
@@ -1491,7 +1737,9 @@
       "exception-status": "OPEN",
       "detected-at": "2026-08-02T08:47:00Z",
       "assigned-to": null,
-      "age-hours": 56.2
+      "age-hours": 56.2,
+      "issuer-id": "PTY00002",
+      "issuer-name": "BP Capital 3.8"
     },
     {
       "exception-id": "EXC000125",
@@ -1503,7 +1751,9 @@
       "exception-status": "OPEN",
       "detected-at": "2026-07-26T18:31:00Z",
       "assigned-to": null,
-      "age-hours": 214.5
+      "age-hours": 214.5,
+      "issuer-id": "PTY00006",
+      "issuer-name": "Emerging Markets"
     },
     {
       "exception-id": "EXC000126",
@@ -1515,7 +1765,9 @@
       "exception-status": "RESOLVED",
       "detected-at": "2026-07-23T06:36:00Z",
       "assigned-to": null,
-      "age-hours": 298.4
+      "age-hours": 298.4,
+      "issuer-id": "PTY00006",
+      "issuer-name": "Emerging Markets"
     },
     {
       "exception-id": "EXC000127",
@@ -1527,7 +1779,9 @@
       "exception-status": "IN_PROGRESS",
       "detected-at": "2026-08-03T03:54:00Z",
       "assigned-to": null,
-      "age-hours": 37.1
+      "age-hours": 37.1,
+      "issuer-id": "PTY00013",
+      "issuer-name": "Rio Tinto 4.1"
     },
     {
       "exception-id": "EXC000128",
@@ -1539,7 +1793,9 @@
       "exception-status": "SUPPRESSED",
       "detected-at": "2026-07-23T05:46:00Z",
       "assigned-to": "Priya Nair",
-      "age-hours": 299.2
+      "age-hours": 299.2,
+      "issuer-id": "PTY00014",
+      "issuer-name": "Siemens AG"
     },
     {
       "exception-id": "EXC000129",
@@ -1551,7 +1807,9 @@
       "exception-status": "OPEN",
       "detected-at": "2026-07-22T19:33:00Z",
       "assigned-to": null,
-      "age-hours": 309.4
+      "age-hours": 309.4,
+      "issuer-id": "PTY00016",
+      "issuer-name": "UK Treasury 4.25"
     },
     {
       "exception-id": "EXC000130",
@@ -1563,7 +1821,9 @@
       "exception-status": "RESOLVED",
       "detected-at": "2026-07-28T02:44:00Z",
       "assigned-to": "Marco Rossi",
-      "age-hours": 182.3
+      "age-hours": 182.3,
+      "issuer-id": "PTY00014",
+      "issuer-name": "Siemens AG"
     },
     {
       "exception-id": "EXC000131",
@@ -1575,7 +1835,9 @@
       "exception-status": "SUPPRESSED",
       "detected-at": "2026-07-26T11:54:00Z",
       "assigned-to": "Marco Rossi",
-      "age-hours": 221.1
+      "age-hours": 221.1,
+      "issuer-id": "PTY00002",
+      "issuer-name": "BP Capital 3.8"
     },
     {
       "exception-id": "EXC000132",
@@ -1587,7 +1849,9 @@
       "exception-status": "OPEN",
       "detected-at": "2026-08-04T03:09:00Z",
       "assigned-to": "Tom Okafor",
-      "age-hours": 13.8
+      "age-hours": 13.8,
+      "issuer-id": "PTY00016",
+      "issuer-name": "UK Treasury 4.25"
     },
     {
       "exception-id": "EXC000133",
@@ -1599,7 +1863,9 @@
       "exception-status": "SUPPRESSED",
       "detected-at": "2026-07-31T14:29:00Z",
       "assigned-to": "Tom Okafor",
-      "age-hours": 98.5
+      "age-hours": 98.5,
+      "issuer-id": "PTY00018",
+      "issuer-name": "Vodafone Group PLC"
     },
     {
       "exception-id": "EXC000134",
@@ -1611,7 +1877,9 @@
       "exception-status": "IN_PROGRESS",
       "detected-at": "2026-08-02T03:28:00Z",
       "assigned-to": "Tom Okafor",
-      "age-hours": 61.5
+      "age-hours": 61.5,
+      "issuer-id": "PTY00009",
+      "issuer-name": "FTSE 100"
     },
     {
       "exception-id": "EXC000135",
@@ -1623,7 +1891,9 @@
       "exception-status": "IN_PROGRESS",
       "detected-at": "2026-07-22T14:03:00Z",
       "assigned-to": "Lena Brandt",
-      "age-hours": 314.9
+      "age-hours": 314.9,
+      "issuer-id": "PTY00001",
+      "issuer-name": "Apple Inc"
     },
     {
       "exception-id": "EXC000136",
@@ -1635,7 +1905,9 @@
       "exception-status": "IN_PROGRESS",
       "detected-at": "2026-07-31T18:02:00Z",
       "assigned-to": "Priya Nair",
-      "age-hours": 95.0
+      "age-hours": 95.0,
+      "issuer-id": "PTY00003",
+      "issuer-name": "Brent Crude Option Nov26"
     },
     {
       "exception-id": "EXC000137",
@@ -1647,7 +1919,9 @@
       "exception-status": "RESOLVED",
       "detected-at": "2026-07-29T15:49:00Z",
       "assigned-to": "Lena Brandt",
-      "age-hours": 145.2
+      "age-hours": 145.2,
+      "issuer-id": "PTY00001",
+      "issuer-name": "Apple Inc"
     },
     {
       "exception-id": "EXC000138",
@@ -1659,7 +1933,9 @@
       "exception-status": "OPEN",
       "detected-at": "2026-07-27T15:29:00Z",
       "assigned-to": "Marco Rossi",
-      "age-hours": 193.5
+      "age-hours": 193.5,
+      "issuer-id": "PTY00007",
+      "issuer-name": "Enel SpA 3.375"
     },
     {
       "exception-id": "EXC000139",
@@ -1671,7 +1947,9 @@
       "exception-status": "RESOLVED",
       "detected-at": "2026-08-01T03:03:00Z",
       "assigned-to": null,
-      "age-hours": 86.0
+      "age-hours": 86.0,
+      "issuer-id": "PTY00018",
+      "issuer-name": "Vodafone Group PLC"
     },
     {
       "exception-id": "EXC000140",
@@ -1683,7 +1961,9 @@
       "exception-status": "OPEN",
       "detected-at": "2026-07-28T18:25:00Z",
       "assigned-to": "Lena Brandt",
-      "age-hours": 166.6
+      "age-hours": 166.6,
+      "issuer-id": "PTY00003",
+      "issuer-name": "Brent Crude Option Nov26"
     },
     {
       "exception-id": "EXC000141",
@@ -1695,7 +1975,9 @@
       "exception-status": "RESOLVED",
       "detected-at": "2026-07-29T20:19:00Z",
       "assigned-to": null,
-      "age-hours": 140.7
+      "age-hours": 140.7,
+      "issuer-id": "PTY00010",
+      "issuer-name": "Global Equity Income"
     },
     {
       "exception-id": "EXC000142",
@@ -1707,7 +1989,9 @@
       "exception-status": "RESOLVED",
       "detected-at": "2026-07-27T13:03:00Z",
       "assigned-to": null,
-      "age-hours": 195.9
+      "age-hours": 195.9,
+      "issuer-id": "PTY00011",
+      "issuer-name": "HSBC Holdings PLC"
     },
     {
       "exception-id": "EXC000143",
@@ -1719,7 +2003,9 @@
       "exception-status": "RESOLVED",
       "detected-at": "2026-07-30T19:03:00Z",
       "assigned-to": "Marco Rossi",
-      "age-hours": 118.0
+      "age-hours": 118.0,
+      "issuer-id": "PTY00012",
+      "issuer-name": "Nestle SA"
     },
     {
       "exception-id": "EXC000144",
@@ -1731,7 +2017,9 @@
       "exception-status": "IN_PROGRESS",
       "detected-at": "2026-08-03T09:18:00Z",
       "assigned-to": "Marco Rossi",
-      "age-hours": 31.7
+      "age-hours": 31.7,
+      "issuer-id": "PTY00011",
+      "issuer-name": "HSBC Holdings PLC"
     },
     {
       "exception-id": "EXC000145",
@@ -1743,7 +2031,9 @@
       "exception-status": "RESOLVED",
       "detected-at": "2026-07-31T20:48:00Z",
       "assigned-to": null,
-      "age-hours": 92.2
+      "age-hours": 92.2,
+      "issuer-id": "PTY00007",
+      "issuer-name": "Enel SpA 3.375"
     },
     {
       "exception-id": "EXC000146",
@@ -1755,7 +2045,9 @@
       "exception-status": "OPEN",
       "detected-at": "2026-07-31T15:31:00Z",
       "assigned-to": "Marco Rossi",
-      "age-hours": 97.5
+      "age-hours": 97.5,
+      "issuer-id": "PTY00015",
+      "issuer-name": "Toyota Motor Corp"
     },
     {
       "exception-id": "EXC000147",
@@ -1767,7 +2059,9 @@
       "exception-status": "IN_PROGRESS",
       "detected-at": "2026-08-04T16:03:00Z",
       "assigned-to": "Marco Rossi",
-      "age-hours": 0.9
+      "age-hours": 0.9,
+      "issuer-id": "PTY00013",
+      "issuer-name": "Rio Tinto 4.1"
     },
     {
       "exception-id": "EXC000148",
@@ -1779,7 +2073,9 @@
       "exception-status": "RESOLVED",
       "detected-at": "2026-07-23T04:26:00Z",
       "assigned-to": "Marco Rossi",
-      "age-hours": 300.6
+      "age-hours": 300.6,
+      "issuer-id": "PTY00016",
+      "issuer-name": "UK Treasury 4.25"
     },
     {
       "exception-id": "EXC000149",
@@ -1791,7 +2087,9 @@
       "exception-status": "RESOLVED",
       "detected-at": "2026-07-28T13:29:00Z",
       "assigned-to": null,
-      "age-hours": 171.5
+      "age-hours": 171.5,
+      "issuer-id": "PTY00017",
+      "issuer-name": "US Treasury 4.0"
     },
     {
       "exception-id": "EXC000150",
@@ -1803,7 +2101,9 @@
       "exception-status": "SUPPRESSED",
       "detected-at": "2026-07-24T03:00:00Z",
       "assigned-to": null,
-      "age-hours": 278.0
+      "age-hours": 278.0,
+      "issuer-id": "PTY00007",
+      "issuer-name": "Enel SpA 3.375"
     },
     {
       "exception-id": "EXC000151",
@@ -1815,7 +2115,9 @@
       "exception-status": "OPEN",
       "detected-at": "2026-08-04T05:25:00Z",
       "assigned-to": "Priya Nair",
-      "age-hours": 11.6
+      "age-hours": 11.6,
+      "issuer-id": "PTY00003",
+      "issuer-name": "Brent Crude Option Nov26"
     },
     {
       "exception-id": "EXC000152",
@@ -1827,7 +2129,9 @@
       "exception-status": "IN_PROGRESS",
       "detected-at": "2026-07-30T14:57:00Z",
       "assigned-to": null,
-      "age-hours": 122.0
+      "age-hours": 122.0,
+      "issuer-id": "PTY00011",
+      "issuer-name": "HSBC Holdings PLC"
     },
     {
       "exception-id": "EXC000153",
@@ -1839,7 +2143,9 @@
       "exception-status": "RESOLVED",
       "detected-at": "2026-07-27T00:42:00Z",
       "assigned-to": "Tom Okafor",
-      "age-hours": 208.3
+      "age-hours": 208.3,
+      "issuer-id": "PTY00018",
+      "issuer-name": "Vodafone Group PLC"
     },
     {
       "exception-id": "EXC000154",
@@ -1851,7 +2157,9 @@
       "exception-status": "OPEN",
       "detected-at": "2026-07-29T16:31:00Z",
       "assigned-to": null,
-      "age-hours": 144.5
+      "age-hours": 144.5,
+      "issuer-id": "PTY00010",
+      "issuer-name": "Global Equity Income"
     },
     {
       "exception-id": "EXC000155",
@@ -1863,7 +2171,9 @@
       "exception-status": "RESOLVED",
       "detected-at": "2026-07-31T08:40:00Z",
       "assigned-to": "Tom Okafor",
-      "age-hours": 104.3
+      "age-hours": 104.3,
+      "issuer-id": "PTY00007",
+      "issuer-name": "Enel SpA 3.375"
     },
     {
       "exception-id": "EXC000156",
@@ -1875,7 +2185,9 @@
       "exception-status": "SUPPRESSED",
       "detected-at": "2026-07-31T15:35:00Z",
       "assigned-to": "Priya Nair",
-      "age-hours": 97.4
+      "age-hours": 97.4,
+      "issuer-id": "PTY00013",
+      "issuer-name": "Rio Tinto 4.1"
     },
     {
       "exception-id": "EXC000157",
@@ -1887,7 +2199,9 @@
       "exception-status": "OPEN",
       "detected-at": "2026-07-24T03:20:00Z",
       "assigned-to": null,
-      "age-hours": 277.7
+      "age-hours": 277.7,
+      "issuer-id": "PTY00010",
+      "issuer-name": "Global Equity Income"
     },
     {
       "exception-id": "EXC000158",
@@ -1899,7 +2213,9 @@
       "exception-status": "OPEN",
       "detected-at": "2026-08-03T02:05:00Z",
       "assigned-to": "Marco Rossi",
-      "age-hours": 38.9
+      "age-hours": 38.9,
+      "issuer-id": "PTY00016",
+      "issuer-name": "UK Treasury 4.25"
     },
     {
       "exception-id": "EXC000159",
@@ -1911,7 +2227,9 @@
       "exception-status": "OPEN",
       "detected-at": "2026-08-04T08:42:00Z",
       "assigned-to": "Marco Rossi",
-      "age-hours": 8.3
+      "age-hours": 8.3,
+      "issuer-id": "PTY00018",
+      "issuer-name": "Vodafone Group PLC"
     },
     {
       "exception-id": "EXC000160",
@@ -1923,7 +2241,9 @@
       "exception-status": "SUPPRESSED",
       "detected-at": "2026-07-29T14:07:00Z",
       "assigned-to": "Marco Rossi",
-      "age-hours": 146.9
+      "age-hours": 146.9,
+      "issuer-id": "PTY00011",
+      "issuer-name": "HSBC Holdings PLC"
     },
     {
       "exception-id": "EXC000161",
@@ -1935,7 +2255,9 @@
       "exception-status": "IN_PROGRESS",
       "detected-at": "2026-07-27T19:19:00Z",
       "assigned-to": null,
-      "age-hours": 189.7
+      "age-hours": 189.7,
+      "issuer-id": "PTY00001",
+      "issuer-name": "Apple Inc"
     },
     {
       "exception-id": "EXC000162",
@@ -1947,7 +2269,9 @@
       "exception-status": "IN_PROGRESS",
       "detected-at": "2026-07-23T23:11:00Z",
       "assigned-to": "Lena Brandt",
-      "age-hours": 281.8
+      "age-hours": 281.8,
+      "issuer-id": "PTY00017",
+      "issuer-name": "US Treasury 4.0"
     },
     {
       "exception-id": "EXC000163",
@@ -1959,7 +2283,9 @@
       "exception-status": "RESOLVED",
       "detected-at": "2026-08-01T05:58:00Z",
       "assigned-to": "Tom Okafor",
-      "age-hours": 83.0
+      "age-hours": 83.0,
+      "issuer-id": "PTY00015",
+      "issuer-name": "Toyota Motor Corp"
     },
     {
       "exception-id": "EXC000164",
@@ -1971,7 +2297,9 @@
       "exception-status": "RESOLVED",
       "detected-at": "2026-07-27T00:58:00Z",
       "assigned-to": "Marco Rossi",
-      "age-hours": 208.0
+      "age-hours": 208.0,
+      "issuer-id": "PTY00002",
+      "issuer-name": "BP Capital 3.8"
     }
   ]
 }

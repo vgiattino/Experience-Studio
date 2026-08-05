@@ -15,6 +15,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  effect,
   forwardRef,
   inject,
   input,
@@ -469,11 +470,127 @@ export class LayoutNodeComponent {
 
   // ── tabs ──────────────────────────────────────────────────────────────────
 
+  /**
+   * The tab list: declared tabs, then tabs generated from a data source.
+   *
+   * DATA-DRIVEN TABS ARE THE CAPABILITY DETAIL PAGES ARE BUILT ON — one tab per contributing
+   * vendor on a security, one per role a party plays — and the compiler already retained the
+   * template for them; only the generation step was missing (docs/M1-IMPLEMENTATION.md §6).
+   *
+   * The generated tabs SHARE ONE COMPILED TEMPLATE, which is why a page with twelve vendor tabs
+   * costs one template and not twelve: only the active tab's content is instantiated, and the tab
+   * identity travels through `selectedTabChannel` into the template's own data sources. That is
+   * also what makes the per-tab query cost exactly one tab's worth.
+   */
   protected readonly visibleTabs = computed<readonly CompiledTab[]>(() => {
-    const tabs = this.container()?.tabs ?? [];
+    const container = this.container();
     const scope = this.context.scope();
-    return tabs.filter((tab) => !tab.visible || tab.visible.test(scope));
+    const declared = (container?.tabs ?? []).filter((tab) => !tab.visible || tab.visible.test(scope));
+
+    const spec = container?.spec;
+    if (!spec || spec.type !== 'tabs' || spec.source.mode !== 'static') {
+      const generated = this.generatedTabs();
+      // Pinned tabs come first: an "Overview" tab preceding one tab per related item is the
+      // shape the schema was designed around.
+      return [...declared, ...generated];
+    }
+    return declared;
   });
+
+  /** Tabs derived from the rows of the declared source. */
+  private readonly generatedTabs = computed<readonly CompiledTab[]>(() => {
+    const container = this.container();
+    const spec = container?.spec;
+    if (!spec || spec.type !== 'tabs' || spec.source.mode !== 'dataDriven') return [];
+
+    const source = spec.source;
+    const template = container?.template ?? [];
+    const rows = this.context.rowsFor(source.source);
+    if (!rows.length) return [];
+
+    const ordered = source.orderField
+      ? [...rows].sort((a, b) => compareForOrder(a[source.orderField!], b[source.orderField!]))
+      : rows;
+
+    const max = source.maxTabs ?? 12;
+    const tabs: CompiledTab[] = [];
+    const seen = new Set<string>();
+
+    for (const row of ordered) {
+      const raw = row[source.idField];
+      if (raw === null || raw === undefined) continue;
+      const id = String(raw);
+      // A duplicate id would produce two tabs that cannot be told apart, and the active-tab
+      // lookup would resolve to whichever came first.
+      if (seen.has(id)) continue;
+      seen.add(id);
+
+      const label = row[source.labelField];
+      tabs.push({
+        id,
+        label: label === null || label === undefined ? id : String(label),
+        icon: source.iconField ? asOptionalString(row[source.iconField]) : undefined,
+        // Deep links use the row's own id, so a link to a vendor tab keeps working.
+        deepLinkId: id,
+        badge: source.badgeField ? { $expr: literalOf(row[source.badgeField]) } : undefined,
+        visible: undefined,
+        content: template,
+      });
+      if (tabs.length >= max) break;
+    }
+    return tabs;
+  });
+
+  /**
+   * Whether a data-driven container found nothing to show.
+   *
+   * Reported rather than rendered as an empty tab strip: a detail page whose "related parties"
+   * region silently vanishes reads as a broken page, while `hideContainer` is a legitimate
+   * authored choice for a region that is genuinely optional.
+   */
+  protected readonly dataDrivenEmpty = computed(() => {
+    const spec = this.container()?.spec;
+    if (!spec || spec.type !== 'tabs' || spec.source.mode !== 'dataDriven') return null;
+    if (this.visibleTabs().length) return null;
+    return spec.source.emptyBehaviour === 'hideContainer' ? 'hide' : 'show';
+  });
+
+  constructor() {
+    /**
+     * Keep the resolved active tab's data loaded, however it came to be active.
+     *
+     * `activeTabId` resolves from three places — a click, a deep-linked filter channel, or the
+     * fallback to the first tab — and only the first of those ran any activation. The effect
+     * covers all three, and matters most for data-driven tabs, whose ids do not exist until the
+     * source that generates them has returned.
+     */
+    effect(() => {
+      const tabId = this.activeTabId();
+      if (!tabId) return;
+      this.publishActiveTab(tabId);
+      this.activateTabSources(tabId);
+    });
+  }
+
+  /**
+   * Push the resolved active tab into its declared channel.
+   *
+   * `activeTabId` falls back to the first tab, and until this ran nothing wrote that fallback
+   * anywhere: the strip highlighted "FUND" while the channel was empty, so the tab template's own
+   * data source — filtered by the channel — returned every asset class. The label said one thing
+   * and the rows another, and a click on any other tab appeared to fix it.
+   *
+   * The write converges rather than looping: `activeTabId` reads the channel back, resolves to the
+   * same id, and the guard below stops the second write.
+   */
+  private publishActiveTab(tabId: string): void {
+    const spec = this.container()?.spec;
+    const channel = spec && spec.type === 'tabs' ? spec.selectedTabChannel : undefined;
+    if (!channel) return;
+    const current = this.context.filters()[channel];
+    if (current !== null && current !== undefined && String(current) === tabId) return;
+    this.context.setFilter(channel, tabId);
+  }
 
   protected readonly activeTabId = computed(() => {
     const tabs = this.visibleTabs();
@@ -494,30 +611,39 @@ export class LayoutNodeComponent {
     const channel = spec && spec.type === 'tabs' ? spec.selectedTabChannel : undefined;
     if (channel) this.context.setFilter(channel, tabId);
     this.context.setActiveTab(this.node().id, tabId);
+    this.activateTabSources(tabId);
+  }
 
-    // Activating a tab activates its deferred sources — this is why a page with
-    // eight tabs does not issue eight queries to show one.
+  /**
+   * Activate the deferred sources of a tab's content.
+   *
+   * Deferring is why a page with eight tabs does not issue eight queries to show one — but the
+   * FIRST tab needs activating too, and nothing clicked it. `activeTabId` falls back to the first
+   * tab, so without this the opening tab's content sat in `loading` until the user clicked away
+   * and back. Data-driven tabs made it obvious, because there the first tab is the only one most
+   * users ever look at.
+   */
+  private activateTabSources(tabId: string): void {
     const tab = this.visibleTabs().find((t) => t.id === tabId);
-    if (tab) {
-      const sources = new Set<Identifier>();
-      const collect = (node: CompiledNode) => {
-        if (node.kind === 'widget') {
-          for (const s of this.page().widgetSources[node.componentId] ?? []) sources.add(s);
-          return;
-        }
-        if (node.kind === 'spacer') return;
-        const c = node.container;
-        [
-          ...c.children,
-          ...(c.primary ?? []),
-          ...(c.secondary ?? []),
-          ...(c.template ?? []),
-          ...(c.tabs ?? []).flatMap((t) => t.content),
-        ].forEach(collect);
-      };
-      tab.content.forEach(collect);
-      void this.orchestrator.activateSources([...sources]);
-    }
+    if (!tab) return;
+    const sources = new Set<Identifier>();
+    const collect = (node: CompiledNode) => {
+      if (node.kind === 'widget') {
+        for (const s of this.page().widgetSources[node.componentId] ?? []) sources.add(s);
+        return;
+      }
+      if (node.kind === 'spacer') return;
+      const c = node.container;
+      [
+        ...c.children,
+        ...(c.primary ?? []),
+        ...(c.secondary ?? []),
+        ...(c.template ?? []),
+        ...(c.tabs ?? []).flatMap((t) => t.content),
+      ].forEach(collect);
+    };
+    tab.content.forEach(collect);
+    void this.orchestrator.activateSources([...sources]);
   }
 
   /** Roving tabindex with arrow-key navigation, per the WAI-ARIA tabs pattern. */
@@ -591,4 +717,29 @@ export class LayoutNodeComponent {
   protected dispatch(actionId: Identifier): void {
     void this.dispatcher.dispatch(actionId);
   }
+}
+
+/** Sort key comparison for `orderField`: numeric when both sides are numbers, else lexical. */
+function compareForOrder(a: unknown, b: unknown): number {
+  const na = Number(a);
+  const nb = Number(b);
+  if (Number.isFinite(na) && Number.isFinite(nb)) return na - nb;
+  return String(a ?? '').localeCompare(String(b ?? ''));
+}
+
+function asOptionalString(value: unknown): string | undefined {
+  return value === null || value === undefined ? undefined : String(value);
+}
+
+/**
+ * A row value rendered as a badge, expressed as an expression literal.
+ *
+ * `badge` is a ComputableValue on the tab, and the value here is already resolved from the row —
+ * so it is wrapped as a literal rather than re-derived. Strings are quoted; anything else would
+ * be parsed as an identifier and evaluate to null.
+ */
+function literalOf(value: unknown): string {
+  if (value === null || value === undefined) return 'null';
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  return JSON.stringify(String(value));
 }

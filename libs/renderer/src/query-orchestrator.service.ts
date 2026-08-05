@@ -13,7 +13,7 @@
  *    is to re-query everything.
  */
 
-import { Injectable, computed, inject, signal } from '@angular/core';
+import { Injectable, computed, effect, inject, signal, untracked } from '@angular/core';
 import { GatewayService } from '@opus/data-client';
 import { TelemetryService } from '@opus/platform';
 import {
@@ -54,6 +54,29 @@ export class QueryOrchestratorService {
   readonly busy = computed(() =>
     Object.values(this.states()).some((s) => s.phase === 'loading'),
   );
+
+  constructor() {
+    /**
+     * A page-state change re-queries whatever depends on it, WHOEVER MADE THE CHANGE.
+     *
+     * The action dispatcher used to be the only caller of `applyChange`, which quietly made
+     * "re-query on change" a property of the dispatcher rather than of the state. It held while the
+     * dispatcher was the only writer — but the renderer writes page state too, for chrome it owns:
+     * selecting a tab writes the container's `selectedTabChannel`. A tab whose content is filtered
+     * by that channel then switched its label and kept its old rows, which is worse than not
+     * supporting the feature.
+     *
+     * Reacting to the change signal instead makes the invariant structural. `applyChange` already
+     * dedupes on the change object's identity, so the dispatcher's direct calls remain correct and
+     * only one of the two paths does the work.
+     */
+    effect(() => {
+      const change = this.context.lastChange();
+      // `untracked`: applyChange reads source states, and tracking those would re-run this effect
+      // on every query settling — the change signal is the only dependency that should wake it.
+      if (change) untracked(() => void this.applyChange());
+    });
+  }
 
   attach(page: CompiledPage): void {
     this.page = page;

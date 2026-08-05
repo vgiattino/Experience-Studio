@@ -27,6 +27,10 @@ import type { PageDefinition, UserContext } from '@opus/contracts';
 import catalogJson from '../../../apps/viewer/public/catalog/securities.catalog.json';
 import securityMasterOperations from '../../../apps/viewer/public/definitions/security-master-operations.page.json';
 import processingDetail from '../../../apps/viewer/public/definitions/processing-detail.page.json';
+import securityMasterDashboard from '../../../apps/viewer/public/definitions/security-master-dashboard.page.json';
+import securityOverview from '../../../apps/viewer/public/definitions/security-overview.page.json';
+import partyOverview from '../../../apps/viewer/public/definitions/party-overview.page.json';
+import exceptionManagement from '../../../apps/viewer/public/definitions/exception-management.page.json';
 import { validatePage } from './validate-page';
 
 /** Every entitlement the fixtures define, so the check is about correctness and not access. */
@@ -50,6 +54,13 @@ const FULLY_ENTITLED: UserContext = {
 const PAGES: Record<string, unknown> = {
   'security-master-operations': securityMasterOperations,
   'processing-detail': processingDetail,
+  // The four EDM business templates. They bind far more of the catalog than the M1 references —
+  // five entities, twenty-odd measures and every filter channel a real page needs — so level 3
+  // over them is the check that the catalog and the templates were designed against each other.
+  'security-master-dashboard': securityMasterDashboard,
+  'security-overview': securityOverview,
+  'party-overview': partyOverview,
+  'exception-management': exceptionManagement,
 };
 
 describe('shipped definitions against the shipped catalog', () => {

@@ -1,0 +1,1375 @@
+{
+  "schemaVersion": "1.0",
+  "id": "security-overview",
+  "name": "Security Overview",
+  "description": "One instrument: its golden record, the vendors that contributed to it, and its open data quality exceptions.",
+  "kind": "detail",
+  "tags": [
+    "template",
+    "securities",
+    "golden-copy",
+    "edm"
+  ],
+  "parameters": {
+    "security-id": {
+      "label": "Security",
+      "dataType": "identifier",
+      "scope": "page",
+      "required": true,
+      "syncToUrl": true,
+      "boundToAttribute": "securities.security.security-id",
+      "description": "The instrument this page is about. Supplied by the drill-down that opened it."
+    },
+    "as-of": {
+      "label": "As Of",
+      "dataType": "date",
+      "scope": "experience",
+      "syncToUrl": true,
+      "default": {
+        "$expr": "today()"
+      }
+    }
+  },
+  "filters": {
+    "field-query": {
+      "label": "Search fields",
+      "dataType": "string",
+      "boundToAttribute": "securities.source-value.field-label",
+      "syncToUrl": true,
+      "clearable": true,
+      "description": "Free-text search over the mastered field names."
+    },
+    "match-status": {
+      "label": "Agreement",
+      "dataType": "enum",
+      "multiValued": true,
+      "boundToAttribute": "securities.source-value.match-status",
+      "syncToUrl": true,
+      "clearable": true
+    },
+    "active-source": {
+      "label": "Active Source",
+      "dataType": "string",
+      "boundToAttribute": "securities.source-value.source-system",
+      "syncToUrl": true,
+      "clearable": false,
+      "description": "Holds the active vendor tab. The comparison table reads it, which is how one table definition serves every generated tab."
+    }
+  },
+  "selections": {
+    "focused-field": {
+      "label": "Focused Field",
+      "mode": "single",
+      "entity": "securities.source-value",
+      "keyFields": [
+        "source-value-id"
+      ]
+    }
+  },
+  "dataSources": {
+    "security-header": {
+      "id": "security-header",
+      "name": "Security",
+      "entity": "securities.security",
+      "kind": "single",
+      "select": {
+        "key": {
+          "security-id": {
+            "$param": "security-id"
+          }
+        },
+        "attributes": [
+          {
+            "attribute": "name",
+            "alias": "name"
+          },
+          {
+            "attribute": "isin",
+            "alias": "isin"
+          },
+          {
+            "attribute": "sedol",
+            "alias": "sedol"
+          },
+          {
+            "attribute": "asset-class",
+            "alias": "asset-class"
+          },
+          {
+            "attribute": "currency",
+            "alias": "currency"
+          },
+          {
+            "attribute": "status",
+            "alias": "status"
+          },
+          {
+            "attribute": "review-status",
+            "alias": "review-status"
+          },
+          {
+            "attribute": "issuer-name",
+            "alias": "issuer-name"
+          },
+          {
+            "attribute": "issuer-id",
+            "alias": "issuer-id"
+          },
+          {
+            "attribute": "sector",
+            "alias": "sector"
+          },
+          {
+            "attribute": "country-of-risk",
+            "alias": "country-of-risk"
+          },
+          {
+            "attribute": "created-at",
+            "alias": "created-at"
+          }
+        ]
+      },
+      "filter": {
+        "all": [
+          {
+            "target": "security-id",
+            "operator": "eq",
+            "value": {
+              "$param": "security-id"
+            },
+            "skipWhenEmpty": false
+          }
+        ]
+      },
+      "loadPolicy": "eager",
+      "cacheTtlHintSeconds": 300
+    },
+    "contribution-count": {
+      "id": "contribution-count",
+      "name": "Contributions",
+      "entity": "securities.source-value",
+      "kind": "aggregate",
+      "select": {
+        "measures": [
+          {
+            "measure": "source-value-count",
+            "aggregation": "count",
+            "alias": "contributions"
+          }
+        ]
+      },
+      "filter": {
+        "all": [
+          {
+            "target": "security-id",
+            "operator": "eq",
+            "value": {
+              "$param": "security-id"
+            },
+            "skipWhenEmpty": false
+          }
+        ]
+      },
+      "loadPolicy": "eager",
+      "cacheTtlHintSeconds": 300
+    },
+    "disagreement-count": {
+      "id": "disagreement-count",
+      "name": "Disagreements",
+      "entity": "securities.source-value",
+      "kind": "aggregate",
+      "select": {
+        "measures": [
+          {
+            "measure": "mismatch-count",
+            "aggregation": "count",
+            "alias": "mismatches"
+          }
+        ]
+      },
+      "filter": {
+        "all": [
+          {
+            "target": "security-id",
+            "operator": "eq",
+            "value": {
+              "$param": "security-id"
+            },
+            "skipWhenEmpty": false
+          },
+          {
+            "target": "match-status",
+            "operator": "in",
+            "value": [
+              "MISMATCH"
+            ],
+            "skipWhenEmpty": false
+          }
+        ]
+      },
+      "loadPolicy": "eager",
+      "cacheTtlHintSeconds": 300
+    },
+    "confidence": {
+      "id": "confidence",
+      "name": "Average Confidence",
+      "entity": "securities.source-value",
+      "kind": "aggregate",
+      "select": {
+        "measures": [
+          {
+            "measure": "average-confidence",
+            "aggregation": "avg",
+            "alias": "confidence"
+          }
+        ]
+      },
+      "filter": {
+        "all": [
+          {
+            "target": "security-id",
+            "operator": "eq",
+            "value": {
+              "$param": "security-id"
+            },
+            "skipWhenEmpty": false
+          }
+        ]
+      },
+      "loadPolicy": "eager",
+      "cacheTtlHintSeconds": 300
+    },
+    "security-exceptions-count": {
+      "id": "security-exceptions-count",
+      "name": "Open Exceptions",
+      "entity": "dq.exception",
+      "kind": "aggregate",
+      "select": {
+        "measures": [
+          {
+            "measure": "exception-count",
+            "aggregation": "count",
+            "alias": "open"
+          }
+        ]
+      },
+      "filter": {
+        "all": [
+          {
+            "target": "security-id",
+            "operator": "eq",
+            "value": {
+              "$param": "security-id"
+            },
+            "skipWhenEmpty": false
+          },
+          {
+            "target": "exception-status",
+            "operator": "in",
+            "value": [
+              "OPEN",
+              "IN_PROGRESS"
+            ],
+            "skipWhenEmpty": false
+          }
+        ]
+      },
+      "loadPolicy": "eager",
+      "cacheTtlHintSeconds": 120
+    },
+    "contributing-sources": {
+      "id": "contributing-sources",
+      "name": "Contributing Sources",
+      "entity": "securities.source-value",
+      "kind": "aggregate",
+      "select": {
+        "measures": [
+          {
+            "measure": "mismatch-count",
+            "aggregation": "count",
+            "alias": "disagreements"
+          }
+        ],
+        "dimensions": [
+          {
+            "attribute": "source-system",
+            "alias": "source-system",
+            "label": "Source"
+          }
+        ]
+      },
+      "filter": {
+        "all": [
+          {
+            "target": "security-id",
+            "operator": "eq",
+            "value": {
+              "$param": "security-id"
+            },
+            "skipWhenEmpty": false
+          },
+          {
+            "target": "match-status",
+            "operator": "in",
+            "value": [
+              "MISMATCH"
+            ],
+            "skipWhenEmpty": false
+          }
+        ]
+      },
+      "sort": [
+        {
+          "field": "source-system",
+          "direction": "asc"
+        }
+      ],
+      "loadPolicy": "eager",
+      "cacheTtlHintSeconds": 300
+    },
+    "source-comparison": {
+      "id": "source-comparison",
+      "name": "Vendor Comparison",
+      "entity": "securities.source-value",
+      "kind": "list",
+      "select": {
+        "attributes": [
+          {
+            "attribute": "field-label",
+            "alias": "field-label",
+            "label": "Field"
+          },
+          {
+            "attribute": "vendor-value",
+            "alias": "vendor-value",
+            "label": "Vendor Value"
+          },
+          {
+            "attribute": "golden-value",
+            "alias": "golden-value",
+            "label": "Golden Value"
+          },
+          {
+            "attribute": "match-status",
+            "alias": "match-status",
+            "label": "Agreement"
+          },
+          {
+            "attribute": "is-golden",
+            "alias": "is-golden",
+            "label": "Won"
+          },
+          {
+            "attribute": "confidence",
+            "alias": "confidence",
+            "label": "Confidence"
+          },
+          {
+            "attribute": "received-at",
+            "alias": "received-at",
+            "label": "Received"
+          },
+          {
+            "attribute": "source-value-id",
+            "alias": "source-value-id"
+          }
+        ]
+      },
+      "filter": {
+        "all": [
+          {
+            "target": "security-id",
+            "operator": "eq",
+            "value": {
+              "$param": "security-id"
+            },
+            "skipWhenEmpty": false
+          },
+          {
+            "target": "source-system",
+            "operator": "eq",
+            "value": {
+              "$filter": "active-source"
+            }
+          },
+          {
+            "target": "field-label",
+            "operator": "contains",
+            "value": {
+              "$filter": "field-query"
+            },
+            "caseSensitive": false
+          },
+          {
+            "target": "match-status",
+            "operator": "in",
+            "value": {
+              "$filter": "match-status"
+            }
+          }
+        ]
+      },
+      "sort": [
+        {
+          "field": "field-label",
+          "direction": "asc"
+        }
+      ],
+      "paging": {
+        "mode": "offset",
+        "pageSize": 50,
+        "maxRows": 500
+      },
+      "loadPolicy": "deferred",
+      "cacheTtlHintSeconds": 120
+    },
+    "golden-record": {
+      "id": "golden-record",
+      "name": "Golden Record",
+      "entity": "securities.source-value",
+      "kind": "list",
+      "select": {
+        "attributes": [
+          {
+            "attribute": "field-label",
+            "alias": "field-label",
+            "label": "Field"
+          },
+          {
+            "attribute": "golden-value",
+            "alias": "golden-value",
+            "label": "Published Value"
+          },
+          {
+            "attribute": "source-system",
+            "alias": "source-system",
+            "label": "Winning Source"
+          },
+          {
+            "attribute": "confidence",
+            "alias": "confidence",
+            "label": "Confidence"
+          },
+          {
+            "attribute": "received-at",
+            "alias": "received-at",
+            "label": "Received"
+          }
+        ]
+      },
+      "filter": {
+        "all": [
+          {
+            "target": "security-id",
+            "operator": "eq",
+            "value": {
+              "$param": "security-id"
+            },
+            "skipWhenEmpty": false
+          },
+          {
+            "target": "is-golden",
+            "operator": "eq",
+            "value": true,
+            "skipWhenEmpty": false
+          }
+        ]
+      },
+      "sort": [
+        {
+          "field": "field-label",
+          "direction": "asc"
+        }
+      ],
+      "paging": {
+        "mode": "offset",
+        "pageSize": 25,
+        "maxRows": 200
+      },
+      "loadPolicy": "eager",
+      "cacheTtlHintSeconds": 300
+    },
+    "security-exceptions": {
+      "id": "security-exceptions",
+      "name": "Exceptions",
+      "entity": "dq.exception",
+      "kind": "list",
+      "select": {
+        "attributes": [
+          {
+            "attribute": "rule-name",
+            "alias": "rule-name",
+            "label": "Rule"
+          },
+          {
+            "attribute": "severity",
+            "alias": "severity",
+            "label": "Severity"
+          },
+          {
+            "attribute": "exception-status",
+            "alias": "exception-status",
+            "label": "Status"
+          },
+          {
+            "attribute": "age-hours",
+            "alias": "age-hours",
+            "label": "Age"
+          },
+          {
+            "attribute": "assigned-to",
+            "alias": "assigned-to",
+            "label": "Assigned To"
+          },
+          {
+            "attribute": "detected-at",
+            "alias": "detected-at",
+            "label": "Detected"
+          },
+          {
+            "attribute": "exception-id",
+            "alias": "exception-id"
+          }
+        ]
+      },
+      "filter": {
+        "all": [
+          {
+            "target": "security-id",
+            "operator": "eq",
+            "value": {
+              "$param": "security-id"
+            },
+            "skipWhenEmpty": false
+          }
+        ]
+      },
+      "sort": [
+        {
+          "field": "age-hours",
+          "direction": "desc"
+        }
+      ],
+      "paging": {
+        "mode": "offset",
+        "pageSize": 25,
+        "maxRows": 500
+      },
+      "loadPolicy": "eager",
+      "cacheTtlHintSeconds": 120
+    }
+  },
+  "components": {
+    "record-heading": {
+      "id": "record-heading",
+      "type": "content.text",
+      "typeVersion": "1.0.0",
+      "dataSource": "security-header",
+      "config": {
+        "variant": "heading",
+        "body": "{name}",
+        "tokens": {
+          "name": {
+            "$expr": "$data.security-header.name ?? 'Security'"
+          }
+        }
+      }
+    },
+    "record-summary": {
+      "id": "record-summary",
+      "type": "content.text",
+      "typeVersion": "1.0.0",
+      "dataSource": "security-header",
+      "config": {
+        "variant": "body",
+        "body": "{assetClass} \u00b7 ISIN {isin} \u00b7 SEDOL {sedol} \u00b7 {currency} \u00b7 issued by {issuer} ({sector}, risk {country}). Review state: {review}.",
+        "tokens": {
+          "assetClass": {
+            "$expr": "$data.security-header.asset-class"
+          },
+          "isin": {
+            "$expr": "$data.security-header.isin"
+          },
+          "sedol": {
+            "$expr": "$data.security-header.sedol ?? 'not supplied'"
+          },
+          "currency": {
+            "$expr": "$data.security-header.currency"
+          },
+          "issuer": {
+            "$expr": "$data.security-header.issuer-name"
+          },
+          "sector": {
+            "$expr": "$data.security-header.sector"
+          },
+          "country": {
+            "$expr": "$data.security-header.country-of-risk"
+          },
+          "review": {
+            "$expr": "$data.security-header.review-status"
+          }
+        }
+      }
+    },
+    "kpi-contributions": {
+      "id": "kpi-contributions",
+      "type": "analytics.kpi-card",
+      "typeVersion": "1.4.0",
+      "title": "Contributions",
+      "dataSource": "contribution-count",
+      "config": {
+        "size": "md",
+        "showThresholdBand": false
+      },
+      "bindings": {
+        "value": {
+          "field": "contributions",
+          "format": {
+            "style": "integer"
+          }
+        }
+      },
+      "description": "Vendor values considered when mastering this instrument."
+    },
+    "kpi-disagreements": {
+      "id": "kpi-disagreements",
+      "type": "analytics.kpi-card",
+      "typeVersion": "1.4.0",
+      "title": "Disagreements",
+      "dataSource": "disagreement-count",
+      "config": {
+        "size": "md",
+        "showThresholdBand": true
+      },
+      "bindings": {
+        "value": {
+          "field": "mismatches",
+          "format": {
+            "style": "integer"
+          }
+        }
+      },
+      "description": "Contributions differing from the published golden value."
+    },
+    "kpi-confidence": {
+      "id": "kpi-confidence",
+      "type": "analytics.kpi-card",
+      "typeVersion": "1.4.0",
+      "title": "Average Confidence",
+      "dataSource": "confidence",
+      "config": {
+        "size": "md",
+        "showThresholdBand": false
+      },
+      "bindings": {
+        "value": {
+          "field": "confidence",
+          "format": {
+            "style": "percent",
+            "decimals": 1
+          }
+        }
+      }
+    },
+    "kpi-open-exceptions": {
+      "id": "kpi-open-exceptions",
+      "type": "analytics.kpi-card",
+      "typeVersion": "1.4.0",
+      "title": "Open Exceptions",
+      "dataSource": "security-exceptions-count",
+      "config": {
+        "size": "md",
+        "showThresholdBand": true
+      },
+      "bindings": {
+        "value": {
+          "field": "open",
+          "format": {
+            "style": "integer"
+          }
+        }
+      },
+      "description": "Unresolved breaks on this instrument."
+    },
+    "field-search": {
+      "id": "field-search",
+      "type": "input.filter-bar",
+      "typeVersion": "1.0.0",
+      "title": "Narrow the comparison",
+      "config": {
+        "searchChannel": "field-query",
+        "searchPlaceholder": "Search mastered fields",
+        "debounceMs": 200,
+        "density": "compact",
+        "facets": [
+          {
+            "channel": "match-status",
+            "label": "Agreement",
+            "multi": true,
+            "options": [
+              {
+                "value": "MATCH",
+                "label": "Matches"
+              },
+              {
+                "value": "MISMATCH",
+                "label": "Disagrees"
+              },
+              {
+                "value": "MISSING",
+                "label": "Not supplied"
+              }
+            ]
+          }
+        ],
+        "showClearAll": true,
+        "summary": "Applies inside every vendor tab, so switching tabs keeps the same question in view."
+      },
+      "eventActions": {
+        "searchChanged": "set-field-query",
+        "facetChanged": "set-match-facet",
+        "cleared": "clear-comparison-filters"
+      },
+      "writesTo": {
+        "filters": [
+          "field-query",
+          "match-status"
+        ]
+      }
+    },
+    "golden-table": {
+      "id": "golden-table",
+      "type": "data.table",
+      "typeVersion": "1.0.0",
+      "title": "Published golden record",
+      "description": "The mastered values currently published, and which source each came from.",
+      "dataSource": "golden-record",
+      "config": {
+        "density": "compact",
+        "maxHeight": "320px",
+        "zebra": true
+      },
+      "bindings": {
+        "columns": [
+          {
+            "field": "field-label",
+            "label": "Field"
+          },
+          {
+            "field": "golden-value",
+            "label": "Published Value"
+          },
+          {
+            "field": "source-system",
+            "label": "Winning Source"
+          },
+          {
+            "field": "confidence",
+            "label": "Confidence",
+            "format": {
+              "style": "percent",
+              "decimals": 1
+            }
+          },
+          {
+            "field": "received-at",
+            "label": "Received",
+            "format": {
+              "style": "datetime"
+            }
+          }
+        ]
+      },
+      "stateOverrides": {
+        "empty": {
+          "title": "No mastered values",
+          "message": "No source has contributed a winning value for this instrument yet."
+        }
+      }
+    },
+    "comparison-table": {
+      "id": "comparison-table",
+      "type": "data.table",
+      "typeVersion": "1.0.0",
+      "title": "Vendor values against the golden copy",
+      "description": "One definition, rendered inside whichever vendor tab is active.",
+      "dataSource": "source-comparison",
+      "config": {
+        "density": "compact",
+        "maxHeight": "420px",
+        "zebra": true,
+        "selectionMode": "single"
+      },
+      "bindings": {
+        "columns": [
+          {
+            "field": "field-label",
+            "label": "Field"
+          },
+          {
+            "field": "vendor-value",
+            "label": "Vendor Value",
+            "emptyValue": "not supplied"
+          },
+          {
+            "field": "golden-value",
+            "label": "Golden Value"
+          },
+          {
+            "field": "match-status",
+            "label": "Agreement"
+          },
+          {
+            "field": "is-golden",
+            "label": "Won",
+            "align": "center"
+          },
+          {
+            "field": "confidence",
+            "label": "Confidence",
+            "format": {
+              "style": "percent",
+              "decimals": 1
+            },
+            "align": "end"
+          },
+          {
+            "field": "received-at",
+            "label": "Received",
+            "format": {
+              "style": "datetime"
+            }
+          },
+          {
+            "field": "source-value-id",
+            "hidden": true
+          }
+        ]
+      },
+      "eventActions": {
+        "selectionChanged": "set-focused-field"
+      },
+      "stateOverrides": {
+        "empty": {
+          "title": "Nothing from this source",
+          "message": "This vendor supplied no field matching the current search."
+        }
+      }
+    },
+    "exceptions-table": {
+      "id": "exceptions-table",
+      "type": "data.table",
+      "typeVersion": "1.0.0",
+      "title": "Data quality exceptions",
+      "dataSource": "security-exceptions",
+      "config": {
+        "density": "compact",
+        "maxHeight": "320px",
+        "zebra": true
+      },
+      "bindings": {
+        "columns": [
+          {
+            "field": "rule-name",
+            "label": "Rule"
+          },
+          {
+            "field": "severity",
+            "label": "Severity"
+          },
+          {
+            "field": "exception-status",
+            "label": "Status"
+          },
+          {
+            "field": "age-hours",
+            "label": "Age",
+            "format": {
+              "style": "duration"
+            },
+            "align": "end"
+          },
+          {
+            "field": "assigned-to",
+            "label": "Assigned To",
+            "emptyValue": "unassigned"
+          },
+          {
+            "field": "detected-at",
+            "label": "Detected",
+            "format": {
+              "style": "datetime"
+            }
+          },
+          {
+            "field": "exception-id",
+            "hidden": true
+          }
+        ]
+      },
+      "eventActions": {
+        "rowActivated": "go-to-exceptions"
+      },
+      "stateOverrides": {
+        "empty": {
+          "title": "No exceptions",
+          "message": "This instrument has no data quality breaks."
+        }
+      }
+    }
+  },
+  "layout": {
+    "kind": "container",
+    "id": "root",
+    "container": {
+      "type": "grid",
+      "columns": 12,
+      "gap": "lg",
+      "children": [
+        {
+          "kind": "widget",
+          "id": "w-record-heading",
+          "component": "record-heading",
+          "placement": {
+            "colStart": 1,
+            "colSpan": 12
+          }
+        },
+        {
+          "kind": "widget",
+          "id": "w-record-summary",
+          "component": "record-summary",
+          "placement": {
+            "colStart": 1,
+            "colSpan": 12
+          }
+        },
+        {
+          "kind": "container",
+          "id": "kpi-row",
+          "placement": {
+            "colStart": 1,
+            "colSpan": 12
+          },
+          "container": {
+            "type": "stack",
+            "direction": "row",
+            "wrap": true,
+            "gap": "md",
+            "directionByBreakpoint": {
+              "xs": "column"
+            },
+            "children": [
+              {
+                "kind": "widget",
+                "id": "w-kpi-contributions",
+                "component": "kpi-contributions",
+                "placement": {
+                  "colSpan": 12,
+                  "breakpoints": {
+                    "sm": {
+                      "colSpan": 6
+                    },
+                    "lg": {
+                      "colSpan": 3
+                    }
+                  }
+                }
+              },
+              {
+                "kind": "widget",
+                "id": "w-kpi-disagreements",
+                "component": "kpi-disagreements",
+                "placement": {
+                  "colSpan": 12,
+                  "breakpoints": {
+                    "sm": {
+                      "colSpan": 6
+                    },
+                    "lg": {
+                      "colSpan": 3
+                    }
+                  }
+                }
+              },
+              {
+                "kind": "widget",
+                "id": "w-kpi-confidence",
+                "component": "kpi-confidence",
+                "placement": {
+                  "colSpan": 12,
+                  "breakpoints": {
+                    "sm": {
+                      "colSpan": 6
+                    },
+                    "lg": {
+                      "colSpan": 3
+                    }
+                  }
+                }
+              },
+              {
+                "kind": "widget",
+                "id": "w-kpi-open-exceptions",
+                "component": "kpi-open-exceptions",
+                "placement": {
+                  "colSpan": 12,
+                  "breakpoints": {
+                    "sm": {
+                      "colSpan": 6
+                    },
+                    "lg": {
+                      "colSpan": 3
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "kind": "container",
+          "id": "golden-panel",
+          "placement": {
+            "colStart": 1,
+            "colSpan": 12,
+            "breakpoints": {
+              "xl": {
+                "colSpan": 5
+              }
+            }
+          },
+          "container": {
+            "type": "panel",
+            "title": "Golden record",
+            "variant": "bordered",
+            "headerActions": [
+              "export-golden",
+              "refresh-page"
+            ],
+            "children": [
+              {
+                "kind": "widget",
+                "id": "w-golden-table",
+                "component": "golden-table",
+                "placement": {
+                  "colStart": 1,
+                  "colSpan": 12
+                }
+              }
+            ]
+          }
+        },
+        {
+          "kind": "container",
+          "id": "sources-panel",
+          "placement": {
+            "colStart": 1,
+            "colSpan": 12,
+            "breakpoints": {
+              "xl": {
+                "colSpan": 7
+              }
+            }
+          },
+          "container": {
+            "type": "panel",
+            "title": "Contributing sources",
+            "variant": "bordered",
+            "subtitle": "One tab per vendor that contributed to this instrument, badged with its disagreement count.",
+            "children": [
+              {
+                "kind": "widget",
+                "id": "w-field-search",
+                "component": "field-search",
+                "placement": {
+                  "colStart": 1,
+                  "colSpan": 12
+                }
+              },
+              {
+                "kind": "container",
+                "id": "source-tabs",
+                "placement": {
+                  "colStart": 1,
+                  "colSpan": 12
+                },
+                "container": {
+                  "type": "tabs",
+                  "variant": "underline",
+                  "overflow": "menu",
+                  "selectedTabChannel": "active-source",
+                  "deferContent": true,
+                  "keepAliveOnSwitch": true,
+                  "source": {
+                    "mode": "dataDriven",
+                    "source": "contributing-sources",
+                    "idField": "source-system",
+                    "labelField": "source-system",
+                    "badgeField": "disagreements",
+                    "orderField": "source-system",
+                    "maxTabs": 10,
+                    "emptyBehaviour": "showEmptyState",
+                    "template": [
+                      {
+                        "kind": "widget",
+                        "id": "t-comparison",
+                        "component": "comparison-table",
+                        "placement": {
+                          "colStart": 1,
+                          "colSpan": 12
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "kind": "container",
+          "id": "exceptions-panel",
+          "placement": {
+            "colStart": 1,
+            "colSpan": 12
+          },
+          "container": {
+            "type": "panel",
+            "title": "Data quality",
+            "variant": "bordered",
+            "headerActions": [
+              "export-exceptions"
+            ],
+            "children": [
+              {
+                "kind": "widget",
+                "id": "w-exceptions-table",
+                "component": "exceptions-table",
+                "placement": {
+                  "colStart": 1,
+                  "colSpan": 12
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "actions": {
+    "set-field-query": {
+      "id": "set-field-query",
+      "kind": "setFilter",
+      "label": "Search fields",
+      "channel": "field-query",
+      "value": {
+        "$context": "$event.value"
+      },
+      "mode": "replace"
+    },
+    "set-match-facet": {
+      "id": "set-match-facet",
+      "kind": "setFilter",
+      "label": "Filter by agreement",
+      "channel": "match-status",
+      "value": {
+        "$context": "$event.value"
+      },
+      "mode": "replace",
+      "enabled": {
+        "$expr": "$event.channel == 'match-status'"
+      }
+    },
+    "set-focused-field": {
+      "id": "set-focused-field",
+      "kind": "setSelection",
+      "channel": "focused-field",
+      "value": {
+        "$context": "$event.source-value-id"
+      }
+    },
+    "clear-comparison-filters": {
+      "id": "clear-comparison-filters",
+      "kind": "clearFilters",
+      "label": "Clear",
+      "channels": [
+        "field-query",
+        "match-status"
+      ]
+    },
+    "refresh-page": {
+      "id": "refresh-page",
+      "kind": "refresh",
+      "label": "Refresh",
+      "icon": "refresh",
+      "bypassCache": true
+    },
+    "drill-to-issuer": {
+      "id": "drill-to-issuer",
+      "kind": "drilldown",
+      "label": "Open issuer",
+      "entity": "parties.party",
+      "key": {
+        "party-id": {
+          "$expr": "$data.security-header.issuer-id"
+        }
+      },
+      "carryContext": true,
+      "openIn": "self",
+      "enabled": {
+        "$expr": "$data.security-header.issuer-id != null"
+      }
+    },
+    "back-to-master": {
+      "id": "back-to-master",
+      "kind": "navigate",
+      "label": "Security master",
+      "target": {
+        "page": "security-master-dashboard"
+      },
+      "carryContext": true
+    },
+    "go-to-exceptions": {
+      "id": "go-to-exceptions",
+      "kind": "navigate",
+      "label": "Exception management",
+      "target": {
+        "page": "exception-management"
+      },
+      "carryContext": true
+    },
+    "export-golden": {
+      "id": "export-golden",
+      "kind": "export",
+      "label": "Export",
+      "icon": "download",
+      "dataSource": "golden-record",
+      "scope": "all",
+      "format": "csv",
+      "includeMetadata": true,
+      "auditProfile": "elevated",
+      "security": {
+        "requiredCapabilities": [
+          "export.data"
+        ]
+      },
+      "confirm": {
+        "message": "Export the golden record for this instrument?",
+        "requiresReason": true
+      }
+    },
+    "export-exceptions": {
+      "id": "export-exceptions",
+      "kind": "export",
+      "label": "Export",
+      "icon": "download",
+      "dataSource": "security-exceptions",
+      "scope": "all",
+      "format": "csv",
+      "includeMetadata": true,
+      "auditProfile": "elevated",
+      "security": {
+        "requiredCapabilities": [
+          "export.data"
+        ]
+      },
+      "confirm": {
+        "message": "Export this instrument\u2019s exceptions?",
+        "requiresReason": true
+      }
+    }
+  },
+  "navigation": {
+    "breadcrumbs": {
+      "mode": "auto"
+    },
+    "pageActions": [
+      "drill-to-issuer",
+      "back-to-master",
+      "go-to-exceptions",
+      "refresh-page"
+    ],
+    "relatedLinks": [
+      {
+        "id": "issuer-link",
+        "label": "Issuer",
+        "action": "drill-to-issuer"
+      },
+      {
+        "id": "exceptions-link",
+        "label": "Exception workbench",
+        "action": "go-to-exceptions"
+      }
+    ]
+  },
+  "security": {
+    "intendedAudience": "Data stewards investigating an instrument.",
+    "requiredCapabilities": [
+      "experience.view"
+    ],
+    "workspaceScope": "tenant",
+    "deniedDataPolicy": "showDeniedState",
+    "sensitivityDeclaration": {
+      "maxSensitivity": "pii",
+      "contributingRefs": [
+        "dq.exception.assigned-to"
+      ],
+      "computedAt": "2026-08-05T12:00:00Z",
+      "computedFromCatalogVersion": 9
+    },
+    "exportPolicy": {
+      "allowed": true,
+      "formats": [
+        "csv"
+      ],
+      "maxRows": 50000,
+      "requiresReason": true,
+      "watermark": true
+    },
+    "auditProfile": "standard"
+  },
+  "presentation": {
+    "themeRef": "opus.default",
+    "density": "comfortable",
+    "maxWidth": "contained",
+    "showPageHeader": true
+  },
+  "performance": {
+    "renderBudgetMs": 2500,
+    "maxEagerDataSources": 8
+  },
+  "version": {
+    "schemaVersion": "1.0",
+    "artifactVersion": 1,
+    "lifecycleState": "published",
+    "immutable": true,
+    "pins": {
+      "catalogVersion": 9,
+      "registryVersion": "1.1.0"
+    },
+    "provenance": {
+      "origin": "human",
+      "actorId": "platform-team@demo-tenant",
+      "createdAt": "2026-08-05T12:00:00Z",
+      "editSummary": {
+        "summary": "Second EDM business template: the golden copy of one instrument beside the vendor contributions it was mastered from, with one data-driven tab per contributing source."
+      }
+    },
+    "validation": {
+      "status": "valid",
+      "stagesPassed": [
+        "structural",
+        "component",
+        "semantic",
+        "binding",
+        "layout"
+      ],
+      "validatedAt": "2026-08-05T12:00:00Z"
+    },
+    "audit": {
+      "createdBy": "platform-team@demo-tenant",
+      "createdAt": "2026-08-05T12:00:00Z"
+    }
+  }
+}

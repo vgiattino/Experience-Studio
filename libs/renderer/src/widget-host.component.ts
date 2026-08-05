@@ -115,9 +115,23 @@ export class WidgetHostComponent {
       void this.mount(outlet);
     });
 
-    // Push data and context on every change, rather than recreating the component.
+    /**
+     * Push data and context on every change, rather than recreating the component.
+     *
+     * BOTH ARE READ BEFORE THE EARLY RETURN, and that ordering is the whole correctness of this
+     * effect. An effect tracks only what it actually read: with the `ref` guard placed first, the
+     * initial run — before the lazy component has mounted — read `dataView()` and nothing else, so
+     * page state was never a dependency. A widget whose data never changes then never received a
+     * context update again.
+     *
+     * That is invisible for a component that reads its values from `data`, which is every M1
+     * component. It is immediately visible for one that reads `context.filters`: the filter bar's
+     * search box lost its text the moment the debounce released its local echo, while the page
+     * stayed correctly filtered — a component and a page disagreeing about the same state.
+     */
     effect(() => {
       const view = this.dataView();
+      const context = this.context.componentContext();
       const ref = this.ref;
       if (!ref) return;
       try {
@@ -126,7 +140,7 @@ export class WidgetHostComponent {
           ref.setInput('data', view);
         }
         if (Object.prototype.hasOwnProperty.call(instance, 'context')) {
-          ref.setInput('context', this.context.componentContext());
+          ref.setInput('context', context);
         }
         ref.changeDetectorRef.markForCheck();
       } catch (error) {

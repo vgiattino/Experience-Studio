@@ -314,7 +314,7 @@ Honest inventory of what this model does not yet cover.
 |---|---|
 | Workflow definition (state machines, tasks, SLAs, escalation, compensation) | Deliberate. A distinct product surface with its own schema; only the seam where a page touches it is modelled here. |
 | Write-back operation registry | v2. The `invoke` action seam exists; the server-side operation contract does not. |
-| Input components (forms, editors) and validation rules | v2, arriving with write-back. `category: input` is reserved in the manifest. |
+| Input components (forms, editors) and validation rules | v2, arriving with write-back. `category: input` is no longer merely reserved — `input.filter-bar` populates it (`docs/EDM-TEMPLATES.md`) — but a *filter* input only writes page state. Components that write **data** still need the write-back contract, and no validation-rule model exists. |
 | Design token / theme schema | Referenced as `themeRef`; the token schema itself belongs with the design system. |
 | Localization string-table format | Referenced as `stringTableRef`; the format is not yet specified. |
 | `graph` and `tree` data source shapes | Declared in the enums and reachable, but their `select` semantics need the relationship-viewer component's requirements to firm up. |

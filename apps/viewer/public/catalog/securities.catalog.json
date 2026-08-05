@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0",
-  "catalogVersion": 8,
+  "catalogVersion": 9,
   "tenantId": "demo-tenant",
   "name": "Securities Operations Catalog",
   "description": "Runtime semantic catalog for the M1 proof of concept. Physical blocks are SERVER ONLY and are stripped from the client projection.",
@@ -215,6 +215,92 @@
           "physical": {
             "ref": "coupon-rate"
           }
+        },
+        "issuer-id": {
+          "id": "issuer-id",
+          "businessName": "Issuer ID",
+          "dataType": "identifier",
+          "sensitivity": "internal",
+          "semanticType": "counterpartyId",
+          "groupable": false,
+          "description": "The legal entity that issued the instrument. Drills through to the party.",
+          "physical": {
+            "ref": "issuer-id"
+          }
+        },
+        "issuer-name": {
+          "id": "issuer-name",
+          "businessName": "Issuer",
+          "dataType": "string",
+          "sensitivity": "internal",
+          "searchable": true,
+          "groupable": true,
+          "synonyms": [
+            "obligor",
+            "legal entity"
+          ],
+          "description": "Denormalised issuer name, carried on the record so a list can show it without a join.",
+          "physical": {
+            "ref": "issuer-name"
+          }
+        },
+        "sector": {
+          "id": "sector",
+          "businessName": "Sector",
+          "dataType": "string",
+          "sensitivity": "internal",
+          "groupable": true,
+          "synonyms": [
+            "industry"
+          ],
+          "physical": {
+            "ref": "sector"
+          }
+        },
+        "country-of-risk": {
+          "id": "country-of-risk",
+          "businessName": "Country of Risk",
+          "dataType": "string",
+          "sensitivity": "internal",
+          "semanticType": "countryCode",
+          "groupable": true,
+          "synonyms": [
+            "risk country",
+            "domicile of risk"
+          ],
+          "physical": {
+            "ref": "country-of-risk"
+          }
+        },
+        "review-status": {
+          "id": "review-status",
+          "businessName": "Review Status",
+          "dataType": "enum",
+          "sensitivity": "internal",
+          "semanticType": "statusCode",
+          "synonyms": [
+            "approval status"
+          ],
+          "enumValues": [
+            {
+              "value": "APPROVED",
+              "label": "Approved",
+              "emphasis": "positive"
+            },
+            {
+              "value": "PENDING",
+              "label": "Pending Review",
+              "emphasis": "warning"
+            },
+            {
+              "value": "ESCALATED",
+              "label": "Escalated",
+              "emphasis": "negative"
+            }
+          ],
+          "physical": {
+            "ref": "review-status"
+          }
         }
       },
       "measures": {
@@ -233,6 +319,42 @@
           "defaultAggregation": "count",
           "higherIsBetter": true,
           "sensitivity": "internal"
+        },
+        "pending-review-count": {
+          "id": "pending-review-count",
+          "businessName": "Pending Review",
+          "synonyms": [
+            "awaiting approval",
+            "unapproved securities"
+          ],
+          "description": "Securities not yet approved by a data steward.",
+          "valueType": "integer",
+          "allowedAggregations": [
+            "count"
+          ],
+          "defaultAggregation": "count",
+          "higherIsBetter": false,
+          "sensitivity": "internal",
+          "defaultThresholds": [
+            {
+              "id": "ok",
+              "from": 0,
+              "to": 10,
+              "emphasis": "positive"
+            },
+            {
+              "id": "watch",
+              "from": 11,
+              "to": 40,
+              "emphasis": "warning"
+            },
+            {
+              "id": "breach",
+              "from": 41,
+              "to": null,
+              "emphasis": "negative"
+            }
+          ]
         }
       }
     },
@@ -683,6 +805,31 @@
           "physical": {
             "ref": "asset-class"
           }
+        },
+        "issuer-id": {
+          "id": "issuer-id",
+          "businessName": "Issuer ID",
+          "dataType": "identifier",
+          "sensitivity": "internal",
+          "semanticType": "counterpartyId",
+          "nullable": true,
+          "groupable": false,
+          "physical": {
+            "ref": "issuer-id"
+          }
+        },
+        "issuer-name": {
+          "id": "issuer-name",
+          "businessName": "Issuer",
+          "dataType": "string",
+          "sensitivity": "internal",
+          "nullable": true,
+          "searchable": true,
+          "groupable": true,
+          "description": "Issuer of the security the exception was raised against, carried on the record so a party page needs no join.",
+          "physical": {
+            "ref": "issuer-name"
+          }
         }
       },
       "measures": {
@@ -735,9 +882,11 @@
       "synonyms": [
         "counterparty",
         "legal entity",
-        "organisation"
+        "organisation",
+        "issuer",
+        "obligor"
       ],
-      "description": "A legal entity related to a security \u2014 issuer, guarantor, obligor.",
+      "description": "A legal entity in the party master \u2014 issuer, guarantor, obligor or counterparty.",
       "domain": "parties",
       "primaryKey": [
         "party-id"
@@ -774,7 +923,11 @@
           "sensitivity": "internal",
           "physical": {
             "ref": "legal-name"
-          }
+          },
+          "synonyms": [
+            "issuer name",
+            "counterparty name"
+          ]
         },
         "lei": {
           "id": "lei",
@@ -796,7 +949,8 @@
           "sensitivity": "internal",
           "physical": {
             "ref": "country"
-          }
+          },
+          "groupable": true
         },
         "party-role": {
           "id": "party-role",
@@ -820,6 +974,394 @@
           "physical": {
             "ref": "party-role"
           }
+        },
+        "lei-status": {
+          "id": "lei-status",
+          "businessName": "LEI Status",
+          "dataType": "enum",
+          "sensitivity": "internal",
+          "semanticType": "statusCode",
+          "synonyms": [
+            "lei registration"
+          ],
+          "description": "Registration state of the Legal Entity Identifier. A lapsed LEI is a reportable condition under several regimes.",
+          "enumValues": [
+            {
+              "value": "ISSUED",
+              "label": "Issued",
+              "emphasis": "positive"
+            },
+            {
+              "value": "LAPSED",
+              "label": "Lapsed",
+              "emphasis": "negative"
+            },
+            {
+              "value": "PENDING",
+              "label": "Pending",
+              "emphasis": "warning"
+            }
+          ],
+          "physical": {
+            "ref": "lei-status"
+          }
+        },
+        "sector": {
+          "id": "sector",
+          "businessName": "Sector",
+          "dataType": "string",
+          "sensitivity": "internal",
+          "groupable": true,
+          "synonyms": [
+            "industry"
+          ],
+          "physical": {
+            "ref": "sector"
+          }
+        },
+        "party-status": {
+          "id": "party-status",
+          "businessName": "Status",
+          "dataType": "enum",
+          "sensitivity": "internal",
+          "semanticType": "statusCode",
+          "enumValues": [
+            {
+              "value": "ACTIVE",
+              "label": "Active",
+              "emphasis": "positive"
+            },
+            {
+              "value": "UNDER_REVIEW",
+              "label": "Under Review",
+              "emphasis": "warning"
+            }
+          ],
+          "physical": {
+            "ref": "party-status"
+          }
+        },
+        "onboarded-at": {
+          "id": "onboarded-at",
+          "businessName": "Onboarded",
+          "dataType": "datetime",
+          "sensitivity": "internal",
+          "physical": {
+            "ref": "onboarded-at"
+          }
+        },
+        "parent-party-id": {
+          "id": "parent-party-id",
+          "businessName": "Parent Party",
+          "dataType": "identifier",
+          "sensitivity": "internal",
+          "semanticType": "counterpartyId",
+          "nullable": true,
+          "groupable": false,
+          "description": "Immediate parent in the group hierarchy, where one exists.",
+          "physical": {
+            "ref": "parent-party-id"
+          }
+        }
+      },
+      "defaultDetailExperience": "securities.operations",
+      "measures": {
+        "party-count": {
+          "id": "party-count",
+          "businessName": "Party Count",
+          "synonyms": [
+            "number of parties",
+            "counterparty count"
+          ],
+          "valueType": "integer",
+          "allowedAggregations": [
+            "count",
+            "countDistinct"
+          ],
+          "defaultAggregation": "count",
+          "higherIsBetter": true,
+          "sensitivity": "internal"
+        }
+      },
+      "aiHints": {
+        "whenToUse": "Questions about issuers, counterparties, legal entities, LEIs or group hierarchy.",
+        "exampleQuestions": [
+          "which issuers have a lapsed LEI",
+          "show counterparties under review"
+        ]
+      }
+    },
+    "securities.source-value": {
+      "id": "securities.source-value",
+      "businessName": "Source Value",
+      "pluralName": "Source Values",
+      "synonyms": [
+        "vendor value",
+        "contribution",
+        "candidate value",
+        "source comparison"
+      ],
+      "description": "One vendor's value for one field of one security, and whether it won the golden copy. This is the record of how the master was mastered.",
+      "domain": "securities",
+      "primaryKey": [
+        "source-value-id"
+      ],
+      "labelAttribute": "field-label",
+      "effectiveDating": "effective",
+      "logicalDataSourceId": "edm-source-values",
+      "rowEntitlementDomain": "edm.security.read",
+      "sensitivity": "internal",
+      "cost": {
+        "class": "high",
+        "typicalRowCount": 48000000,
+        "volatilityTtlSeconds": 300,
+        "requiresFilter": true
+      },
+      "aiHints": {
+        "whenToUse": "Questions about where a value came from, which vendors disagree, or why the golden copy says what it says.",
+        "exampleQuestions": [
+          "which sources disagree on coupon rate",
+          "show vendor values for this security"
+        ]
+      },
+      "attributes": {
+        "source-value-id": {
+          "id": "source-value-id",
+          "businessName": "Source Value ID",
+          "dataType": "identifier",
+          "sensitivity": "internal",
+          "groupable": false,
+          "physical": {
+            "ref": "source-value-id"
+          }
+        },
+        "security-id": {
+          "id": "security-id",
+          "businessName": "Security ID",
+          "dataType": "identifier",
+          "sensitivity": "internal",
+          "semanticType": "securityId",
+          "groupable": false,
+          "physical": {
+            "ref": "security-id"
+          }
+        },
+        "security-name": {
+          "id": "security-name",
+          "businessName": "Security Name",
+          "dataType": "string",
+          "sensitivity": "internal",
+          "searchable": true,
+          "groupable": false,
+          "physical": {
+            "ref": "security-name"
+          }
+        },
+        "source-system": {
+          "id": "source-system",
+          "businessName": "Source",
+          "dataType": "string",
+          "sensitivity": "internal",
+          "groupable": true,
+          "synonyms": [
+            "vendor",
+            "contributor",
+            "feed"
+          ],
+          "description": "The contributing vendor or internal system.",
+          "physical": {
+            "ref": "source-system"
+          }
+        },
+        "field-name": {
+          "id": "field-name",
+          "businessName": "Field",
+          "dataType": "identifier",
+          "sensitivity": "internal",
+          "groupable": true,
+          "description": "The mastered attribute this value is a candidate for.",
+          "physical": {
+            "ref": "field-name"
+          }
+        },
+        "field-label": {
+          "id": "field-label",
+          "businessName": "Field Name",
+          "dataType": "string",
+          "sensitivity": "internal",
+          "groupable": true,
+          "searchable": true,
+          "physical": {
+            "ref": "field-label"
+          }
+        },
+        "vendor-value": {
+          "id": "vendor-value",
+          "businessName": "Vendor Value",
+          "dataType": "string",
+          "sensitivity": "internal",
+          "nullable": true,
+          "groupable": false,
+          "description": "The value this source supplied. Null when the source did not carry the field.",
+          "physical": {
+            "ref": "vendor-value"
+          }
+        },
+        "golden-value": {
+          "id": "golden-value",
+          "businessName": "Golden Value",
+          "dataType": "string",
+          "sensitivity": "internal",
+          "nullable": true,
+          "groupable": false,
+          "description": "The mastered value currently published.",
+          "physical": {
+            "ref": "golden-value"
+          }
+        },
+        "match-status": {
+          "id": "match-status",
+          "businessName": "Match",
+          "dataType": "enum",
+          "sensitivity": "internal",
+          "semanticType": "statusCode",
+          "synonyms": [
+            "comparison",
+            "agreement"
+          ],
+          "enumValues": [
+            {
+              "value": "MATCH",
+              "label": "Matches golden",
+              "emphasis": "positive"
+            },
+            {
+              "value": "MISMATCH",
+              "label": "Disagrees",
+              "emphasis": "negative"
+            },
+            {
+              "value": "MISSING",
+              "label": "Not supplied",
+              "emphasis": "warning"
+            }
+          ],
+          "physical": {
+            "ref": "match-status"
+          }
+        },
+        "is-golden": {
+          "id": "is-golden",
+          "businessName": "Is Golden",
+          "dataType": "boolean",
+          "sensitivity": "internal",
+          "description": "True when this contribution is the one the golden copy took.",
+          "physical": {
+            "ref": "is-golden"
+          }
+        },
+        "confidence": {
+          "id": "confidence",
+          "businessName": "Confidence",
+          "dataType": "percentage",
+          "sensitivity": "internal",
+          "semanticType": "rate",
+          "groupable": false,
+          "format": {
+            "style": "percent",
+            "decimals": 1
+          },
+          "physical": {
+            "ref": "confidence"
+          }
+        },
+        "received-at": {
+          "id": "received-at",
+          "businessName": "Received",
+          "dataType": "datetime",
+          "sensitivity": "internal",
+          "physical": {
+            "ref": "received-at"
+          }
+        }
+      },
+      "measures": {
+        "source-value-count": {
+          "id": "source-value-count",
+          "businessName": "Contributions",
+          "synonyms": [
+            "number of contributions",
+            "vendor values"
+          ],
+          "valueType": "integer",
+          "allowedAggregations": [
+            "count",
+            "countDistinct"
+          ],
+          "defaultAggregation": "count",
+          "sensitivity": "internal",
+          "groupableBy": [
+            "securities.source-value.source-system",
+            "securities.source-value.field-label",
+            "securities.source-value.match-status"
+          ]
+        },
+        "mismatch-count": {
+          "id": "mismatch-count",
+          "businessName": "Disagreements",
+          "synonyms": [
+            "mismatches",
+            "vendor disagreements",
+            "conflicts"
+          ],
+          "description": "Contributions whose value differs from the published golden value.",
+          "valueType": "integer",
+          "allowedAggregations": [
+            "count"
+          ],
+          "defaultAggregation": "count",
+          "higherIsBetter": false,
+          "sensitivity": "internal",
+          "defaultThresholds": [
+            {
+              "id": "ok",
+              "from": 0,
+              "to": 0,
+              "emphasis": "positive"
+            },
+            {
+              "id": "watch",
+              "from": 1,
+              "to": 3,
+              "emphasis": "warning"
+            },
+            {
+              "id": "breach",
+              "from": 4,
+              "to": null,
+              "emphasis": "negative"
+            }
+          ]
+        },
+        "average-confidence": {
+          "id": "average-confidence",
+          "businessName": "Average Confidence",
+          "valueType": "percentage",
+          "format": {
+            "style": "percent",
+            "decimals": 1
+          },
+          "allowedAggregations": [
+            "avg",
+            "min",
+            "max"
+          ],
+          "defaultAggregation": "avg",
+          "higherIsBetter": true,
+          "sensitivity": "internal",
+          "physical": {
+            "ref": "confidence"
+          }
         }
       }
     }
@@ -827,41 +1369,42 @@
   "relationships": {
     "securities.security.related-parties": {
       "id": "securities.security.related-parties",
-      "businessName": "Related Parties",
-      "description": "Legal entities associated with this security and the role each plays.",
+      "businessName": "Issuer",
+      "description": "The legal entity that issued this security.",
       "from": "securities.security",
       "to": "parties.party",
-      "cardinality": "many-to-many",
+      "cardinality": "many-to-one",
       "inverseId": "parties.party.securities",
       "keyMapping": [
         {
-          "fromAttribute": "security-id",
+          "fromAttribute": "issuer-id",
           "toAttribute": "party-id"
         }
       ],
       "joinSemantics": "left",
       "temporalSemantics": "asOfParent",
-      "traversalCost": "medium",
-      "expectedFanout": 3,
+      "traversalCost": "low",
+      "expectedFanout": 1,
       "aiHints": {
         "whenToUse": "Whenever the user asks about issuers, guarantors or who is behind a security."
       }
     },
     "parties.party.securities": {
       "id": "parties.party.securities",
-      "businessName": "Securities",
+      "businessName": "Issued Securities",
       "from": "parties.party",
       "to": "securities.security",
-      "cardinality": "many-to-many",
+      "cardinality": "one-to-many",
       "inverseId": "securities.security.related-parties",
       "keyMapping": [
         {
           "fromAttribute": "party-id",
-          "toAttribute": "security-id"
+          "toAttribute": "issuer-id"
         }
       ],
-      "traversalCost": "high",
-      "expectedFanout": 400
+      "traversalCost": "medium",
+      "expectedFanout": 6,
+      "description": "Every security this party issued."
     },
     "securities.security.exceptions": {
       "id": "securities.security.exceptions",
@@ -895,6 +1438,60 @@
       ],
       "joinSemantics": "inner",
       "traversalCost": "low"
+    },
+    "securities.security.source-values": {
+      "id": "securities.security.source-values",
+      "businessName": "Source Values",
+      "description": "Every vendor contribution considered for this security.",
+      "from": "securities.security",
+      "to": "securities.source-value",
+      "cardinality": "one-to-many",
+      "inverseId": "securities.source-value.security",
+      "keyMapping": [
+        {
+          "fromAttribute": "security-id",
+          "toAttribute": "security-id"
+        }
+      ],
+      "joinSemantics": "left",
+      "traversalCost": "medium",
+      "expectedFanout": 30,
+      "aiHints": {
+        "whenToUse": "Whenever the user asks where a value came from, or which vendors disagree."
+      }
+    },
+    "securities.source-value.security": {
+      "id": "securities.source-value.security",
+      "businessName": "Security",
+      "from": "securities.source-value",
+      "to": "securities.security",
+      "cardinality": "many-to-one",
+      "inverseId": "securities.security.source-values",
+      "keyMapping": [
+        {
+          "fromAttribute": "security-id",
+          "toAttribute": "security-id"
+        }
+      ],
+      "joinSemantics": "inner",
+      "traversalCost": "low"
+    },
+    "parties.party.exceptions": {
+      "id": "parties.party.exceptions",
+      "businessName": "Data Quality Exceptions",
+      "description": "Exceptions on securities this party issued.",
+      "from": "parties.party",
+      "to": "dq.exception",
+      "cardinality": "one-to-many",
+      "keyMapping": [
+        {
+          "fromAttribute": "party-id",
+          "toAttribute": "issuer-id"
+        }
+      ],
+      "joinSemantics": "left",
+      "traversalCost": "medium",
+      "expectedFanout": 12
     }
   },
   "drift": {
@@ -913,6 +1510,6 @@
     "createdBy": "steward@demo-tenant",
     "createdAt": "2026-07-28T09:14:00Z",
     "modifiedBy": "steward@demo-tenant",
-    "modifiedAt": "2026-08-01T16:22:00Z"
+    "modifiedAt": "2026-08-05T12:00:00Z"
   }
 }

@@ -27,6 +27,7 @@ export const AUTHOR: UserContext = {
     'edm.security.read',
     'edm.dq.read',
     'edm.dq.assignee.read',
+    'edm.party.read',
   ],
   entitlementScopeHash: 'author-full',
 };

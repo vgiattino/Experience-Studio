@@ -40,7 +40,13 @@ export const PERSONAS: readonly Persona[] = [
     id: 'analyst',
     label: 'Business Analyst',
     description: 'Full operational view, including exception assignees and export.',
-    dataCapabilities: ['edm.processing.read', 'edm.security.read', 'edm.dq.read', 'edm.dq.assignee.read'],
+    dataCapabilities: [
+      'edm.processing.read',
+      'edm.security.read',
+      'edm.dq.read',
+      'edm.dq.assignee.read',
+      'edm.party.read',
+    ],
     user: {
       ...BASE,
       id: 'analyst@demo-tenant',
@@ -54,7 +60,12 @@ export const PERSONAS: readonly Persona[] = [
     id: 'steward',
     label: 'Data Steward',
     description: 'Operational view without the assignee column — renders as `partial`.',
-    dataCapabilities: ['edm.processing.read', 'edm.security.read', 'edm.dq.read'],
+    dataCapabilities: [
+      'edm.processing.read',
+      'edm.security.read',
+      'edm.dq.read',
+      'edm.party.read',
+    ],
     user: {
       ...BASE,
       id: 'steward@demo-tenant',
