@@ -1,0 +1,41 @@
+{
+  "compileOnSave": false,
+  "compilerOptions": {
+    "strict": true,
+    "noImplicitOverride": true,
+    "noPropertyAccessFromIndexSignature": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "experimentalDecorators": true,
+    "importHelpers": true,
+    "resolveJsonModule": true,
+    "target": "ES2022",
+    "module": "preserve",
+    "moduleResolution": "bundler",
+    "baseUrl": ".",
+    "paths": {
+      "@opus/contracts": ["libs/contracts/src/index.ts"],
+      "@opus/platform": ["libs/platform/src/index.ts"],
+      "@opus/design-system": ["libs/design-system/src/index.ts"],
+      "@opus/validator": ["libs/validator/src/index.ts"],
+      "@opus/data-client": ["libs/data-client/src/index.ts"],
+      "@opus/component-registry": ["libs/component-registry/src/index.ts"],
+      "@opus/renderer": ["libs/renderer/src/index.ts"],
+      "@opus/components/*": ["libs/components/*/index.ts"],
+      "@opus/schemas/*": ["schemas/*"]
+    }
+  },
+  "angularCompilerOptions": {
+    "enableI18nLegacyMessageIdFormat": false,
+    "strictInjectionParameters": true,
+    "strictInputAccessModifiers": true,
+    "strictTemplates": true
+  },
+  "files": [],
+  "references": [
+    { "path": "./tsconfig.app.json" },
+    { "path": "./tsconfig.spec.json" }
+  ]
+}

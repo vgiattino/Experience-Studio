@@ -1,0 +1,92 @@
+{
+  "schemaVersion": "1.0",
+  "type": "content.text",
+  "version": "1.0.0",
+  "name": "Text",
+  "category": "content",
+  "description": "Headings and prose, with placeholder tokens resolved from expressions.",
+  "icon": "text",
+
+  "generation": {
+    "purpose": "Give a page or a region a heading and a sentence of context, so the reader knows what they are looking at and as of when.",
+    "whenToUse": "At the top of a dashboard to state its purpose and reporting date, or above a region to explain it. Use `tokens` with expressions to include live values such as the as-of date or a record count, so the sentence stays accurate.",
+    "whenNotToUse": "Do not use to display a metric — a number a user will read as a figure belongs in analytics.kpi-card where it can carry formatting and thresholds.",
+    "keyProperties": ["variant", "body", "tokens"],
+    "eligible": true,
+    "exampleConfig": {
+      "variant": "heading",
+      "body": "Processing health for {asOf}.",
+      "tokens": { "asOf": { "$expr": "$params.as-of" } }
+    }
+  },
+
+  "properties": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "variant": {
+        "type": "string",
+        "enum": ["heading", "subheading", "body", "caption"],
+        "default": "body"
+      },
+      "body": {
+        "description": "Template text. {tokenName} placeholders are replaced from `tokens`. Rendered as text, never as markup.",
+        "type": "string",
+        "maxLength": 2000
+      },
+      "tokens": {
+        "description": "Expressions supplying placeholder values.",
+        "type": "object",
+        "additionalProperties": {
+          "type": "object",
+          "properties": { "$expr": { "type": "string", "maxLength": 2048 } },
+          "required": ["$expr"],
+          "additionalProperties": false
+        }
+      },
+      "align": { "type": "string", "enum": ["start", "center"], "default": "start" },
+      "emphasis": { "type": "string", "enum": ["default", "muted"], "default": "default" }
+    },
+    "additionalProperties": false
+  },
+
+  "dataRequirement": {
+    "shape": "none"
+  },
+
+  "states": ["ready"],
+
+  "breakpoints": {
+    "xs": { "supported": true, "minColSpan": 12, "behaviour": "full" },
+    "sm": { "supported": true, "minColSpan": 12, "behaviour": "full" },
+    "md": { "supported": true, "minColSpan": 6, "behaviour": "full" },
+    "lg": { "supported": true, "minColSpan": 4, "behaviour": "full" },
+    "xl": { "supported": true, "minColSpan": 3, "behaviour": "full" }
+  },
+
+  "accessibility": {
+    "wcagLevel": "AA",
+    "keyboardContract": "Non-interactive; adds no tab stop.",
+    "requiredLabels": [],
+    "colourIndependent": true,
+    "notes": "The `variant` maps to a real heading level (h2 / h3) so document structure is meaningful to assistive technology rather than styled text."
+  },
+
+  "capabilities": [],
+
+  "performance": {
+    "renderBudgetMs": 16,
+    "virtualized": false,
+    "skeleton": { "minHeight": "48px", "shape": "text" }
+  },
+
+  "lifecycle": {
+    "stability": "stable",
+    "since": "1.0.0"
+  },
+
+  "bundle": {
+    "libraryPath": "@opus/components/text",
+    "exportName": "TextComponent"
+  }
+}

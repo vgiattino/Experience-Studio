@@ -259,7 +259,7 @@ A conformant artifact must pass all eight. Only level 1 is expressible in JSON S
 
 Levels 5 and 8 are the two most easily skipped and the least recoverable later. Level 5 is a security boundary. Level 8 is what keeps generated content conformant without a human reviewing every page.
 
-**Verification status:** all 16 schemas are valid JSON, conform to the 2020-12 metaschema, and have fully resolvable `$ref`s; all five example artifacts validate at level 1. Levels 2–8 require the platform validator, which is a milestone-1 deliverable.
+**Verification status:** all 16 schemas are valid JSON, conform to the 2020-12 metaschema, and have fully resolvable `$ref`s; all five example artifacts and all three runtime definitions validate at level 1 via `npm run validate`. Levels 2, 4 and 7 are implemented in `libs/validator` and covered by 33 tests. Levels 3, 5, 6 and 8 require the catalog service and the Data Gateway and are reported as *not run* rather than assumed to pass.
 
 ---
 
@@ -277,7 +277,17 @@ The dashboard and detail pages are the reference definitions named as a mileston
 
 ---
 
-## 7. Evolution
+## 7. Amendments Since v1.0 Draft
+
+Recorded rather than made silently, because the compatibility policy in §7 is only meaningful
+if amendments to it are visible.
+
+| Date | Change | Class | Rationale |
+|---|---|---|---|
+| M1 | Added `content` to `component-manifest.category` (and to `slots.allowedCategories`) | **Breaking** by §7 — a member added to a closed enum | Text and media components structure a page without binding a data shape, and forcing them into `layout` was inaccurate. Amended in place because v1.0 is pre-release with zero published artifacts; after first publication this would have required a major version |
+| M1 | Documented `gridPlacement.breakpoints` as resolving **mobile-first** | Clarification, no shape change | The direction was unstated, and the M1 definitions were accidentally written in both directions — four quarter-width cards rendered as halves and wrapped. See `docs/M1-IMPLEMENTATION.md` §4.1 |
+
+## 8. Evolution
 
 Full rules in `versioning.schema.json#/$defs/compatibilityPolicy`. In summary:
 
@@ -289,7 +299,7 @@ Migrations are pure, ordered, chained functions applied forward in memory at loa
 
 ---
 
-## 8. Known Gaps
+## 9. Known Gaps
 
 Honest inventory of what this model does not yet cover.
 
@@ -306,7 +316,7 @@ Honest inventory of what this model does not yet cover.
 
 ---
 
-## 9. Decisions Requiring Ratification
+## 10. Decisions Requiring Ratification
 
 | # | Decision | Consequence if reversed later |
 |---|---|---|

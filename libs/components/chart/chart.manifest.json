@@ -1,0 +1,105 @@
+{
+  "schemaVersion": "1.0",
+  "type": "analytics.chart",
+  "version": "1.0.0",
+  "name": "Chart",
+  "category": "analytics",
+  "description": "Encoding-driven chart. One component for the whole family: choose a mark and map data fields to visual channels.",
+  "icon": "chart",
+
+  "generation": {
+    "purpose": "Show how a measure varies across a dimension, optionally split into series.",
+    "whenToUse": "Whenever the data has a dimension — a trend over time, a breakdown by category, a comparison across series. Choose the mark from the question: 'bar' for counts by category, 'line' or 'area' for a trend over time, 'point' for scatter. Use stacking 'stacked' when the parts sum to a meaningful whole.",
+    "whenNotToUse": "Do not use for a single aggregated figure — use analytics.kpi-card. Do not use for record-level detail — use data.table.",
+    "keyProperties": ["mark", "stacking", "legend", "gridlines"],
+    "eligible": true,
+    "exampleConfig": { "mark": "bar", "stacking": "stacked", "legend": { "position": "bottom" } }
+  },
+
+  "properties": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "mark": { "type": "string", "enum": ["bar", "line", "area", "point"], "default": "bar" },
+      "stacking": {
+        "description": "Only meaningful when a series encoding is bound.",
+        "type": "string",
+        "enum": ["none", "stacked", "normalized"],
+        "default": "none"
+      },
+      "legend": {
+        "type": "object",
+        "properties": {
+          "position": { "type": "string", "enum": ["top", "bottom", "end", "none"], "default": "bottom" }
+        },
+        "additionalProperties": false
+      },
+      "gridlines": { "type": "boolean", "default": true },
+      "emptyMessage": { "type": "string", "maxLength": 256 }
+    },
+    "additionalProperties": false
+  },
+
+  "dataRequirement": {
+    "shape": "series",
+    "roles": [
+      { "role": "x", "label": "Category / time axis", "required": true, "accepts": ["dimension", "attribute"] },
+      { "role": "y", "label": "Value axis", "required": true, "accepts": ["measure"] },
+      { "role": "series", "label": "Series split", "accepts": ["dimension", "attribute"] }
+    ],
+    "maxRows": 2000
+  },
+
+  "events": {
+    "segmentActivated": {
+      "label": "Segment activated",
+      "description": "Emitted when a bar or point is clicked or activated with Enter. Typically mapped to a setFilter action so clicking a segment filters the rest of the page.",
+      "payload": {
+        "series": { "dataType": "string", "description": "Series key, or null when no series encoding is bound." },
+        "x": { "dataType": "string", "description": "Category or time bucket key." },
+        "value": { "dataType": "decimal", "description": "The plotted value." }
+      }
+    },
+    "retryRequested": {
+      "label": "Retry requested",
+      "description": "Emitted when the user activates Retry in the error state."
+    }
+  },
+
+  "states": ["ready", "loading", "empty", "error", "denied"],
+
+  "breakpoints": {
+    "xs": { "supported": true, "minColSpan": 12, "behaviour": "condensed", "note": "Axis labels thin out automatically as width decreases." },
+    "sm": { "supported": true, "minColSpan": 12, "behaviour": "condensed" },
+    "md": { "supported": true, "minColSpan": 8, "behaviour": "full" },
+    "lg": { "supported": true, "minColSpan": 6, "behaviour": "full" },
+    "xl": { "supported": true, "minColSpan": 4, "behaviour": "full" }
+  },
+
+  "accessibility": {
+    "wcagLevel": "AA",
+    "keyboardContract": "Bars and points are focusable buttons with an accessible label naming the series, category and value. Enter activates.",
+    "requiredLabels": ["title"],
+    "colourIndependent": true,
+    "notes": "A figcaption contains a data-table equivalent of every plotted value, so the chart is fully readable without seeing it. Series are distinguishable by legend text, not colour alone."
+  },
+
+  "capabilities": [],
+
+  "performance": {
+    "renderBudgetMs": 100,
+    "virtualized": false,
+    "skeleton": { "minHeight": "220px", "shape": "chart" }
+  },
+
+  "lifecycle": {
+    "stability": "experimental",
+    "since": "1.0.0",
+    "migrationNote": "M1 implements the bar, line, area and point marks with linear and band scales. Log and time scales, y2 and the size/shape channels are declared in the schema but not yet rendered."
+  },
+
+  "bundle": {
+    "libraryPath": "@opus/components/chart",
+    "exportName": "ChartComponent"
+  }
+}

@@ -1,0 +1,726 @@
+{
+  "schemaVersion": "1.0",
+  "id": "processing-detail",
+  "name": "File Processing",
+  "description": "Inbound file loads for the selected business date.",
+  "kind": "detail",
+  "route": "processing",
+  "parameters": {
+    "as-of": {
+      "label": "As Of",
+      "dataType": "date",
+      "scope": "experience",
+      "syncToUrl": true,
+      "default": {
+        "$expr": "today()"
+      },
+      "description": "Carried from the dashboard, so drilling in does not silently reset the reporting date."
+    },
+    "load-id": {
+      "label": "File Load",
+      "dataType": "identifier",
+      "scope": "page",
+      "syncToUrl": true,
+      "boundToEntity": "processing.file-load",
+      "boundToAttribute": "processing.file-load.load-id",
+      "description": "Set when arriving via drill-down from the dashboard. Narrows the table to one load."
+    }
+  },
+  "filters": {
+    "status": {
+      "label": "Status",
+      "dataType": "enum",
+      "multiValued": true,
+      "boundToAttribute": "processing.file-load.load-status",
+      "syncToUrl": true
+    }
+  },
+  "dataSources": {
+    "rows-processed": {
+      "id": "rows-processed",
+      "name": "Rows Processed",
+      "entity": "processing.file-load",
+      "kind": "aggregate",
+      "select": {
+        "measures": [
+          {
+            "measure": "row-count",
+            "aggregation": "sum",
+            "alias": "total-rows"
+          }
+        ]
+      },
+      "filter": {
+        "all": [
+          {
+            "target": "business-date",
+            "operator": "eq",
+            "value": {
+              "$param": "as-of"
+            }
+          }
+        ]
+      },
+      "loadPolicy": "eager"
+    },
+    "awaiting-count": {
+      "id": "awaiting-count",
+      "name": "Awaiting Arrival",
+      "entity": "processing.file-load",
+      "kind": "aggregate",
+      "select": {
+        "measures": [
+          {
+            "measure": "late-file-count",
+            "aggregation": "count",
+            "alias": "awaiting-count"
+          }
+        ]
+      },
+      "filter": {
+        "all": [
+          {
+            "target": "business-date",
+            "operator": "eq",
+            "value": {
+              "$param": "as-of"
+            }
+          },
+          {
+            "target": "load-status",
+            "operator": "in",
+            "value": [
+              "AWAITING",
+              "LATE"
+            ]
+          }
+        ]
+      },
+      "loadPolicy": "eager"
+    },
+    "by-source": {
+      "id": "by-source",
+      "name": "Loads by Source and Status",
+      "entity": "processing.file-load",
+      "kind": "aggregate",
+      "select": {
+        "measures": [
+          {
+            "measure": "late-file-count",
+            "aggregation": "count",
+            "alias": "load-count"
+          }
+        ],
+        "dimensions": [
+          {
+            "attribute": "source-system",
+            "alias": "source",
+            "label": "Source"
+          },
+          {
+            "attribute": "load-status",
+            "alias": "status",
+            "label": "Status"
+          }
+        ]
+      },
+      "filter": {
+        "all": [
+          {
+            "target": "business-date",
+            "operator": "eq",
+            "value": {
+              "$param": "as-of"
+            }
+          },
+          {
+            "target": "load-status",
+            "operator": "in",
+            "value": {
+              "$filter": "status"
+            },
+            "skipWhenEmpty": true
+          }
+        ]
+      },
+      "sort": [
+        {
+          "field": "source",
+          "direction": "asc"
+        }
+      ],
+      "loadPolicy": "eager"
+    },
+    "loads": {
+      "id": "loads",
+      "name": "File Loads",
+      "entity": "processing.file-load",
+      "kind": "list",
+      "select": {
+        "attributes": [
+          {
+            "attribute": "load-id",
+            "alias": "load-id"
+          },
+          {
+            "attribute": "file-name",
+            "alias": "file-name"
+          },
+          {
+            "attribute": "source-system",
+            "alias": "source"
+          },
+          {
+            "attribute": "load-status",
+            "alias": "status"
+          },
+          {
+            "attribute": "expected-at",
+            "alias": "expected"
+          },
+          {
+            "attribute": "completed-at",
+            "alias": "completed"
+          },
+          {
+            "attribute": "row-count",
+            "alias": "rows"
+          }
+        ]
+      },
+      "filter": {
+        "all": [
+          {
+            "target": "business-date",
+            "operator": "eq",
+            "value": {
+              "$param": "as-of"
+            }
+          },
+          {
+            "target": "load-id",
+            "operator": "eq",
+            "value": {
+              "$param": "load-id"
+            },
+            "skipWhenEmpty": true
+          },
+          {
+            "target": "load-status",
+            "operator": "in",
+            "value": {
+              "$filter": "status"
+            },
+            "skipWhenEmpty": true
+          }
+        ]
+      },
+      "sort": [
+        {
+          "field": "status",
+          "direction": "asc"
+        },
+        {
+          "field": "expected",
+          "direction": "asc"
+        }
+      ],
+      "paging": {
+        "mode": "offset",
+        "pageSize": 60,
+        "maxRows": 1000
+      },
+      "loadPolicy": "eager"
+    }
+  },
+  "components": {
+    "intro": {
+      "id": "intro",
+      "type": "content.text",
+      "typeVersion": "1.0.0",
+      "title": "Processing summary",
+      "config": {
+        "variant": "body",
+        "body": "{rows} rows processed for {asOf}. {awaiting} loads are still awaiting arrival or late.",
+        "tokens": {
+          "rows": {
+            "$expr": "$data.rows-processed.total-rows ?? 0"
+          },
+          "asOf": {
+            "$expr": "$params.as-of"
+          },
+          "awaiting": {
+            "$expr": "$data.awaiting-count.awaiting-count ?? 0"
+          }
+        }
+      }
+    },
+    "focus-note": {
+      "id": "focus-note",
+      "type": "content.text",
+      "typeVersion": "1.0.0",
+      "title": "Focused on one load",
+      "config": {
+        "variant": "caption",
+        "emphasis": "muted",
+        "body": "Showing file load {loadId} only, from a drill-down. Clear the focus to see every load.",
+        "tokens": {
+          "loadId": {
+            "$expr": "$params.load-id"
+          }
+        }
+      },
+      "visible": {
+        "$expr": "not isEmpty($params.load-id)"
+      }
+    },
+    "kpi-rows": {
+      "id": "kpi-rows",
+      "type": "analytics.kpi-card",
+      "typeVersion": "1.4.0",
+      "title": "Rows Processed",
+      "dataSource": "rows-processed",
+      "config": {
+        "size": "md"
+      },
+      "bindings": {
+        "value": {
+          "field": "total-rows",
+          "format": {
+            "style": "integer",
+            "abbreviate": true
+          }
+        }
+      }
+    },
+    "kpi-awaiting": {
+      "id": "kpi-awaiting",
+      "type": "analytics.kpi-card",
+      "typeVersion": "1.4.0",
+      "title": "Awaiting or Late",
+      "dataSource": "awaiting-count",
+      "config": {
+        "size": "md",
+        "showThresholdBand": true
+      },
+      "bindings": {
+        "value": {
+          "field": "awaiting-count",
+          "format": {
+            "style": "integer"
+          },
+          "thresholds": [
+            {
+              "id": "clear",
+              "label": "All arrived",
+              "from": 0,
+              "to": 0,
+              "emphasis": "positive"
+            },
+            {
+              "id": "watch",
+              "label": "Outstanding",
+              "from": 1,
+              "to": null,
+              "emphasis": "warning"
+            }
+          ]
+        }
+      }
+    },
+    "source-chart": {
+      "id": "source-chart",
+      "type": "analytics.chart",
+      "typeVersion": "1.0.0",
+      "title": "Loads by source and status",
+      "dataSource": "by-source",
+      "config": {
+        "mark": "bar",
+        "stacking": "stacked",
+        "legend": {
+          "position": "bottom"
+        },
+        "emptyMessage": "No file loads for the selected date."
+      },
+      "encodings": [
+        {
+          "channel": "x",
+          "binding": {
+            "field": "source",
+            "label": "Source"
+          },
+          "axis": {
+            "gridlines": false
+          }
+        },
+        {
+          "channel": "y",
+          "binding": {
+            "field": "load-count",
+            "label": "Loads",
+            "format": {
+              "style": "integer"
+            }
+          },
+          "scale": {
+            "zero": true
+          },
+          "axis": {
+            "title": "Loads"
+          }
+        },
+        {
+          "channel": "series",
+          "binding": {
+            "field": "status",
+            "label": "Status"
+          }
+        }
+      ],
+      "eventActions": {
+        "segmentActivated": "filter-by-status"
+      }
+    },
+    "loads-table": {
+      "id": "loads-table",
+      "type": "data.table",
+      "typeVersion": "1.0.0",
+      "title": "File loads",
+      "dataSource": "loads",
+      "config": {
+        "density": "compact",
+        "maxHeight": "480px"
+      },
+      "bindings": {
+        "columns": [
+          {
+            "field": "file-name",
+            "label": "File",
+            "width": "fit"
+          },
+          {
+            "field": "source",
+            "label": "Source",
+            "width": "140px"
+          },
+          {
+            "field": "status",
+            "label": "Status",
+            "width": "120px",
+            "renderAs": "badge",
+            "conditionalFormats": [
+              {
+                "when": {
+                  "$expr": "$row.status == 'FAILED'"
+                },
+                "emphasis": "negative"
+              },
+              {
+                "when": {
+                  "$expr": "$row.status == 'LATE'"
+                },
+                "emphasis": "warning"
+              },
+              {
+                "when": {
+                  "$expr": "$row.status == 'COMPLETE'"
+                },
+                "emphasis": "positive"
+              },
+              {
+                "when": {
+                  "$expr": "$row.status == 'AWAITING'"
+                },
+                "emphasis": "muted"
+              }
+            ]
+          },
+          {
+            "field": "expected",
+            "label": "Expected By",
+            "width": "160px",
+            "format": {
+              "style": "datetime"
+            }
+          },
+          {
+            "field": "completed",
+            "label": "Completed",
+            "width": "160px",
+            "format": {
+              "style": "datetime"
+            },
+            "emptyValue": "Not complete"
+          },
+          {
+            "field": "rows",
+            "label": "Rows",
+            "width": "110px",
+            "align": "end",
+            "format": {
+              "style": "integer"
+            }
+          },
+          {
+            "field": "load-id",
+            "hidden": true
+          }
+        ]
+      }
+    }
+  },
+  "layout": {
+    "kind": "container",
+    "id": "root",
+    "container": {
+      "type": "grid",
+      "gap": "lg",
+      "children": [
+        {
+          "kind": "widget",
+          "id": "w-intro",
+          "component": "intro",
+          "placement": {
+            "colStart": 1,
+            "colSpan": 12
+          }
+        },
+        {
+          "kind": "widget",
+          "id": "w-focus-note",
+          "component": "focus-note",
+          "placement": {
+            "colStart": 1,
+            "colSpan": 12
+          }
+        },
+        {
+          "kind": "container",
+          "id": "kpi-row",
+          "placement": {
+            "colStart": 1,
+            "colSpan": 12
+          },
+          "container": {
+            "type": "stack",
+            "direction": "row",
+            "wrap": true,
+            "gap": "md",
+            "directionByBreakpoint": {
+              "xs": "column"
+            },
+            "children": [
+              {
+                "kind": "widget",
+                "id": "w-kpi-rows",
+                "component": "kpi-rows",
+                "placement": {
+                  "colSpan": 12,
+                  "breakpoints": {
+                    "sm": {
+                      "colSpan": 6
+                    },
+                    "lg": {
+                      "colSpan": 3
+                    }
+                  }
+                }
+              },
+              {
+                "kind": "widget",
+                "id": "w-kpi-awaiting",
+                "component": "kpi-awaiting",
+                "placement": {
+                  "colSpan": 12,
+                  "breakpoints": {
+                    "sm": {
+                      "colSpan": 6
+                    },
+                    "lg": {
+                      "colSpan": 3
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "kind": "container",
+          "id": "chart-panel",
+          "placement": {
+            "colStart": 1,
+            "colSpan": 12,
+            "breakpoints": {
+              "xl": {
+                "colSpan": 5
+              }
+            }
+          },
+          "container": {
+            "type": "panel",
+            "title": "Loads by source",
+            "variant": "bordered",
+            "headerActions": [
+              "clear-status-filter"
+            ],
+            "children": [
+              {
+                "kind": "widget",
+                "id": "w-source-chart",
+                "component": "source-chart",
+                "placement": {
+                  "colSpan": 12,
+                  "minHeight": "260px"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "kind": "container",
+          "id": "table-panel",
+          "placement": {
+            "colStart": 1,
+            "colSpan": 12,
+            "breakpoints": {
+              "xl": {
+                "colSpan": 7
+              }
+            }
+          },
+          "container": {
+            "type": "panel",
+            "title": "File loads",
+            "variant": "bordered",
+            "headerActions": [
+              "clear-load-focus",
+              "back-to-operations"
+            ],
+            "children": [
+              {
+                "kind": "widget",
+                "id": "w-loads",
+                "component": "loads-table",
+                "placement": {
+                  "colSpan": 12,
+                  "minHeight": "320px"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "actions": {
+    "filter-by-status": {
+      "id": "filter-by-status",
+      "kind": "setFilter",
+      "label": "Filter by status",
+      "channel": "status",
+      "value": {
+        "$context": "$event.series"
+      },
+      "mode": "toggle"
+    },
+    "clear-status-filter": {
+      "id": "clear-status-filter",
+      "kind": "clearFilters",
+      "label": "Clear status filter",
+      "channels": [
+        "status"
+      ]
+    },
+    "clear-load-focus": {
+      "id": "clear-load-focus",
+      "kind": "setParameter",
+      "label": "Show all loads",
+      "parameter": "load-id",
+      "value": null,
+      "updateUrl": true,
+      "visible": {
+        "$expr": "not isEmpty($params.load-id)"
+      }
+    },
+    "back-to-operations": {
+      "id": "back-to-operations",
+      "kind": "navigate",
+      "label": "Back to operations",
+      "target": {
+        "page": "security-master-operations"
+      },
+      "carryContext": true
+    }
+  },
+  "navigation": {
+    "breadcrumbs": {
+      "mode": "auto"
+    },
+    "backBehaviour": "declaredParent",
+    "pageActions": [
+      "back-to-operations"
+    ]
+  },
+  "security": {
+    "intendedAudience": "Operations analysts monitoring inbound processing.",
+    "requiredCapabilities": [
+      "experience.view"
+    ],
+    "workspaceScope": "tenant",
+    "deniedDataPolicy": "showDeniedState",
+    "exportPolicy": {
+      "allowed": false
+    }
+  },
+  "presentation": {
+    "themeRef": "opus.default",
+    "maxWidth": "full",
+    "showPageHeader": true
+  },
+  "performance": {
+    "renderBudgetMs": 2000,
+    "maxEagerDataSources": 6
+  },
+  "version": {
+    "schemaVersion": "1.0",
+    "artifactVersion": 1,
+    "lifecycleState": "published",
+    "immutable": true,
+    "pins": {
+      "catalogVersion": 7,
+      "registryVersion": "1.0.0"
+    },
+    "provenance": {
+      "origin": "human",
+      "actorId": "platform-team@demo-tenant",
+      "createdAt": "2026-08-04T09:00:00Z"
+    },
+    "validation": {
+      "status": "valid",
+      "stagesPassed": [
+        "structural",
+        "component",
+        "binding",
+        "layout"
+      ],
+      "validatedAt": "2026-08-04T09:00:00Z"
+    },
+    "governance": {
+      "publishedBy": "platform-team@demo-tenant",
+      "publishedAt": "2026-08-04T09:00:00Z",
+      "publishedEnvironments": [
+        "dev"
+      ]
+    },
+    "audit": {
+      "createdBy": "platform-team@demo-tenant",
+      "createdAt": "2026-08-04T09:00:00Z"
+    }
+  },
+  "tags": [
+    "operations",
+    "processing",
+    "m1-reference"
+  ]
+}

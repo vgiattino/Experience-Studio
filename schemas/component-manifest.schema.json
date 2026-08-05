@@ -14,9 +14,9 @@
     },
     "name": { "$ref": "common.schema.json#/$defs/i18nString" },
     "category": {
-      "description": "Tier in the component system. 'business' components must be compositions of lower tiers rather than bespoke implementations; permitting them to reach for raw data and raw DOM forks the library into two incompatible halves.",
+      "description": "Tier in the component system. 'business' components must be compositions of lower tiers rather than bespoke implementations; permitting them to reach for raw data and raw DOM forks the library into two incompatible halves. 'content' is presentational text and media that structures a page without binding a data shape.",
       "type": "string",
-      "enum": ["layout", "data", "analytics", "business", "input"]
+      "enum": ["layout", "data", "analytics", "business", "input", "content"]
     },
     "description": { "type": "string", "maxLength": 2048 },
     "icon": { "type": "string", "maxLength": 64 },
@@ -111,7 +111,10 @@
           "maxChildren": { "type": "integer", "minimum": 1 },
           "allowedCategories": {
             "type": "array",
-            "items": { "type": "string", "enum": ["layout", "data", "analytics", "business", "input"] }
+            "items": {
+              "type": "string",
+              "enum": ["layout", "data", "analytics", "business", "input", "content"]
+            }
           },
           "allowedTypes": {
             "type": "array",

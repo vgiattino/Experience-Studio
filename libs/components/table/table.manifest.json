@@ -1,0 +1,113 @@
+{
+  "schemaVersion": "1.0",
+  "type": "data.table",
+  "version": "1.0.0",
+  "name": "Table",
+  "category": "data",
+  "description": "Tabular rows with per-column formatting, conditional emphasis, client-side sort and row or cell activation.",
+  "icon": "table",
+
+  "generation": {
+    "purpose": "Show a list of records with several attributes each, so the user can scan, sort and open individual rows.",
+    "whenToUse": "For record-level detail — exception queues, file loads, search results. Bind one column per attribute the user needs, and put the entity key in a hidden column so a drill-down action can read it.",
+    "whenNotToUse": "Do not use for aggregated figures or for a breakdown by a dimension; use analytics.kpi-card for a single value and analytics.chart for a dimensioned series.",
+    "keyProperties": ["density", "selectionMode", "maxHeight"],
+    "eligible": true,
+    "exampleConfig": { "density": "compact", "selectionMode": "single", "maxHeight": "420px" }
+  },
+
+  "properties": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "density": { "type": "string", "enum": ["comfortable", "compact"], "default": "comfortable" },
+      "selectionMode": { "type": "string", "enum": ["none", "single"], "default": "none" },
+      "showRowCount": { "type": "boolean", "default": true },
+      "zebra": { "type": "boolean", "default": true },
+      "maxHeight": {
+        "description": "Scroll the table body beyond this height, keeping the header visible.",
+        "type": "string",
+        "pattern": "^[0-9]+(px|rem|vh)$"
+      }
+    },
+    "additionalProperties": false
+  },
+
+  "dataRequirement": {
+    "shape": "tabular",
+    "roles": [
+      {
+        "role": "columns",
+        "label": "Columns",
+        "required": true,
+        "repeated": true,
+        "accepts": ["attribute", "measure", "key"]
+      }
+    ],
+    "maxRows": 5000
+  },
+
+  "events": {
+    "rowActivated": {
+      "label": "Row activated",
+      "description": "Emitted when a row is clicked or activated with Enter. Payload is the row.",
+      "payload": {}
+    },
+    "selectionChanged": {
+      "label": "Selection changed",
+      "description": "Emitted when selectionMode is 'single' and the selected row changes.",
+      "payload": {}
+    },
+    "cellActivated": {
+      "label": "Cell activated",
+      "description": "Emitted when a link cell is activated. Supersedes rowActivated so a link does not also drill the row.",
+      "payload": {}
+    },
+    "retryRequested": {
+      "label": "Retry requested",
+      "description": "Emitted when the user activates Retry in the error state."
+    }
+  },
+
+  "states": ["ready", "loading", "empty", "partial", "error", "denied"],
+
+  "breakpoints": {
+    "xs": {
+      "supported": true,
+      "minColSpan": 12,
+      "behaviour": "scrollable",
+      "note": "Body scrolls horizontally inside its own container; the page never scrolls sideways."
+    },
+    "sm": { "supported": true, "minColSpan": 12, "behaviour": "scrollable" },
+    "md": { "supported": true, "minColSpan": 8, "behaviour": "full" },
+    "lg": { "supported": true, "minColSpan": 6, "behaviour": "full" },
+    "xl": { "supported": true, "minColSpan": 4, "behaviour": "full" }
+  },
+
+  "accessibility": {
+    "wcagLevel": "AA",
+    "keyboardContract": "Column headers are buttons that toggle sort and report aria-sort. Rows are focusable and Enter-activatable only when interactive. Link cells are buttons and stop propagation so keyboard users get one unambiguous target per cell.",
+    "requiredLabels": ["title"],
+    "colourIndependent": true,
+    "notes": "A caption names the table and states the row count for screen readers. Conditional emphasis is accompanied by the value text, never colour alone."
+  },
+
+  "capabilities": [],
+
+  "performance": {
+    "renderBudgetMs": 120,
+    "virtualized": false,
+    "skeleton": { "minHeight": "240px", "shape": "table" }
+  },
+
+  "lifecycle": {
+    "stability": "experimental",
+    "since": "1.0.0",
+    "migrationNote": "M1 sorts client-side over the returned page and is not virtualized. Server-side sort and virtualization land with the real Data Gateway."
+  },
+
+  "bundle": {
+    "libraryPath": "@opus/components/table",
+    "exportName": "TableComponent"
+  }
+}

@@ -1,0 +1,189 @@
+/**
+ * Design tokens.
+ *
+ * Definitions name semantics (`emphasis: negative`), never colours, so theming,
+ * dark mode and contrast stay under the design system's control. That is what
+ * makes an AI-generated page accessible by construction: the generator cannot
+ * choose an inaccessible palette because it never chooses a colour at all.
+ */
+
+:root {
+  /* ── spacing scale */
+  --opus-space-0: 0;
+  --opus-space-1: 0.25rem;
+  --opus-space-2: 0.5rem;
+  --opus-space-3: 0.75rem;
+  --opus-space-4: 1rem;
+  --opus-space-5: 1.5rem;
+  --opus-space-6: 2rem;
+  --opus-space-7: 3rem;
+
+  /* ── radii and elevation */
+  --opus-radius-sm: 4px;
+  --opus-radius-md: 8px;
+  --opus-radius-lg: 12px;
+  --opus-shadow-raised: 0 1px 2px rgb(0 0 0 / 8%), 0 4px 12px rgb(0 0 0 / 6%);
+
+  /* ── typography */
+  --opus-font-sans: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --opus-font-mono: 'JetBrains Mono', 'SF Mono', 'Consolas', monospace;
+  --opus-text-xs: 0.75rem;
+  --opus-text-sm: 0.8125rem;
+  --opus-text-md: 0.9375rem;
+  --opus-text-lg: 1.125rem;
+  --opus-text-xl: 1.5rem;
+  --opus-text-2xl: 2rem;
+  --opus-text-3xl: 2.5rem;
+  --opus-weight-regular: 400;
+  --opus-weight-medium: 500;
+  --opus-weight-semibold: 600;
+  --opus-leading-tight: 1.2;
+  --opus-leading-normal: 1.5;
+
+  /* ── layout */
+  --opus-grid-columns: 12;
+  --opus-gap-none: 0;
+  --opus-gap-sm: var(--opus-space-2);
+  --opus-gap-md: var(--opus-space-4);
+  --opus-gap-lg: var(--opus-space-5);
+  --opus-shell-nav-width: 250px;
+  --opus-page-max-width: 1680px;
+
+  /* ── motion */
+  --opus-duration-fast: 120ms;
+  --opus-duration-normal: 200ms;
+  --opus-easing: cubic-bezier(0.2, 0, 0.2, 1);
+
+  /* ── light theme surfaces and text */
+  --opus-canvas: #f4f6f9;
+  --opus-surface: #ffffff;
+  --opus-surface-raised: #ffffff;
+  --opus-surface-sunken: #eef1f6;
+  --opus-surface-hover: #f5f7fa;
+  --opus-border: #dbe1ea;
+  --opus-border-strong: #b9c2d0;
+  --opus-text: #171c26;
+  --opus-text-secondary: #566076;
+  --opus-text-muted: #7a869c;
+  --opus-text-inverse: #ffffff;
+  --opus-focus-ring: #2563eb;
+
+  /* ── emphasis semantics: the only vocabulary a definition may use */
+  --opus-emphasis-neutral: #475569;
+  --opus-emphasis-neutral-bg: #eef1f6;
+  --opus-emphasis-positive: #15803d;
+  --opus-emphasis-positive-bg: #dcfce7;
+  --opus-emphasis-warning: #a16207;
+  --opus-emphasis-warning-bg: #fef3c7;
+  --opus-emphasis-negative: #b91c1c;
+  --opus-emphasis-negative-bg: #fee2e2;
+  --opus-emphasis-info: #1d4ed8;
+  --opus-emphasis-info-bg: #dbeafe;
+  --opus-emphasis-muted: #7a869c;
+  --opus-emphasis-muted-bg: #f1f3f7;
+
+  /* ── categorical chart palette, contrast-checked against both surfaces */
+  --opus-chart-1: #2563eb;
+  --opus-chart-2: #0d9488;
+  --opus-chart-3: #c2410c;
+  --opus-chart-4: #7c3aed;
+  --opus-chart-5: #b91c1c;
+  --opus-chart-6: #4d7c0f;
+  --opus-chart-grid: #e2e7ee;
+  --opus-chart-axis: #7a869c;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --opus-canvas: #0d1117;
+    --opus-surface: #161b23;
+    --opus-surface-raised: #1c222c;
+    --opus-surface-sunken: #10151c;
+    --opus-surface-hover: #202834;
+    --opus-border: #2b333f;
+    --opus-border-strong: #3f4a59;
+    --opus-text: #e6ebf2;
+    --opus-text-secondary: #a3aec0;
+    --opus-text-muted: #7a869c;
+    --opus-text-inverse: #0d1117;
+    --opus-focus-ring: #60a5fa;
+
+    --opus-emphasis-neutral: #a3aec0;
+    --opus-emphasis-neutral-bg: #232b36;
+    --opus-emphasis-positive: #4ade80;
+    --opus-emphasis-positive-bg: #14321f;
+    --opus-emphasis-warning: #fbbf24;
+    --opus-emphasis-warning-bg: #362a10;
+    --opus-emphasis-negative: #f87171;
+    --opus-emphasis-negative-bg: #3b1717;
+    --opus-emphasis-info: #60a5fa;
+    --opus-emphasis-info-bg: #14243d;
+    --opus-emphasis-muted: #7a869c;
+    --opus-emphasis-muted-bg: #1e242e;
+
+    --opus-chart-1: #60a5fa;
+    --opus-chart-2: #2dd4bf;
+    --opus-chart-3: #fb923c;
+    --opus-chart-4: #a78bfa;
+    --opus-chart-5: #f87171;
+    --opus-chart-6: #a3e635;
+    --opus-chart-grid: #262e3a;
+    --opus-chart-axis: #7a869c;
+
+    --opus-shadow-raised: 0 1px 2px rgb(0 0 0 / 40%), 0 4px 12px rgb(0 0 0 / 30%);
+  }
+}
+
+/* Explicit theme override wins in both directions. */
+:root[data-theme='dark'] {
+  --opus-canvas: #0d1117;
+  --opus-surface: #161b23;
+  --opus-surface-raised: #1c222c;
+  --opus-surface-sunken: #10151c;
+  --opus-surface-hover: #202834;
+  --opus-border: #2b333f;
+  --opus-border-strong: #3f4a59;
+  --opus-text: #e6ebf2;
+  --opus-text-secondary: #a3aec0;
+  --opus-text-muted: #7a869c;
+  --opus-text-inverse: #0d1117;
+  --opus-focus-ring: #60a5fa;
+
+  --opus-emphasis-neutral: #a3aec0;
+  --opus-emphasis-neutral-bg: #232b36;
+  --opus-emphasis-positive: #4ade80;
+  --opus-emphasis-positive-bg: #14321f;
+  --opus-emphasis-warning: #fbbf24;
+  --opus-emphasis-warning-bg: #362a10;
+  --opus-emphasis-negative: #f87171;
+  --opus-emphasis-negative-bg: #3b1717;
+  --opus-emphasis-info: #60a5fa;
+  --opus-emphasis-info-bg: #14243d;
+  --opus-emphasis-muted: #7a869c;
+  --opus-emphasis-muted-bg: #1e242e;
+
+  --opus-chart-1: #60a5fa;
+  --opus-chart-2: #2dd4bf;
+  --opus-chart-3: #fb923c;
+  --opus-chart-4: #a78bfa;
+  --opus-chart-5: #f87171;
+  --opus-chart-6: #a3e635;
+  --opus-chart-grid: #262e3a;
+  --opus-chart-axis: #7a869c;
+
+  --opus-shadow-raised: 0 1px 2px rgb(0 0 0 / 40%), 0 4px 12px rgb(0 0 0 / 30%);
+}
+
+/* Density is a page-level presentation choice, applied as a data attribute. */
+[data-density='compact'] {
+  --opus-gap-md: var(--opus-space-3);
+  --opus-gap-lg: var(--opus-space-4);
+  --opus-text-md: 0.875rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --opus-duration-fast: 0ms;
+    --opus-duration-normal: 0ms;
+  }
+}

@@ -1,0 +1,139 @@
+{
+  "schemaVersion": "1.0",
+  "id": "securities.operations",
+  "name": "Securities Operations",
+  "description": "Operational experience for the securities master: processing health and exception remediation.",
+  "icon": "securities",
+  "kind": "application",
+  "workspaceId": "ops-securities",
+
+  "pages": {
+    "security-master-operations": { "$pageRef": "security-master-operations.page.json" },
+    "processing-detail": { "$pageRef": "processing-detail.page.json" }
+  },
+
+  "navigation": {
+    "mode": "sidebar",
+    "homePage": "security-master-operations",
+    "items": [
+      {
+        "kind": "group",
+        "id": "nav-operations-group",
+        "label": "Operations",
+        "icon": "dashboard",
+        "children": [
+          {
+            "kind": "page",
+            "id": "nav-operations",
+            "label": "Security Master",
+            "icon": "dashboard",
+            "page": "security-master-operations"
+          },
+          {
+            "kind": "page",
+            "id": "nav-processing",
+            "label": "File Processing",
+            "icon": "pipeline",
+            "page": "processing-detail",
+            "badge": { "source": "nav-attention-count", "field": "attention-count", "emphasis": "warning" }
+          }
+        ]
+      },
+      { "kind": "divider", "id": "nav-divider" },
+      {
+        "kind": "external",
+        "id": "nav-runbook",
+        "label": "Architecture docs",
+        "icon": "book",
+        "urlTemplate": "https://github.com/vgiattino/Experience-Studio/tree/main/architecture"
+      }
+    ],
+    "drilldownTargets": {
+      "processing.file-load": { "page": "processing-detail", "openIn": "self" }
+    }
+  },
+
+  "parameters": {
+    "as-of": {
+      "label": "As Of",
+      "dataType": "date",
+      "default": { "$expr": "today()" },
+      "required": true,
+      "exposedInShell": false,
+      "persist": "session"
+    }
+  },
+
+  "dataSources": {
+    "nav-attention-count": {
+      "id": "nav-attention-count",
+      "name": "Loads Needing Attention",
+      "description": "Drives the live badge beside the File Processing nav item.",
+      "entity": "processing.file-load",
+      "kind": "aggregate",
+      "select": {
+        "measures": [{ "measure": "late-file-count", "aggregation": "count", "alias": "attention-count" }]
+      },
+      "filter": {
+        "all": [
+          { "target": "load-status", "operator": "in", "value": ["LATE", "FAILED"] },
+          { "target": "business-date", "operator": "onOrAfterToday" }
+        ]
+      },
+      "loadPolicy": "eager",
+      "cacheTtlHintSeconds": 120,
+      "expectedCostClass": "low"
+    }
+  },
+
+  "security": {
+    "intendedAudience": "Securities operations team and data stewards.",
+    "requiredCapabilities": ["experience.view"],
+    "workspaceScope": "tenant",
+    "deniedDataPolicy": "showDeniedState",
+    "exportPolicy": {
+      "allowed": true,
+      "formats": ["csv"],
+      "maxRows": 50000,
+      "requiresReason": true,
+      "watermark": true
+    },
+    "auditProfile": "standard",
+    "sharingPolicy": { "allowCopy": true, "allowTemplate": true, "allowCrossTenantExemplar": false }
+  },
+
+  "presentation": { "themeRef": "opus.default", "density": "comfortable", "showShellHeader": true },
+
+  "localization": {
+    "defaultLocale": "en-GB",
+    "supportedLocales": ["en-GB", "en-US", "de-DE"]
+  },
+
+  "environments": ["dev"],
+
+  "version": {
+    "schemaVersion": "1.0",
+    "artifactVersion": 1,
+    "lifecycleState": "published",
+    "immutable": true,
+    "pins": { "catalogVersion": 7, "registryVersion": "1.0.0" },
+    "provenance": {
+      "origin": "human",
+      "actorId": "platform-team@demo-tenant",
+      "createdAt": "2026-08-04T09:00:00Z"
+    },
+    "validation": {
+      "status": "valid",
+      "stagesPassed": ["structural"],
+      "validatedAt": "2026-08-04T09:00:00Z"
+    },
+    "governance": {
+      "publishedBy": "platform-team@demo-tenant",
+      "publishedAt": "2026-08-04T09:00:00Z",
+      "publishedEnvironments": ["dev"]
+    },
+    "audit": { "createdBy": "platform-team@demo-tenant", "createdAt": "2026-08-04T09:00:00Z" }
+  },
+
+  "tags": ["operations", "securities", "m1-reference"]
+}

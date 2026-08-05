@@ -46,6 +46,13 @@ Durations are omitted deliberately; sequence and exit criteria are the architect
 - Schemas are versioned, published as a package, and consumed by at least two subsystems.
 - Every NFR-relevant field (responsive, localization, provenance) exists in the model, not on a wishlist.
 
+**Status: DELIVERED**, and extended beyond the original scope with a runtime proof of concept
+that renders the reference definitions — see [`../docs/M1-IMPLEMENTATION.md`](../docs/M1-IMPLEMENTATION.md).
+Sixteen schemas, an expression grammar, five worked examples and two runtime page definitions
+all validate; the schemas are consumed by the contracts library, the validator, the renderer and
+the CI gate. Two amendments were needed and are recorded in `schemas/README.md` §7: a `content`
+component category, and the breakpoint cascade direction, which the schema had left unstated.
+
 ---
 
 ## Milestone 2 — Design System and Component Core

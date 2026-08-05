@@ -215,6 +215,7 @@
         "order": { "type": "integer", "minimum": 0, "maximum": 999 },
         "minHeight": { "type": "string", "pattern": "^[0-9]+(px|rem|vh)$" },
         "breakpoints": {
+          "description": "Per-breakpoint overrides, resolved MOBILE-FIRST: the base placement is the narrowest case, and an entry applies at its breakpoint and wider, with the widest applicable entry winning. So colSpan 12 with { sm: 6, lg: 3 } is full width on a phone, halves on a tablet and quarters on a desktop. Choosing a direction matters more than which direction — a definition set that mixes mobile-first and desktop-first placement silently mislays panels.",
           "type": "object",
           "propertyNames": { "$ref": "#/$defs/breakpoint" },
           "additionalProperties": {

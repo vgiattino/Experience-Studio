@@ -165,6 +165,8 @@ This is mandated rather than encouraged because of who authors pages. A human de
 
 `denied` is separate from `error` deliberately: a user lacking column entitlement is a normal, expected outcome that must read as "not available to you," not as a fault.
 
+**Angular constraint, found in M1:** `<ng-content>` cannot be projected into an embedded view, so placing it inside `@if` or `@switch` silently renders nothing. The state shell therefore always instantiates the projected widget and toggles it with CSS, keeping only the state presentations under control flow. Without this, widgets mount, report `ready`, and display empty boxes — a failure with no error to follow.
+
 ### 3.6 Accessibility and internationalization
 
 Both belong in the component tier, and this is where the architecture gets a genuine advantage: **if components are accessible and localized by construction, every AI-generated page inherits both for free.** That leverage exists only if the investment is made before the library is written.
@@ -258,13 +260,20 @@ Properties that matter:
 - **Version-aware.** The registry is published with a version; definitions pin it. An unknown type resolves to a placeholder widget with telemetry — never a blank page (see runtime failure matrix).
 - **The one extension point.** Future third-party components register here, which gives a single place to apply review gates and sandboxing.
 
-Instantiation uses Angular's dynamic component creation with signal-based input bindings, so subsequent data arrivals update inputs rather than destroying and recreating components.
+Instantiation uses Angular's dynamic component creation with signal-based input bindings, so subsequent data arrivals update inputs rather than destroying and recreating components. Two details, both learned by building it in M1:
+
+- **Probe before setting an input.** Angular *logs* NG0303 for an unknown input rather than throwing, so a blind `setInput` produces console noise the host cannot catch. The host checks that the component declares the input first — and components legitimately omit optional inputs they have no use for.
+- **A recursive layout component needs `forwardRef` in its own `imports`.** A direct self-reference is evaluated while the class binding is still uninitialised, resolves to `undefined`, and makes *every other importer* fail with NG2012 — an error that points away from the cause.
 
 ### 5.3 Layout and responsiveness
 
 Definitions declare a **12-column responsive grid** with per-breakpoint overrides for position, span, order and visibility; the renderer maps this to CSS Grid. The AI generates the breakpoint variants as part of the definition, which is what makes "responsive by default" a property of the artifact rather than a hope about CSS.
 
 **Prefer container queries over viewport media queries.** A component's correct layout depends on the space *it* occupies, not the size of the window. The same KPI card appears full-width on a dashboard, in a narrow drawer, and in a split detail pane; only container queries make it behave correctly in all three without the definition having to know where it was placed.
+
+**Breakpoint overrides resolve mobile-first** (settled in M1, documented in `common.schema.json`): the base placement is the narrowest case, and an override applies at its breakpoint and wider. Choosing a direction matters more than which direction — a definition set that mixes mobile-first and desktop-first placement silently mislays panels, because an override intended for one end of the scale leaks to the other.
+
+**A row-direction stack is laid out on the same 12-column grid as a grid container.** `colSpan` means "columns of twelve", and flex-basis percentages cannot honour that once gaps are added: four 25% items plus three gaps overflow and wrap to one per line.
 
 ### 5.4 Expression evaluation
 
@@ -320,3 +329,6 @@ The **reference definition corpus** is shared with the AI evaluation harness ([`
 | F8 | Encoding-model chart family | Either weak visualizations or component-type proliferation |
 | F9 | Six mandatory component states | Generated pages ship with holes |
 | F10 | WCAG 2.2 AA and i18n as component acceptance criteria | Cross-cutting retrofit across the entire library |
+| F11 | Mobile-first breakpoint cascade | Every stored placement resolves differently; panels move |
+
+**Implementation status:** F2–F10 are implemented in the M1 runtime. F1 (two apps) awaits Studio, and F3's registry is hand-maintained pending generation. See [`../docs/M1-IMPLEMENTATION.md`](../docs/M1-IMPLEMENTATION.md) §3 for the full list of deviations.

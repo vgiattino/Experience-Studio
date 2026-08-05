@@ -5,6 +5,8 @@ Related: [`frontend-architecture.md`](./frontend-architecture.md) · [`backend-a
 
 This document answers one question in detail: **how does a JSON page definition become a running, governed, entitled application?**
 
+**Implemented in M1.** Stages 1–8 below run in `libs/renderer`, with a mock gateway standing in for stage 3's data plane. Every claim in §1, §5, §6, §8, §9 and §10 was verified in a browser — see [`../docs/M1-IMPLEMENTATION.md`](../docs/M1-IMPLEMENTATION.md) §2.
+
 ---
 
 ## 1. The Runtime Guarantee

@@ -26,6 +26,7 @@ The platform's centre of gravity is therefore the **definition** — the artifac
 | [`ai-generation-architecture.md`](./ai-generation-architecture.md) | Superseded by `ai-architecture.md` |
 | [`../schemas/README.md`](../schemas/README.md) | The core metadata model: ten models, JSON schemas, worked examples |
 | [`../schemas/expression-grammar.md`](../schemas/expression-grammar.md) | Expression language specification |
+| [`../docs/M1-IMPLEMENTATION.md`](../docs/M1-IMPLEMENTATION.md) | Milestone 1 implementation record: what was built, verified, deviated and deferred |
 
 ---
 
@@ -104,9 +105,13 @@ Architectural principles established across the documents above:
 Build order is the review's central recommendation: **contracts → deterministic rendering → AI.**
 
 ```
-M0 Decisions   M1 Contracts   M2 Components   M3 Renderer + Gateway
-M4 Builder     M5 Catalog     M6 AI + Eval    M7 Governance   M8 Hardening
+M0 Decisions   M1 Contracts ✓   M2 Components   M3 Renderer + Gateway
+M4 Builder     M5 Catalog       M6 AI + Eval    M7 Governance   M8 Hardening
 ```
+
+M1 is delivered, including a working runtime proof of concept that renders the reference
+definitions. M3's renderer exists; what M3 still owes is the real Data Gateway and the
+entitlement enforcement that only a server can provide.
 
 At M3 the platform is real: hand-authored JSON renders as a governed, entitled, responsive page. At M6 it becomes authorable in natural language. Reversing that order risks a compelling demo and an unshippable product. Detail and exit criteria: [`implementation-roadmap.md`](./implementation-roadmap.md).
 
@@ -114,4 +119,15 @@ At M3 the platform is real: hand-authored JSON renders as a governed, entitled, 
 
 ## 6. Status
 
-All architecture documents are **drafts pending approval**. No production code has been written. Each document ends with a table of decisions requiring ratification; those tables are the intended agenda for architecture sign-off, and should become ADRs once accepted.
+Architecture documents are **drafts pending approval**. Each ends with a table of decisions
+requiring ratification; those tables are the intended agenda for architecture sign-off and
+should become ADRs once accepted.
+
+**Milestone 1 is implemented**: the deterministic runtime — application shell, rendering
+engine, component framework, JSON page loader, five components — with a mock gateway in place
+of the real data plane. What it verified, where it deviated, and what it deliberately left out
+are recorded in [`../docs/M1-IMPLEMENTATION.md`](../docs/M1-IMPLEMENTATION.md).
+
+Building it settled two open questions and found four defects that document review had not:
+the breakpoint cascade direction, an expression sandbox escape, silent data loss from an
+uncoerced date parameter, and a misplaced client/server split in filter resolution.
