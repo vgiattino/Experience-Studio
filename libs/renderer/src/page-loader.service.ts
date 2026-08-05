@@ -93,6 +93,21 @@ export class PageLoaderService {
     return this.processDefinition(raw, options);
   }
 
+  /**
+   * Load a definition already in memory — an AI generation, or a Studio draft.
+   *
+   * Deliberately the SAME path as a fetched definition: migrate → validate → compile, with
+   * the same validator and the same telemetry. A generated page that renders here but would
+   * be rejected on reload would be the worst kind of bug, and routing generation through a
+   * shortcut is how that bug gets written.
+   */
+  async loadDefinition(
+    definition: unknown,
+    options: { validate?: boolean } = {},
+  ): Promise<LoadOutcome> {
+    return this.processDefinition(definition, options);
+  }
+
   private async processDefinition(
     raw: unknown,
     options: { validate?: boolean },

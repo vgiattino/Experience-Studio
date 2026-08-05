@@ -130,6 +130,26 @@ component category, and the breakpoint cascade direction, which the schema had l
 - Retrieval returns only what the requesting user is entitled to see.
 - A steward adds a business concept without engineering involvement.
 
+**Status: PARTIALLY DELIVERED.** A mocked catalog service and the entitlement-aware retrieval
+API exist in `libs/catalog/`, with catalog coverage for securities, parties, file processing and
+data quality exceptions, plus the drift block populated on the runtime catalog. Retrieval scoping
+is verified: a persona lacking `edm.dq.read` generates a page containing no reference to data
+quality exceptions, in any field.
+
+Two things this milestone surfaced that had been architecture without an implementation:
+
+- **The logical→physical boundary is now load-bearing rather than declared.** The gateway is the
+  only component holding both vocabularies, driven by the catalog's server-only `physical`
+  blocks. It is genuinely exercised: `securities.security.security-id` is stored as
+  `security_id`, and the `rows-processed` measure aggregates a `row-count` column. A page naming
+  either physical form would be wrong.
+- **Level-3 semantic validation moved from "server-only" to implemented**, because generation
+  cannot be honest without it (`ai-architecture.md` §5.4).
+
+Still outstanding: the catalog is a static JSON artifact rather than a service, so authoring,
+publication and steward tooling do not exist, and `similarity()` is token overlap rather than a
+vector index.
+
 ---
 
 ## Milestone 6 — AI Generation and Evaluation
@@ -152,6 +172,29 @@ component category, and the breakpoint cascade direction, which the schema had l
 - Invalid generations never reach the user as errors — repaired or fallen back.
 - Refinement preserves prior manual edits, verified by test.
 - A user reaches a publishable dashboard from a natural-language prompt within the agreed latency and cost budget.
+
+**Status: PARTIALLY DELIVERED, ahead of sequence.** The generation *pipeline* is built and
+working end to end against mocked metadata and a simulated provider — intent, entitlement-scoped
+retrieval, context assembly under budget, template selection, plan-then-fill, deterministic
+assembly, the validation cascade, bounded targeted repair, validated deterministic fallback, and
+provenance. See [`../docs/AI-GENERATION-WORKFLOW.md`](../docs/AI-GENERATION-WORKFLOW.md).
+
+Pulled forward deliberately and at low cost, because the pipeline is provider-agnostic: it was
+buildable without a model, and building it corrected five defects in the design of §5 of
+`ai-architecture.md` that review had not found — four of them the same class, a safety mechanism
+that appeared to work because nothing ever reached it.
+
+Still outstanding for M6, and the reason this is not "delivered":
+
+- **Server-side orchestration.** Generation runs in the browser, so the catalog projection and
+  the model call are client-side. Both are server concerns in production.
+- **The evaluation harness and golden corpus** — the CI gate on quality, and the mechanism the
+  faithful-assembly invariant exists to protect. Nothing currently detects a generation-quality
+  regression.
+- **Refinement as a patch.** `intake` classifies `refine` and context assembly projects the
+  current page, but generation re-plans rather than emitting a JSON Patch, so manual edits are
+  not preserved.
+- **A real model**, behind the existing `ModelProvider` port.
 
 ---
 

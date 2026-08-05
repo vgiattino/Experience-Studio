@@ -49,6 +49,8 @@ libs/
   component-registry/           # (L4) generated type -> loader map
   renderer/                     # (L5) definition interpreter, expression engine, layout engine
   data-client/                  # (L5) gateway client, batching, cache, entitlement-aware keys
+  catalog/                      # (L5) semantic catalog projection, retrieval, grounding pack
+  generation/                   # (L6) intake, context assembly, plan/fill, assembly, orchestration
   studio-core/                  # (L6) definition store, patch log, undo, diff
   studio-ui/                    # (L6) canvas, inspector, palette, prompt panel, catalog browser
   testing/                      # fixtures, harnesses, definition builders
@@ -62,11 +64,15 @@ libs/
 | L4 `components` | L1–L3 | renderer, other component libs, data-client |
 | L4 `component-registry` | L1, L4 (lazily) | renderer |
 | L5 `renderer` | L1–L3, registry, data-client | components (directly), studio-* |
+| L5 `catalog` | L1 | renderer, data-client, generation |
+| L6 `generation` | L1–L5 | components (directly) |
 | L6 `studio-*` | L1–L5 | — |
 
 Two rules in that table deserve emphasis because they are easy to violate and expensive to unwind:
 
 **The renderer must not import components directly.** It resolves them through the registry. Otherwise the renderer's bundle transitively contains every component and code-splitting is impossible.
+
+**`catalog` depends on `contracts` alone.** It is the layer both the generator and the gateway need, from opposite directions — the generator needs the entitlement-scoped *projection*, the gateway needs the server-only *physical* map — and giving it any wider dependency would make the one library that must be usable on both sides of the network unusable on either. For the same reason the validator's level-3 check takes a minimal structural interface rather than importing `catalog`.
 
 **Components must not import the data client.** They receive resolved data as an input signal. A component that fetches its own data cannot be composed, cannot be batched into the dashboard's single query round trip, cannot be previewed with fixture data, and becomes a second path to EDM — which §5 of [`security-architecture.md`](./security-architecture.md) forbids outright.
 

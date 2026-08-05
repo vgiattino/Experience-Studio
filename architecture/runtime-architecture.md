@@ -96,6 +96,8 @@ Compilation transforms a definition into an immutable **`CompiledPage`** plan. I
 
 **`CompiledPage` is memoized by definition version.** Because published versions are immutable, this cache can never be stale. Navigating away and back, switching breakpoints, or re-rendering after a filter change costs nothing in compilation.
 
+**[revised by implementation] The immutability qualifier is load-bearing, and the cache must test for it.** A cache keyed on `(id, artifactVersion)` is sound only for an artifact that cannot change under that key. A draft — a Studio work-in-progress, or an AI generation the user re-runs — mutates while keeping both, so the cache would serve the previous content indefinitely. `compilePage` therefore caches only when `version.immutable !== false`. Compilation is sub-millisecond, so skipping the cache for drafts costs nothing measurable; the alternative is a preview that silently disagrees with the definition it claims to show.
+
 **The dependency graph is the payoff.** Derived statically from expression and parameter references, it tells the runtime exactly which data sources a given filter change invalidates. Without it, the only safe behaviour on any state change is to re-query everything — which is what makes many low-code dashboards feel slow. With it, changing an asset-class filter re-queries the three widgets that use it and leaves the other nine untouched.
 
 Unknown component types are resolved here, and the handling is deliberate (§10): a placeholder, not a failure.

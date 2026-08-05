@@ -313,9 +313,9 @@
       "source-system": "Bloomberg",
       "business-date": "2026-08-03",
       "expected-at": "2026-08-03T11:15:00Z",
-      "completed-at": "2026-08-03T11:31:00Z",
-      "load-status": "COMPLETE",
-      "row-count": 426377
+      "completed-at": null,
+      "load-status": "LATE",
+      "row-count": 0
     },
     {
       "load-id": "LD000032",
@@ -323,9 +323,9 @@
       "source-system": "Bloomberg",
       "business-date": "2026-08-03",
       "expected-at": "2026-08-03T08:00:00Z",
-      "completed-at": "2026-08-03T08:22:00Z",
-      "load-status": "COMPLETE",
-      "row-count": 77969
+      "completed-at": null,
+      "load-status": "LATE",
+      "row-count": 0
     },
     {
       "load-id": "LD000033",
@@ -333,9 +333,9 @@
       "source-system": "Bloomberg",
       "business-date": "2026-08-03",
       "expected-at": "2026-08-03T06:00:00Z",
-      "completed-at": "2026-08-03T06:20:00Z",
-      "load-status": "COMPLETE",
-      "row-count": 153694
+      "completed-at": null,
+      "load-status": "LATE",
+      "row-count": 0
     },
     {
       "load-id": "LD000034",
@@ -343,9 +343,9 @@
       "source-system": "Bloomberg",
       "business-date": "2026-08-03",
       "expected-at": "2026-08-03T08:30:00Z",
-      "completed-at": "2026-08-03T08:54:00Z",
-      "load-status": "COMPLETE",
-      "row-count": 26624
+      "completed-at": null,
+      "load-status": "LATE",
+      "row-count": 0
     },
     {
       "load-id": "LD000035",
@@ -353,9 +353,9 @@
       "source-system": "Bloomberg",
       "business-date": "2026-08-03",
       "expected-at": "2026-08-03T11:15:00Z",
-      "completed-at": "2026-08-03T11:34:00Z",
-      "load-status": "COMPLETE",
-      "row-count": 154807
+      "completed-at": null,
+      "load-status": "FAILED",
+      "row-count": 0
     },
     {
       "load-id": "LD000036",
@@ -363,9 +363,9 @@
       "source-system": "Refinitiv",
       "business-date": "2026-08-03",
       "expected-at": "2026-08-03T08:15:00Z",
-      "completed-at": "2026-08-03T08:55:00Z",
-      "load-status": "COMPLETE",
-      "row-count": 439815
+      "completed-at": null,
+      "load-status": "FAILED",
+      "row-count": 0
     },
     {
       "load-id": "LD000037",
@@ -613,9 +613,9 @@
       "source-system": "Bloomberg",
       "business-date": "2026-08-02",
       "expected-at": "2026-08-02T06:15:00Z",
-      "completed-at": "2026-08-02T06:17:00Z",
-      "load-status": "COMPLETE",
-      "row-count": 249987
+      "completed-at": null,
+      "load-status": "LATE",
+      "row-count": 0
     },
     {
       "load-id": "LD000062",
@@ -623,9 +623,9 @@
       "source-system": "Bloomberg",
       "business-date": "2026-08-02",
       "expected-at": "2026-08-02T11:30:00Z",
-      "completed-at": "2026-08-02T12:02:00Z",
-      "load-status": "COMPLETE",
-      "row-count": 458116
+      "completed-at": null,
+      "load-status": "LATE",
+      "row-count": 0
     },
     {
       "load-id": "LD000063",
@@ -633,9 +633,9 @@
       "source-system": "Bloomberg",
       "business-date": "2026-08-02",
       "expected-at": "2026-08-02T06:15:00Z",
-      "completed-at": "2026-08-02T06:38:00Z",
-      "load-status": "COMPLETE",
-      "row-count": 155933
+      "completed-at": null,
+      "load-status": "LATE",
+      "row-count": 0
     },
     {
       "load-id": "LD000064",

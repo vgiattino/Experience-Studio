@@ -23,6 +23,8 @@
       "@opus/data-client": ["libs/data-client/src/index.ts"],
       "@opus/component-registry": ["libs/component-registry/src/index.ts"],
       "@opus/renderer": ["libs/renderer/src/index.ts"],
+      "@opus/catalog": ["libs/catalog/src/index.ts"],
+      "@opus/generation": ["libs/generation/src/index.ts"],
       "@opus/components/*": ["libs/components/*/index.ts"],
       "@opus/schemas/*": ["schemas/*"]
     }

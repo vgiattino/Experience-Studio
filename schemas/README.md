@@ -250,7 +250,7 @@ A conformant artifact must pass all eight. Only level 1 is expressible in JSON S
 |---|---|---|---|
 | 1 | **Structural** | These schemas | Client + server |
 | 2 | **Component** | Types exist at pinned `registryVersion`; `config` conforms to manifest `properties`; slots respect constraints | Server |
-| 3 | **Semantic** | Entities, attributes, measures, relationships, data sources exist at pinned `catalogVersion`; local refs resolve | Server |
+| 3 | **Semantic** | Entities, attributes, measures, relationships, data sources exist at pinned `catalogVersion`; aggregation in `allowedAggregations`; dimension groupable; filter target filterable; `requiresFilter` honoured; local refs resolve | Client + server |
 | 4 | **Binding** | Aggregation in `allowedAggregations`; role `accepts` and `dataTypes` satisfied; required roles present; alias exists in the source; units and currencies coherent | Server |
 | 5 | **Entitlement** | Every referenced concept is visible to the caller — re-checked independently of retrieval, because retrieval scoping is a quality mechanism and not a security control | Server |
 | 6 | **Cost** | Fan-out, estimated rows, `requiresFilter` honoured, page budget respected | Server (gateway estimate) |
@@ -259,7 +259,11 @@ A conformant artifact must pass all eight. Only level 1 is expressible in JSON S
 
 Levels 5 and 8 are the two most easily skipped and the least recoverable later. Level 5 is a security boundary. Level 8 is what keeps generated content conformant without a human reviewing every page.
 
-**Verification status:** all 16 schemas are valid JSON, conform to the 2020-12 metaschema, and have fully resolvable `$ref`s; all five example artifacts and all three runtime definitions validate at level 1 via `npm run validate`. Levels 2, 4 and 7 are implemented in `libs/validator` and covered by 33 tests. Levels 3, 5, 6 and 8 require the catalog service and the Data Gateway and are reported as *not run* rather than assumed to pass.
+**Verification status:** all 16 schemas are valid JSON, conform to the 2020-12 metaschema, and have fully resolvable `$ref`s; all five example artifacts, all three runtime definitions and the runtime catalog validate at level 1 via `npm run validate`. Levels 2, **3**, 4 and 7 are implemented in `libs/validator`. Levels 5, 6 and 8 require the Data Gateway and an accessibility pass, and are reported as *not run* rather than assumed to pass.
+
+**Level 3 moved from server-only to implemented**, and the reason is worth recording because it inverts the original justification. It was scoped to the server because it needs a catalog; AI generation supplies one, and without level 3 the generation pipeline cannot be honest. Deterministic assembly must carry a model's decisions faithfully rather than clamping an illegal aggregation to a legal one — otherwise provenance lies, model error is invisible to the eval harness, and the repair loop never runs because nothing invalid reaches it (`architecture/ai-architecture.md` §5.4). Level 3 is the only level that catches a disallowed aggregation independently of the assembler.
+
+`validateSemantics` takes a minimal structural interface rather than depending on the catalog library, so the same implementation serves the server against a stored catalog, the client against an entitlement-scoped projection, and tests against a literal. **It does not check entitlement** — level 3 asks whether a reference is meaningful, level 5 asks whether the caller may use it. Conflating them would make an artifact's validity depend on who validated it.
 
 ---
 
@@ -286,6 +290,8 @@ if amendments to it are visible.
 |---|---|---|---|
 | M1 | Added `content` to `component-manifest.category` (and to `slots.allowedCategories`) | **Breaking** by §7 — a member added to a closed enum | Text and media components structure a page without binding a data shape, and forcing them into `layout` was inaccurate. Amended in place because v1.0 is pre-release with zero published artifacts; after first publication this would have required a major version |
 | M1 | Documented `gridPlacement.breakpoints` as resolving **mobile-first** | Clarification, no shape change | The direction was unstated, and the M1 definitions were accidentally written in both directions — four quarter-width cards rendered as halves and wrapped. See `docs/M1-IMPLEMENTATION.md` §4.1 |
+| M6 | Level 3 (semantic) reclassified from *Server* to *Client + server* | Clarification, no shape change | AI generation supplies the catalog level 3 needs, and cannot be honest without it. See the note under §5 |
+| M6 | `cost.requiresFilter` given an enforceable meaning: at least one filter clause that **always** constrains | Clarification of an existing field | The flag existed but nothing checked it, and the first generated page scanned a `requiresFilter` entity with no filter at all. A clause whose value is a page-state wrapper does not satisfy it, because `skipWhenEmpty` means it may constrain nothing |
 
 ## 8. Evolution
 

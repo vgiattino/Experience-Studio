@@ -7,6 +7,12 @@
  * immutable, so that cache can never be stale. Re-rendering, navigating away and
  * back, or changing a filter does not recompile.
  *
+ * THAT ARGUMENT ONLY HOLDS FOR AN IMMUTABLE ARTIFACT, and the qualifier is load-bearing.
+ * A draft — an AI generation, a Studio work-in-progress — changes while keeping the same
+ * id and artifact version, so a cache keyed on the pair would serve the previous content
+ * forever. Drafts are therefore compiled every time and never cached. Compilation is
+ * sub-millisecond, so the cost is nil; being wrong here is not.
+ *
  * The payoff is the DEPENDENCY GRAPH. Derived statically by walking the JSON — no
  * expression is executed and no query is issued — it tells the runtime exactly
  * which data sources a given filter change invalidates. Without it the only safe
@@ -101,7 +107,8 @@ export function compilePage(
   options: { useCache?: boolean } = {},
 ): { page: CompiledPage; cacheHit: boolean } {
   const cacheKey = `${definition.id}@${definition.version.artifactVersion}`;
-  if (options.useCache !== false) {
+  const cacheable = definition.version.immutable !== false;
+  if (options.useCache !== false && cacheable) {
     const cached = compileCache.get(cacheKey);
     if (cached) return { page: cached, cacheHit: true };
   }
@@ -130,7 +137,7 @@ export function compilePage(
     compileMs: performance.now() - startedAt,
   };
 
-  compileCache.set(cacheKey, page);
+  if (cacheable) compileCache.set(cacheKey, page);
   return { page, cacheHit: false };
 }
 

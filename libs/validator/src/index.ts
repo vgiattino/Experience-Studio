@@ -9,6 +9,11 @@
 
 export { validatePage, type PageValidationOptions } from './validate-page';
 export {
+  semanticFindingsFor,
+  validateSemantics,
+  type SemanticCatalog,
+} from './validate-semantic';
+export {
   LEVELS_REQUIRING_SERVER,
   summarize,
   type Severity,

@@ -1,8 +1,15 @@
 # AI Architecture
 
-Status: **Draft for approval**
+Status: **Approved; pipeline implemented against mocked metadata and a simulated provider**
 Related: [`architecture-review.md`](./architecture-review.md) · [`backend-architecture.md`](./backend-architecture.md) · [`security-architecture.md`](./security-architecture.md)
+Implementation record: [`../docs/AI-GENERATION-WORKFLOW.md`](../docs/AI-GENERATION-WORKFLOW.md)
 Supersedes: [`ai-generation-architecture.md`](./ai-generation-architecture.md)
+
+> **Implementation status.** §2–§6 are built in `libs/generation/` and `libs/catalog/`, with a
+> rules-based `SimulatedModelProvider` behind the `ModelProvider` port. §7 (evaluation harness)
+> and the real-model integration are not. Building it corrected five things this document had
+> wrong; each is marked **[revised by implementation]** inline, and all five are recorded with
+> their symptoms in the implementation record.
 
 ---
 
@@ -74,6 +81,8 @@ Classification routes to one of: **create**, **refine**, **explain** (describe w
 
 A cheap structured pass extracts candidate business concepts, measures, filters, timeframes, granularity, comparison intents, and visualization hints. This is a retrieval query builder, not a generation step. Separating it improves retrieval precision materially over embedding the raw prompt, because user prompts carry framing language ("show me a dashboard for the ops team that…") that pollutes similarity search.
 
+**[revised by implementation]** Framing language and *filler* need separating, because the vagueness check of §2.1 depends on the distinction. Framing is scaffolding around a real request; filler is a request with nothing inside it. Stripping only framing left "Make me something nice" holding two apparently-specific terms, which classified it as answerable and sent it to retrieval — producing a decline about the data catalog when the user's problem was that they had not said what they wanted. A prompt reduced to nothing by either list is the trigger for the single clarifying question.
+
 ---
 
 ## 3. Metadata Retrieval
@@ -91,6 +100,8 @@ Three complementary strategies, because each fails differently:
 | **Graph expansion** | Relationship traversal, 1–2 hops from seed entities | Concepts the user implied but did not name — pricing and related parties given a security |
 
 Results are fused, reranked, and truncated to the retrieval budget. Graph expansion is capped by `traversal_cost` so a highly-connected entity cannot pull in the whole catalog.
+
+**[revised by implementation]** Fusion means an entity can be reached by several strategies at once, so the record of *how* it was reached is a set, not a label. Downstream ranking must therefore ask whether expansion was the **sole** origin, not whether it contributed. Treating any graph contribution as "inferred" demoted entities the user had named explicitly, and the symptom was specific: a request naming "exceptions" produced a page with no exceptions on it, showing an unrequested figure in their place. The entity had been found lexically *and* reached by expansion from securities, and the second fact cancelled the first.
 
 ### 3.2 Entitlement filtering happens before ranking, not after
 
@@ -208,11 +219,28 @@ Each stage returns structured, machine-readable errors usable both by the repair
 
 Stages 5 and 8 are the two most easily omitted and the two least recoverable later. Stage 5 is a security boundary. Stage 8 is what makes accessibility hold for content no human designed.
 
+**[revised by implementation]** This table describes the cascade but omits the invariant that makes it *reachable*, which turned out to be the load-bearing one:
+
+> **Deterministic assembly carries the model's decisions faithfully. It never corrects them.**
+
+Clamping an illegal aggregation to a legal one in the assembler looks like defence in depth and is three defects at once: provenance becomes a lie (the record says `sum`, the page computes `count`), model error becomes invisible to the eval harness of §7, and the cascade above never runs, because nothing invalid ever reaches it. A page can be assembled from wrong decisions and then rejected; it must not be silently rewritten into a right one.
+
+The division is: a model's **decisions** — which widget, which measure, which aggregation, which component — are assembled as given and validated; only what the model has no say in (ids, layout arithmetic, version envelopes, action wiring) is decided by code.
+
+The corollary is that stage 3 is not optional for generation. It was scoped as server-only because it needs a catalog, but it is the only level that independently catches a disallowed aggregation, so without it §5.4 and §5.5 are decorative. It is implemented in `libs/validator/src/validate-semantic.ts` and takes a minimal structural interface rather than a dependency on the catalog library, so the same code serves the server, the client and tests.
+
 ### 5.5 Repair and fallback
 
 **Repair:** bounded to two attempts. Failing fragments only, with the specific validation errors supplied as constraints, plus targeted re-retrieval when the failure is a missing catalog reference (usually the grounding pack was too narrow, not the model wrong).
 
+**[revised by implementation]** Two mechanical details determine whether "failing fragments only" is achievable at all, and both were wrong on the first attempt:
+
+1. **Every repairable decision must live in the stage repair regenerates.** Repair re-runs *fills*, so a decision carried on the *plan* is permanently unrepairable — reported correctly by validation, then unfixable. `aggregation` was on the plan and has moved to the fill, which is where it belongs anyway: it is a binding decision, of a kind with a filter or a sort.
+2. **Findings must be mappable back to widgets.** A finding paths at the artifact, not at a widget: a component error at `/components/<id>`, a semantic or binding error at `/dataSources/<id>`. Matching only the former meant every stage-3 error implicated nothing, repair regenerated nothing, and a fixable page fell back. A data-source → widget reverse index closes it.
+
 **Fallback:** when repair is exhausted, instantiate the closest curated template with the retrieved bindings, and tell the user plainly what happened and what to adjust.
+
+**[revised by implementation]** The fallback is itself validated, and any widget that still fails is dropped until the page passes. It is the last thing between a user and an error message, so "guaranteed valid" has to be a guarantee rather than an intention — and a fallback assembled from the same grounding that just failed can inherit the same defect. A page with two figures instead of three is a result; an invalid page is not.
 
 The user must never receive a validation trace or an error page. A partial, honest, working result with an explanation is always better than a failure — and it keeps the artifact in a state the user can edit forward from.
 

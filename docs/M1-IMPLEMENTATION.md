@@ -24,7 +24,7 @@ libs/components/                 kpi-card, table, chart, text, navigation (+ man
 libs/component-registry/         type → lazy import map
 libs/renderer/                   compiler, page context, orchestrator, dispatcher, hosts
 libs/data-client/                gateway client + mock gateway
-libs/validator/                  shared validator (levels 1, 2, 4, 7)
+libs/validator/                  shared validator (levels 1, 2, 4, 7; level 3 added in M6)
 tools/validate-metadata.mjs      CI gate over schemas, artifacts and manifests
 ```
 
@@ -186,11 +186,11 @@ page carrying `as-of` → focus note appears via a `visible` expression.
 | Gap | Consequence | Milestone |
 |---|---|---|
 | Real Data Gateway and EDM connection | Entitlement enforcement is simulated, and therefore unproven | M3 |
-| Semantic catalog service | Bindings validate against page-local aliases, not a governed catalog. Validation levels 3, 5, 6, 8 do not run | M5 |
+| ~~Semantic catalog service~~ | **Superseded.** A mocked catalog service, entitlement-scoped retrieval and level-3 validation were built with the AI generation workflow — see [`AI-GENERATION-WORKFLOW.md`](AI-GENERATION-WORKFLOW.md). Levels 5, 6 and 8 still do not run | M5 |
 | Split, drawer, repeater, data-driven tabs | Detail pages with per-record tabs are not yet expressible in the runtime | M2/M3 |
 | Grid virtualization, server-side sort and paging | Will not meet the security-universe scale target | M2 |
 | Visual builder, definition store, patch log | Definitions are hand-authored files; no undo, no versions at rest | M4 |
-| AI generation | The definitions are hand-authored. Deliberate: the roadmap builds the renderer first, so generation aims at a proven target | M6 |
+| ~~AI generation~~ | **Superseded.** The pipeline is built and generates a validated draft from a natural-language prompt — see [`AI-GENERATION-WORKFLOW.md`](AI-GENERATION-WORKFLOW.md). The renderer-first sequencing paid off exactly as intended: the generator aims at a target already proven to render | M6 |
 | Governance lifecycle, promotion, audit | `version` envelopes are authored by hand, not enforced | M7 |
 | WCAG audit | Components implement keyboard contracts and were manually checked; no automated axe gate in CI | M2 |
 | i18n string tables | `i18nString` resolves to `default`; no locale switching | M2 |
@@ -227,3 +227,23 @@ The load-bearing claim now has evidence: **a business user's page is data, and t
 an interpreter.** Two dashboards, eight widgets, four component types, cross-widget filtering,
 deferred loading, drill-down with carried context, and three entitlement postures — all from
 ~1,100 lines of validated JSON and no page-specific code.
+
+
+---
+
+## 9. Amended by Later Work
+
+Two claims in this record were corrected by building the AI generation workflow. Both are
+recorded here rather than edited away, because the correction is the useful part.
+
+| § | Original claim | Correction |
+|---|---|---|
+| §2 (compilation memoized per definition version) | Presented without qualification | Sound only for an **immutable** artifact. A draft mutates while keeping the same id and artifact version, so `compilePage` now caches only when `version.immutable !== false`. An AI generation re-run under the old rule would have rendered its predecessor forever |
+| §6 (validation levels 3/5/6/8 absent, needing the catalog and gateway) | Correct at the time | Level 3 is now implemented. It needed a catalog, and generation supplies one — and without it the generator has to either silently correct illegal model decisions or emit them unchecked. See `schemas/README.md` §5 |
+
+The mock gateway also gained the logical→physical field resolution the catalog's server-only
+`physical` blocks describe. That closed a real gap: the M1 fixtures happened to use column names
+identical to their catalog ids, so nothing exercised the boundary the schemas' rule R6 exists to
+protect. It is now load-bearing — `securities.security.security-id` is stored as `security_id`,
+and the `rows-processed` measure aggregates a `row-count` column — and the M1 dashboard reports
+the same figures through the translation as it did without it.

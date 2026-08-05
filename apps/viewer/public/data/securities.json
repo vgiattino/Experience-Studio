@@ -7,7 +7,7 @@
   ],
   "rows": [
     {
-      "security-id": "SEC00001",
+      "security_id": "SEC00001",
       "isin": "GB0000000017",
       "sedol": "1000037",
       "name": "Vodafone Group PLC",
@@ -19,7 +19,7 @@
       "coupon-rate": null
     },
     {
-      "security-id": "SEC00002",
+      "security_id": "SEC00002",
       "isin": "GB0000000024",
       "sedol": "1000074",
       "name": "HSBC Holdings PLC",
@@ -31,7 +31,7 @@
       "coupon-rate": null
     },
     {
-      "security-id": "SEC00003",
+      "security_id": "SEC00003",
       "isin": "DE0000000031",
       "sedol": "1000111",
       "name": "Siemens AG",
@@ -43,7 +43,7 @@
       "coupon-rate": null
     },
     {
-      "security-id": "SEC00004",
+      "security_id": "SEC00004",
       "isin": "US0000000048",
       "sedol": "1000148",
       "name": "Apple Inc",
@@ -55,7 +55,7 @@
       "coupon-rate": null
     },
     {
-      "security-id": "SEC00005",
+      "security_id": "SEC00005",
       "isin": "CH0000000055",
       "sedol": "1000185",
       "name": "Nestle SA",
@@ -67,7 +67,7 @@
       "coupon-rate": null
     },
     {
-      "security-id": "SEC00006",
+      "security_id": "SEC00006",
       "isin": "JP0000000062",
       "sedol": "1000222",
       "name": "Toyota Motor Corp",
@@ -79,7 +79,7 @@
       "coupon-rate": null
     },
     {
-      "security-id": "SEC00007",
+      "security_id": "SEC00007",
       "isin": "GB0000000079",
       "sedol": "1000259",
       "name": "UK Treasury 4.25% 2032",
@@ -91,7 +91,7 @@
       "coupon-rate": 1.494
     },
     {
-      "security-id": "SEC00008",
+      "security_id": "SEC00008",
       "isin": "DE0000000086",
       "sedol": "1000296",
       "name": "Bund 2.6% 2034",
@@ -103,7 +103,7 @@
       "coupon-rate": 2.371
     },
     {
-      "security-id": "SEC00009",
+      "security_id": "SEC00009",
       "isin": "US0000000093",
       "sedol": "1000333",
       "name": "US Treasury 4.0% 2031",
@@ -115,7 +115,7 @@
       "coupon-rate": 0.857
     },
     {
-      "security-id": "SEC00010",
+      "security_id": "SEC00010",
       "isin": "GB0000000100",
       "sedol": "1000370",
       "name": "BP Capital 3.8% 2029",
@@ -127,7 +127,7 @@
       "coupon-rate": 1.221
     },
     {
-      "security-id": "SEC00011",
+      "security_id": "SEC00011",
       "isin": "US0000000117",
       "sedol": "1000407",
       "name": "Rio Tinto 4.1% 2033",
@@ -139,7 +139,7 @@
       "coupon-rate": 4.83
     },
     {
-      "security-id": "SEC00012",
+      "security_id": "SEC00012",
       "isin": "DE0000000124",
       "sedol": "1000444",
       "name": "Enel SpA 3.375% 2030",
@@ -151,7 +151,7 @@
       "coupon-rate": 1.07
     },
     {
-      "security-id": "SEC00013",
+      "security_id": "SEC00013",
       "isin": "GB0000000131",
       "sedol": "1000481",
       "name": "Global Equity Income Fund",
@@ -163,7 +163,7 @@
       "coupon-rate": null
     },
     {
-      "security-id": "SEC00014",
+      "security_id": "SEC00014",
       "isin": "DE0000000148",
       "sedol": "1000518",
       "name": "European Bond Fund",
@@ -175,7 +175,7 @@
       "coupon-rate": null
     },
     {
-      "security-id": "SEC00015",
+      "security_id": "SEC00015",
       "isin": "US0000000155",
       "sedol": "1000555",
       "name": "Emerging Markets Fund",
@@ -187,7 +187,7 @@
       "coupon-rate": null
     },
     {
-      "security-id": "SEC00016",
+      "security_id": "SEC00016",
       "isin": "GB0000000162",
       "sedol": "1000592",
       "name": "FTSE 100 Index Future Sep26",
@@ -199,7 +199,7 @@
       "coupon-rate": null
     },
     {
-      "security-id": "SEC00017",
+      "security_id": "SEC00017",
       "isin": "DE0000000179",
       "sedol": "1000629",
       "name": "EUR/USD Forward Dec26",
@@ -211,7 +211,7 @@
       "coupon-rate": null
     },
     {
-      "security-id": "SEC00018",
+      "security_id": "SEC00018",
       "isin": "US0000000186",
       "sedol": "1000666",
       "name": "Brent Crude Option Nov26",
@@ -223,7 +223,7 @@
       "coupon-rate": null
     },
     {
-      "security-id": "SEC00019",
+      "security_id": "SEC00019",
       "isin": "GB0000000193",
       "sedol": "1000703",
       "name": "Vodafone Group PLC Series 2",
@@ -235,7 +235,7 @@
       "coupon-rate": null
     },
     {
-      "security-id": "SEC00020",
+      "security_id": "SEC00020",
       "isin": "GB0000000200",
       "sedol": "1000740",
       "name": "HSBC Holdings PLC Series 2",
@@ -247,7 +247,7 @@
       "coupon-rate": null
     },
     {
-      "security-id": "SEC00021",
+      "security_id": "SEC00021",
       "isin": "DE0000000217",
       "sedol": "1000777",
       "name": "Siemens AG Series 2",
@@ -259,7 +259,7 @@
       "coupon-rate": null
     },
     {
-      "security-id": "SEC00022",
+      "security_id": "SEC00022",
       "isin": "US0000000224",
       "sedol": "1000814",
       "name": "Apple Inc Series 2",
@@ -271,7 +271,7 @@
       "coupon-rate": null
     },
     {
-      "security-id": "SEC00023",
+      "security_id": "SEC00023",
       "isin": "CH0000000231",
       "sedol": "1000851",
       "name": "Nestle SA Series 2",
@@ -283,7 +283,7 @@
       "coupon-rate": null
     },
     {
-      "security-id": "SEC00024",
+      "security_id": "SEC00024",
       "isin": "JP0000000248",
       "sedol": "1000888",
       "name": "Toyota Motor Corp Series 2",
@@ -295,7 +295,7 @@
       "coupon-rate": null
     },
     {
-      "security-id": "SEC00025",
+      "security_id": "SEC00025",
       "isin": "GB0000000255",
       "sedol": "1000925",
       "name": "UK Treasury 4.25% 2032 Series 2",
@@ -307,7 +307,7 @@
       "coupon-rate": 2.483
     },
     {
-      "security-id": "SEC00026",
+      "security_id": "SEC00026",
       "isin": "DE0000000262",
       "sedol": "1000962",
       "name": "Bund 2.6% 2034 Series 2",
@@ -319,7 +319,7 @@
       "coupon-rate": 1.177
     },
     {
-      "security-id": "SEC00027",
+      "security_id": "SEC00027",
       "isin": "US0000000279",
       "sedol": "1000999",
       "name": "US Treasury 4.0% 2031 Series 2",
@@ -331,7 +331,7 @@
       "coupon-rate": 5.971
     },
     {
-      "security-id": "SEC00028",
+      "security_id": "SEC00028",
       "isin": "GB0000000286",
       "sedol": "1001036",
       "name": "BP Capital 3.8% 2029 Series 2",
@@ -343,7 +343,7 @@
       "coupon-rate": 6.114
     },
     {
-      "security-id": "SEC00029",
+      "security_id": "SEC00029",
       "isin": "US0000000293",
       "sedol": "1001073",
       "name": "Rio Tinto 4.1% 2033 Series 2",
@@ -355,7 +355,7 @@
       "coupon-rate": 4.222
     },
     {
-      "security-id": "SEC00030",
+      "security_id": "SEC00030",
       "isin": "DE0000000300",
       "sedol": "1001110",
       "name": "Enel SpA 3.375% 2030 Series 2",
@@ -367,7 +367,7 @@
       "coupon-rate": 4.146
     },
     {
-      "security-id": "SEC00031",
+      "security_id": "SEC00031",
       "isin": "GB0000000317",
       "sedol": "1001147",
       "name": "Global Equity Income Fund Series 2",
@@ -379,7 +379,7 @@
       "coupon-rate": null
     },
     {
-      "security-id": "SEC00032",
+      "security_id": "SEC00032",
       "isin": "DE0000000324",
       "sedol": "1001184",
       "name": "European Bond Fund Series 2",
@@ -391,7 +391,7 @@
       "coupon-rate": null
     },
     {
-      "security-id": "SEC00033",
+      "security_id": "SEC00033",
       "isin": "US0000000331",
       "sedol": "1001221",
       "name": "Emerging Markets Fund Series 2",
@@ -403,7 +403,7 @@
       "coupon-rate": null
     },
     {
-      "security-id": "SEC00034",
+      "security_id": "SEC00034",
       "isin": "GB0000000348",
       "sedol": "1001258",
       "name": "FTSE 100 Index Future Sep26 Series 2",
@@ -415,7 +415,7 @@
       "coupon-rate": null
     },
     {
-      "security-id": "SEC00035",
+      "security_id": "SEC00035",
       "isin": "DE0000000355",
       "sedol": "1001295",
       "name": "EUR/USD Forward Dec26 Series 2",
@@ -427,7 +427,7 @@
       "coupon-rate": null
     },
     {
-      "security-id": "SEC00036",
+      "security_id": "SEC00036",
       "isin": "US0000000362",
       "sedol": "1001332",
       "name": "Brent Crude Option Nov26 Series 2",
@@ -439,7 +439,7 @@
       "coupon-rate": null
     },
     {
-      "security-id": "SEC00037",
+      "security_id": "SEC00037",
       "isin": "GB0000000379",
       "sedol": "1001369",
       "name": "Vodafone Group PLC Series 3",
@@ -451,7 +451,7 @@
       "coupon-rate": null
     },
     {
-      "security-id": "SEC00038",
+      "security_id": "SEC00038",
       "isin": "GB0000000386",
       "sedol": "1001406",
       "name": "HSBC Holdings PLC Series 3",
@@ -463,7 +463,7 @@
       "coupon-rate": null
     },
     {
-      "security-id": "SEC00039",
+      "security_id": "SEC00039",
       "isin": "DE0000000393",
       "sedol": "1001443",
       "name": "Siemens AG Series 3",
@@ -475,7 +475,7 @@
       "coupon-rate": null
     },
     {
-      "security-id": "SEC00040",
+      "security_id": "SEC00040",
       "isin": "US0000000400",
       "sedol": "1001480",
       "name": "Apple Inc Series 3",
@@ -487,7 +487,7 @@
       "coupon-rate": null
     },
     {
-      "security-id": "SEC00041",
+      "security_id": "SEC00041",
       "isin": "CH0000000417",
       "sedol": "1001517",
       "name": "Nestle SA Series 3",
@@ -499,7 +499,7 @@
       "coupon-rate": null
     },
     {
-      "security-id": "SEC00042",
+      "security_id": "SEC00042",
       "isin": "JP0000000424",
       "sedol": "1001554",
       "name": "Toyota Motor Corp Series 3",
@@ -511,7 +511,7 @@
       "coupon-rate": null
     },
     {
-      "security-id": "SEC00043",
+      "security_id": "SEC00043",
       "isin": "GB0000000431",
       "sedol": "1001591",
       "name": "UK Treasury 4.25% 2032 Series 3",
@@ -523,7 +523,7 @@
       "coupon-rate": 2.687
     },
     {
-      "security-id": "SEC00044",
+      "security_id": "SEC00044",
       "isin": "DE0000000448",
       "sedol": "1001628",
       "name": "Bund 2.6% 2034 Series 3",
@@ -535,7 +535,7 @@
       "coupon-rate": 3.873
     },
     {
-      "security-id": "SEC00045",
+      "security_id": "SEC00045",
       "isin": "US0000000455",
       "sedol": "1001665",
       "name": "US Treasury 4.0% 2031 Series 3",
@@ -547,7 +547,7 @@
       "coupon-rate": 0.889
     },
     {
-      "security-id": "SEC00046",
+      "security_id": "SEC00046",
       "isin": "GB0000000462",
       "sedol": "1001702",
       "name": "BP Capital 3.8% 2029 Series 3",
@@ -559,7 +559,7 @@
       "coupon-rate": 3.324
     },
     {
-      "security-id": "SEC00047",
+      "security_id": "SEC00047",
       "isin": "US0000000479",
       "sedol": "1001739",
       "name": "Rio Tinto 4.1% 2033 Series 3",
@@ -571,7 +571,7 @@
       "coupon-rate": 4.648
     },
     {
-      "security-id": "SEC00048",
+      "security_id": "SEC00048",
       "isin": "DE0000000486",
       "sedol": "1001776",
       "name": "Enel SpA 3.375% 2030 Series 3",
@@ -583,7 +583,7 @@
       "coupon-rate": 2.398
     },
     {
-      "security-id": "SEC00049",
+      "security_id": "SEC00049",
       "isin": "GB0000000493",
       "sedol": "1001813",
       "name": "Global Equity Income Fund Series 3",
@@ -595,7 +595,7 @@
       "coupon-rate": null
     },
     {
-      "security-id": "SEC00050",
+      "security_id": "SEC00050",
       "isin": "DE0000000500",
       "sedol": "1001850",
       "name": "European Bond Fund Series 3",
@@ -607,7 +607,7 @@
       "coupon-rate": null
     },
     {
-      "security-id": "SEC00051",
+      "security_id": "SEC00051",
       "isin": "US0000000517",
       "sedol": "1001887",
       "name": "Emerging Markets Fund Series 3",
@@ -619,7 +619,7 @@
       "coupon-rate": null
     },
     {
-      "security-id": "SEC00052",
+      "security_id": "SEC00052",
       "isin": "GB0000000524",
       "sedol": "1001924",
       "name": "FTSE 100 Index Future Sep26 Series 3",
@@ -631,7 +631,7 @@
       "coupon-rate": null
     },
     {
-      "security-id": "SEC00053",
+      "security_id": "SEC00053",
       "isin": "DE0000000531",
       "sedol": "1001961",
       "name": "EUR/USD Forward Dec26 Series 3",
@@ -643,7 +643,7 @@
       "coupon-rate": null
     },
     {
-      "security-id": "SEC00054",
+      "security_id": "SEC00054",
       "isin": "US0000000548",
       "sedol": "1001998",
       "name": "Brent Crude Option Nov26 Series 3",

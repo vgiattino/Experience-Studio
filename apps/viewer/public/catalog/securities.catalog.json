@@ -1,0 +1,902 @@
+{
+  "schemaVersion": "1.0",
+  "catalogVersion": 7,
+  "tenantId": "demo-tenant",
+  "name": "Securities Operations Catalog",
+  "description": "Runtime semantic catalog for the M1 proof of concept. Physical blocks are SERVER ONLY and are stripped from the client projection.",
+  "lifecycleState": "published",
+  "domains": {
+    "securities": {
+      "businessName": "Securities",
+      "order": 1
+    },
+    "processing": {
+      "businessName": "Data Processing",
+      "order": 2
+    },
+    "dq": {
+      "businessName": "Data Quality",
+      "order": 3
+    },
+    "parties": {
+      "businessName": "Parties",
+      "order": 4
+    }
+  },
+  "entities": {
+    "securities.security": {
+      "id": "securities.security",
+      "businessName": "Security",
+      "pluralName": "Securities",
+      "synonyms": [
+        "instrument",
+        "asset",
+        "issue"
+      ],
+      "description": "A tradable financial instrument in the security master.",
+      "domain": "securities",
+      "primaryKey": [
+        "security-id"
+      ],
+      "labelAttribute": "name",
+      "secondaryLabelAttribute": "isin",
+      "iconHint": "security",
+      "effectiveDating": "bitemporal",
+      "logicalDataSourceId": "edm-security-master",
+      "rowEntitlementDomain": "edm.security.read",
+      "sensitivity": "internal",
+      "defaultDetailExperience": "securities.operations",
+      "defaultSearchExperience": "securities.operations",
+      "cost": {
+        "class": "medium",
+        "typicalRowCount": 2400000,
+        "volatilityTtlSeconds": 300,
+        "requiresFilter": true
+      },
+      "aiHints": {
+        "whenToUse": "Any question about instruments themselves \u2014 identifiers, classification, issuer, status.",
+        "exampleQuestions": [
+          "how many new securities were added today",
+          "show me equities missing a SEDOL"
+        ]
+      },
+      "attributes": {
+        "security-id": {
+          "id": "security-id",
+          "businessName": "Security ID",
+          "dataType": "identifier",
+          "semanticType": "securityId",
+          "nullable": false,
+          "groupable": false,
+          "sensitivity": "internal",
+          "physical": {
+            "ref": "security_id"
+          }
+        },
+        "isin": {
+          "id": "isin",
+          "businessName": "ISIN",
+          "synonyms": [
+            "international securities identification number"
+          ],
+          "dataType": "string",
+          "semanticType": "isin",
+          "searchable": true,
+          "groupable": false,
+          "sensitivity": "internal",
+          "physical": {
+            "ref": "isin"
+          }
+        },
+        "sedol": {
+          "id": "sedol",
+          "businessName": "SEDOL",
+          "dataType": "string",
+          "semanticType": "sedol",
+          "searchable": true,
+          "groupable": false,
+          "sensitivity": "internal",
+          "physical": {
+            "ref": "sedol"
+          }
+        },
+        "name": {
+          "id": "name",
+          "businessName": "Security Name",
+          "dataType": "string",
+          "searchable": true,
+          "groupable": false,
+          "sensitivity": "internal",
+          "physical": {
+            "ref": "name"
+          }
+        },
+        "asset-class": {
+          "id": "asset-class",
+          "businessName": "Asset Class",
+          "synonyms": [
+            "instrument type",
+            "security type"
+          ],
+          "dataType": "enum",
+          "semanticType": "assetClass",
+          "sensitivity": "internal",
+          "enumValues": [
+            {
+              "value": "EQUITY",
+              "label": "Equity",
+              "order": 1
+            },
+            {
+              "value": "BOND",
+              "label": "Bond",
+              "order": 2
+            },
+            {
+              "value": "FUND",
+              "label": "Fund",
+              "order": 3
+            },
+            {
+              "value": "DERIVATIVE",
+              "label": "Derivative",
+              "order": 4
+            }
+          ],
+          "physical": {
+            "ref": "asset-class"
+          }
+        },
+        "currency": {
+          "id": "currency",
+          "businessName": "Trading Currency",
+          "dataType": "string",
+          "semanticType": "currencyCode",
+          "sensitivity": "internal",
+          "physical": {
+            "ref": "currency"
+          }
+        },
+        "status": {
+          "id": "status",
+          "businessName": "Status",
+          "dataType": "enum",
+          "semanticType": "statusCode",
+          "sensitivity": "internal",
+          "enumValues": [
+            {
+              "value": "ACTIVE",
+              "label": "Active",
+              "emphasis": "positive"
+            },
+            {
+              "value": "PENDING",
+              "label": "Pending Review",
+              "emphasis": "warning"
+            },
+            {
+              "value": "MATURED",
+              "label": "Matured",
+              "emphasis": "muted"
+            }
+          ],
+          "physical": {
+            "ref": "status"
+          }
+        },
+        "created-at": {
+          "id": "created-at",
+          "businessName": "Created",
+          "dataType": "datetime",
+          "sensitivity": "internal",
+          "physical": {
+            "ref": "created-at"
+          }
+        },
+        "maturity-date": {
+          "id": "maturity-date",
+          "businessName": "Maturity Date",
+          "dataType": "date",
+          "nullable": true,
+          "sensitivity": "internal",
+          "physical": {
+            "ref": "maturity-date"
+          }
+        },
+        "coupon-rate": {
+          "id": "coupon-rate",
+          "businessName": "Coupon Rate",
+          "dataType": "percentage",
+          "semanticType": "rate",
+          "nullable": true,
+          "precision": 9,
+          "scale": 6,
+          "sensitivity": "internal",
+          "physical": {
+            "ref": "coupon-rate"
+          }
+        }
+      },
+      "measures": {
+        "security-count": {
+          "id": "security-count",
+          "businessName": "Security Count",
+          "synonyms": [
+            "number of securities",
+            "instrument count"
+          ],
+          "valueType": "integer",
+          "allowedAggregations": [
+            "count",
+            "countDistinct"
+          ],
+          "defaultAggregation": "count",
+          "higherIsBetter": true,
+          "sensitivity": "internal"
+        }
+      }
+    },
+    "processing.file-load": {
+      "id": "processing.file-load",
+      "businessName": "File Load",
+      "pluralName": "File Loads",
+      "synonyms": [
+        "feed",
+        "inbound file",
+        "data load"
+      ],
+      "description": "An inbound vendor or client file processed by EDM, with its arrival and completion status.",
+      "domain": "processing",
+      "primaryKey": [
+        "load-id"
+      ],
+      "labelAttribute": "file-name",
+      "effectiveDating": "effective",
+      "logicalDataSourceId": "edm-file-processing",
+      "rowEntitlementDomain": "edm.processing.read",
+      "sensitivity": "internal",
+      "cost": {
+        "class": "low",
+        "typicalRowCount": 5000,
+        "volatilityTtlSeconds": 60
+      },
+      "aiHints": {
+        "whenToUse": "Operational questions about today's processing \u2014 what arrived, what is late, what failed.",
+        "exampleQuestions": [
+          "which files are late today",
+          "show failed loads by source"
+        ]
+      },
+      "attributes": {
+        "load-id": {
+          "id": "load-id",
+          "businessName": "Load ID",
+          "dataType": "identifier",
+          "groupable": false,
+          "sensitivity": "internal",
+          "physical": {
+            "ref": "load-id"
+          }
+        },
+        "file-name": {
+          "id": "file-name",
+          "businessName": "File Name",
+          "dataType": "string",
+          "semanticType": "fileName",
+          "searchable": true,
+          "groupable": false,
+          "sensitivity": "internal",
+          "physical": {
+            "ref": "file-name"
+          }
+        },
+        "source-system": {
+          "id": "source-system",
+          "businessName": "Source",
+          "synonyms": [
+            "vendor",
+            "feed provider"
+          ],
+          "dataType": "string",
+          "sensitivity": "internal",
+          "physical": {
+            "ref": "source-system"
+          }
+        },
+        "business-date": {
+          "id": "business-date",
+          "businessName": "Business Date",
+          "dataType": "date",
+          "sensitivity": "internal",
+          "physical": {
+            "ref": "business-date"
+          }
+        },
+        "expected-at": {
+          "id": "expected-at",
+          "businessName": "Expected By",
+          "dataType": "datetime",
+          "sensitivity": "internal",
+          "physical": {
+            "ref": "expected-at"
+          }
+        },
+        "completed-at": {
+          "id": "completed-at",
+          "businessName": "Completed",
+          "dataType": "datetime",
+          "nullable": true,
+          "sensitivity": "internal",
+          "physical": {
+            "ref": "completed-at"
+          }
+        },
+        "load-status": {
+          "id": "load-status",
+          "businessName": "Status",
+          "dataType": "enum",
+          "semanticType": "statusCode",
+          "sensitivity": "internal",
+          "enumValues": [
+            {
+              "value": "COMPLETE",
+              "label": "Complete",
+              "emphasis": "positive"
+            },
+            {
+              "value": "LATE",
+              "label": "Late",
+              "emphasis": "warning"
+            },
+            {
+              "value": "FAILED",
+              "label": "Failed",
+              "emphasis": "negative"
+            },
+            {
+              "value": "AWAITING",
+              "label": "Awaiting",
+              "emphasis": "neutral"
+            }
+          ],
+          "physical": {
+            "ref": "load-status"
+          }
+        },
+        "row-count": {
+          "id": "row-count",
+          "businessName": "Rows Processed",
+          "dataType": "integer",
+          "sensitivity": "internal",
+          "physical": {
+            "ref": "row-count"
+          }
+        }
+      },
+      "measures": {
+        "late-file-count": {
+          "id": "late-file-count",
+          "businessName": "Late Files",
+          "synonyms": [
+            "files late",
+            "overdue feeds"
+          ],
+          "description": "Count of loads past their expected time and not yet complete.",
+          "valueType": "integer",
+          "allowedAggregations": [
+            "count",
+            "sum"
+          ],
+          "defaultAggregation": "count",
+          "higherIsBetter": false,
+          "defaultThresholds": [
+            {
+              "id": "ok",
+              "from": 0,
+              "to": 0,
+              "emphasis": "positive"
+            },
+            {
+              "id": "watch",
+              "from": 1,
+              "to": 5,
+              "emphasis": "warning"
+            },
+            {
+              "id": "breach",
+              "from": 6,
+              "to": null,
+              "emphasis": "negative"
+            }
+          ],
+          "sensitivity": "internal"
+        },
+        "failed-file-count": {
+          "id": "failed-file-count",
+          "businessName": "Failed Files",
+          "valueType": "integer",
+          "allowedAggregations": [
+            "count",
+            "sum"
+          ],
+          "defaultAggregation": "count",
+          "higherIsBetter": false,
+          "defaultThresholds": [
+            {
+              "id": "ok",
+              "from": 0,
+              "to": 0,
+              "emphasis": "positive"
+            },
+            {
+              "id": "breach",
+              "from": 1,
+              "to": null,
+              "emphasis": "negative"
+            }
+          ],
+          "sensitivity": "internal"
+        },
+        "rows-processed": {
+          "id": "rows-processed",
+          "businessName": "Rows Processed",
+          "valueType": "integer",
+          "allowedAggregations": [
+            "sum",
+            "avg",
+            "max"
+          ],
+          "defaultAggregation": "sum",
+          "higherIsBetter": true,
+          "sensitivity": "internal",
+          "physical": {
+            "ref": "row-count"
+          }
+        }
+      }
+    },
+    "dq.exception": {
+      "id": "dq.exception",
+      "businessName": "Data Quality Exception",
+      "pluralName": "Data Quality Exceptions",
+      "synonyms": [
+        "exception",
+        "break",
+        "data issue",
+        "validation failure"
+      ],
+      "description": "An instance of a data quality rule failing for a specific record.",
+      "domain": "dq",
+      "primaryKey": [
+        "exception-id"
+      ],
+      "labelAttribute": "rule-name",
+      "effectiveDating": "effective",
+      "logicalDataSourceId": "edm-dq-exceptions",
+      "rowEntitlementDomain": "edm.dq.read",
+      "sensitivity": "confidential",
+      "defaultDetailExperience": "securities.operations",
+      "cost": {
+        "class": "medium",
+        "typicalRowCount": 180000,
+        "volatilityTtlSeconds": 120
+      },
+      "aiHints": {
+        "whenToUse": "Questions about data quality, breaks, remediation backlog, or rule failures.",
+        "exampleQuestions": [
+          "show open high severity exceptions",
+          "which rules fail most often"
+        ]
+      },
+      "attributes": {
+        "exception-id": {
+          "id": "exception-id",
+          "businessName": "Exception ID",
+          "dataType": "identifier",
+          "groupable": false,
+          "sensitivity": "internal",
+          "physical": {
+            "ref": "exception-id"
+          }
+        },
+        "security-id": {
+          "id": "security-id",
+          "businessName": "Security ID",
+          "dataType": "identifier",
+          "semanticType": "securityId",
+          "groupable": false,
+          "sensitivity": "internal",
+          "physical": {
+            "ref": "security-id"
+          }
+        },
+        "rule-name": {
+          "id": "rule-name",
+          "businessName": "Rule",
+          "synonyms": [
+            "check",
+            "validation"
+          ],
+          "dataType": "string",
+          "semanticType": "ruleCode",
+          "searchable": true,
+          "sensitivity": "internal",
+          "physical": {
+            "ref": "rule-name"
+          }
+        },
+        "severity": {
+          "id": "severity",
+          "businessName": "Severity",
+          "dataType": "enum",
+          "semanticType": "severityCode",
+          "sensitivity": "internal",
+          "enumValues": [
+            {
+              "value": "HIGH",
+              "label": "High",
+              "emphasis": "negative",
+              "order": 1
+            },
+            {
+              "value": "MEDIUM",
+              "label": "Medium",
+              "emphasis": "warning",
+              "order": 2
+            },
+            {
+              "value": "LOW",
+              "label": "Low",
+              "emphasis": "neutral",
+              "order": 3
+            }
+          ],
+          "physical": {
+            "ref": "severity"
+          }
+        },
+        "exception-status": {
+          "id": "exception-status",
+          "businessName": "Status",
+          "dataType": "enum",
+          "semanticType": "statusCode",
+          "sensitivity": "internal",
+          "enumValues": [
+            {
+              "value": "OPEN",
+              "label": "Open",
+              "emphasis": "negative"
+            },
+            {
+              "value": "IN_PROGRESS",
+              "label": "In Progress",
+              "emphasis": "warning"
+            },
+            {
+              "value": "RESOLVED",
+              "label": "Resolved",
+              "emphasis": "positive"
+            },
+            {
+              "value": "SUPPRESSED",
+              "label": "Suppressed",
+              "emphasis": "muted"
+            }
+          ],
+          "physical": {
+            "ref": "exception-status"
+          }
+        },
+        "detected-at": {
+          "id": "detected-at",
+          "businessName": "Detected",
+          "dataType": "datetime",
+          "sensitivity": "internal",
+          "physical": {
+            "ref": "detected-at"
+          }
+        },
+        "assigned-to": {
+          "id": "assigned-to",
+          "businessName": "Assigned To",
+          "dataType": "string",
+          "semanticType": "personName",
+          "nullable": true,
+          "sensitivity": "pii",
+          "columnEntitlement": "edm.dq.assignee.read",
+          "maskingPolicy": "mask",
+          "physical": {
+            "ref": "assigned-to"
+          }
+        },
+        "detail": {
+          "id": "detail",
+          "businessName": "Detail",
+          "dataType": "string",
+          "nullable": true,
+          "groupable": false,
+          "sensitivity": "confidential",
+          "physical": {
+            "ref": "detail"
+          }
+        },
+        "security-name": {
+          "id": "security-name",
+          "businessName": "Security Name",
+          "synonyms": [
+            "instrument name",
+            "security"
+          ],
+          "description": "Name of the security the exception was raised against.",
+          "dataType": "string",
+          "searchable": true,
+          "groupable": false,
+          "sensitivity": "internal",
+          "physical": {
+            "ref": "security-name"
+          }
+        },
+        "asset-class": {
+          "id": "asset-class",
+          "businessName": "Asset Class",
+          "synonyms": [
+            "instrument type"
+          ],
+          "description": "Asset class of the security the exception relates to.",
+          "dataType": "enum",
+          "semanticType": "assetClass",
+          "sensitivity": "internal",
+          "enumValues": [
+            {
+              "value": "EQUITY",
+              "label": "Equity"
+            },
+            {
+              "value": "BOND",
+              "label": "Bond"
+            },
+            {
+              "value": "FUND",
+              "label": "Fund"
+            },
+            {
+              "value": "DERIVATIVE",
+              "label": "Derivative"
+            }
+          ],
+          "physical": {
+            "ref": "asset-class"
+          }
+        }
+      },
+      "measures": {
+        "exception-count": {
+          "id": "exception-count",
+          "businessName": "Exception Count",
+          "synonyms": [
+            "number of breaks",
+            "open issues"
+          ],
+          "valueType": "integer",
+          "allowedAggregations": [
+            "count",
+            "countDistinct"
+          ],
+          "defaultAggregation": "count",
+          "higherIsBetter": false,
+          "groupableBy": [
+            "dq.exception.severity",
+            "dq.exception.rule-name",
+            "dq.exception.exception-status",
+            "dq.exception.detected-at"
+          ],
+          "sensitivity": "internal"
+        },
+        "age-hours": {
+          "id": "age-hours",
+          "businessName": "Age (hours)",
+          "description": "Hours since detection for unresolved exceptions.",
+          "valueType": "duration",
+          "allowedAggregations": [
+            "avg",
+            "max",
+            "median",
+            "p95"
+          ],
+          "defaultAggregation": "avg",
+          "higherIsBetter": false,
+          "sensitivity": "internal",
+          "physical": {
+            "ref": "age-hours"
+          }
+        }
+      }
+    },
+    "parties.party": {
+      "id": "parties.party",
+      "businessName": "Party",
+      "pluralName": "Parties",
+      "synonyms": [
+        "counterparty",
+        "legal entity",
+        "organisation"
+      ],
+      "description": "A legal entity related to a security \u2014 issuer, guarantor, obligor.",
+      "domain": "parties",
+      "primaryKey": [
+        "party-id"
+      ],
+      "labelAttribute": "legal-name",
+      "effectiveDating": "effective",
+      "logicalDataSourceId": "edm-party-master",
+      "rowEntitlementDomain": "edm.party.read",
+      "sensitivity": "internal",
+      "cost": {
+        "class": "low",
+        "typicalRowCount": 90000,
+        "volatilityTtlSeconds": 900
+      },
+      "attributes": {
+        "party-id": {
+          "id": "party-id",
+          "businessName": "Party ID",
+          "dataType": "identifier",
+          "semanticType": "counterpartyId",
+          "groupable": false,
+          "sensitivity": "internal",
+          "physical": {
+            "ref": "party-id"
+          }
+        },
+        "legal-name": {
+          "id": "legal-name",
+          "businessName": "Legal Name",
+          "dataType": "string",
+          "semanticType": "organizationName",
+          "searchable": true,
+          "groupable": false,
+          "sensitivity": "internal",
+          "physical": {
+            "ref": "legal-name"
+          }
+        },
+        "lei": {
+          "id": "lei",
+          "businessName": "LEI",
+          "dataType": "string",
+          "semanticType": "lei",
+          "searchable": true,
+          "groupable": false,
+          "sensitivity": "internal",
+          "physical": {
+            "ref": "lei"
+          }
+        },
+        "country": {
+          "id": "country",
+          "businessName": "Country",
+          "dataType": "string",
+          "semanticType": "countryCode",
+          "sensitivity": "internal",
+          "physical": {
+            "ref": "country"
+          }
+        },
+        "party-role": {
+          "id": "party-role",
+          "businessName": "Role",
+          "dataType": "enum",
+          "sensitivity": "internal",
+          "enumValues": [
+            {
+              "value": "ISSUER",
+              "label": "Issuer"
+            },
+            {
+              "value": "GUARANTOR",
+              "label": "Guarantor"
+            },
+            {
+              "value": "OBLIGOR",
+              "label": "Obligor"
+            }
+          ],
+          "physical": {
+            "ref": "party-role"
+          }
+        }
+      }
+    }
+  },
+  "relationships": {
+    "securities.security.related-parties": {
+      "id": "securities.security.related-parties",
+      "businessName": "Related Parties",
+      "description": "Legal entities associated with this security and the role each plays.",
+      "from": "securities.security",
+      "to": "parties.party",
+      "cardinality": "many-to-many",
+      "inverseId": "parties.party.securities",
+      "keyMapping": [
+        {
+          "fromAttribute": "security-id",
+          "toAttribute": "party-id"
+        }
+      ],
+      "joinSemantics": "left",
+      "temporalSemantics": "asOfParent",
+      "traversalCost": "medium",
+      "expectedFanout": 3,
+      "aiHints": {
+        "whenToUse": "Whenever the user asks about issuers, guarantors or who is behind a security."
+      }
+    },
+    "parties.party.securities": {
+      "id": "parties.party.securities",
+      "businessName": "Securities",
+      "from": "parties.party",
+      "to": "securities.security",
+      "cardinality": "many-to-many",
+      "inverseId": "securities.security.related-parties",
+      "keyMapping": [
+        {
+          "fromAttribute": "party-id",
+          "toAttribute": "security-id"
+        }
+      ],
+      "traversalCost": "high",
+      "expectedFanout": 400
+    },
+    "securities.security.exceptions": {
+      "id": "securities.security.exceptions",
+      "businessName": "Data Quality Exceptions",
+      "from": "securities.security",
+      "to": "dq.exception",
+      "cardinality": "one-to-many",
+      "inverseId": "dq.exception.security",
+      "keyMapping": [
+        {
+          "fromAttribute": "security-id",
+          "toAttribute": "security-id"
+        }
+      ],
+      "joinSemantics": "left",
+      "traversalCost": "low",
+      "expectedFanout": 2
+    },
+    "dq.exception.security": {
+      "id": "dq.exception.security",
+      "businessName": "Security",
+      "from": "dq.exception",
+      "to": "securities.security",
+      "cardinality": "many-to-one",
+      "inverseId": "securities.security.exceptions",
+      "keyMapping": [
+        {
+          "fromAttribute": "security-id",
+          "toAttribute": "security-id"
+        }
+      ],
+      "joinSemantics": "inner",
+      "traversalCost": "low"
+    }
+  },
+  "drift": {
+    "lastCheckedAt": "2026-08-04T02:00:00Z",
+    "status": "warnings",
+    "findings": [
+      {
+        "ref": "securities.security.coupon-rate",
+        "kind": "nullabilityChanged",
+        "detail": "Physical column now nullable in EDM; catalog already permits null.",
+        "severity": "info"
+      }
+    ]
+  },
+  "audit": {
+    "createdBy": "steward@demo-tenant",
+    "createdAt": "2026-07-28T09:14:00Z",
+    "modifiedBy": "steward@demo-tenant",
+    "modifiedAt": "2026-08-01T16:22:00Z"
+  }
+}

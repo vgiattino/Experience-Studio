@@ -25,12 +25,16 @@ import { StateShellComponent } from '@opus/design-system';
 import { TelemetryService } from '@opus/platform';
 import { text, type DataRow, type ExperienceDefinition, type NavItem } from '@opus/contracts';
 
+import { CatalogService, type CatalogSnapshot } from '@opus/catalog';
+
 import { DevPanelComponent } from './dev-panel.component';
+import { GenerationStudioComponent } from './generation-studio.component';
 import { loadFixtureTables } from './fixture-loader';
 import { PERSONAS, readSessionOptions, type SessionOptions } from './session';
 
 const DEFINITIONS_BASE = 'definitions';
 const DATA_BASE = 'data';
+const CATALOG_URL = 'catalog/securities.catalog.json';
 const EXPERIENCE_URL = `${DEFINITIONS_BASE}/securities-operations.experience.json`;
 
 @Component({
@@ -41,6 +45,7 @@ const EXPERIENCE_URL = `${DEFINITIONS_BASE}/securities-operations.experience.jso
     PageRendererComponent,
     StateShellComponent,
     DevPanelComponent,
+    GenerationStudioComponent,
   ],
   template: `
     <div class="shell">
@@ -53,10 +58,20 @@ const EXPERIENCE_URL = `${DEFINITIONS_BASE}/securities-operations.experience.jso
           </div>
         </div>
 
+        <button
+          type="button"
+          class="create"
+          [class.active]="mode() === 'studio'"
+          [attr.aria-pressed]="mode() === 'studio'"
+          (click)="openStudio()"
+        >
+          <span aria-hidden="true">✦</span> Create with AI
+        </button>
+
         @if (experience()?.navigation; as nav) {
           <opus-navigation
             [items]="navItems()"
-            [activePage]="activePageId()"
+            [activePage]="mode() === 'studio' ? null : activePageId()"
             [badgeData]="badgeData()"
             [ariaLabel]="experienceName() + ' navigation'"
             (navigate)="onNavigate($event)"
@@ -98,7 +113,9 @@ const EXPERIENCE_URL = `${DEFINITIONS_BASE}/securities-operations.experience.jso
       </aside>
 
       <main class="content">
-        @if (status() === 'loading') {
+        @if (mode() === 'studio') {
+          <opus-generation-studio [user]="generationUser()" [snapshot]="snapshot()" />
+        } @else if (status() === 'loading') {
           <div class="centred">
             <opus-state-shell state="loading" label="experience" skeleton="block" />
           </div>
@@ -231,6 +248,35 @@ const EXPERIENCE_URL = `${DEFINITIONS_BASE}/securities-operations.experience.jso
       color: var(--opus-text-muted);
     }
 
+    .create {
+      margin-inline: var(--opus-space-4);
+      display: flex;
+      align-items: center;
+      gap: var(--opus-space-2);
+      padding: var(--opus-space-2) var(--opus-space-3);
+      font: inherit;
+      font-size: var(--opus-text-sm);
+      font-weight: var(--opus-weight-medium);
+      text-align: start;
+      color: var(--opus-text);
+      background: var(--opus-canvas);
+      border: 1px dashed var(--opus-border);
+      border-radius: var(--opus-radius-sm);
+      cursor: pointer;
+    }
+
+    .create.active {
+      color: var(--opus-text-inverse);
+      background: var(--opus-emphasis-info);
+      border-style: solid;
+      border-color: var(--opus-emphasis-info);
+    }
+
+    .create:focus-visible {
+      outline: 2px solid var(--opus-focus-ring);
+      outline-offset: 2px;
+    }
+
     .theme {
       margin-inline: var(--opus-space-4);
       padding: var(--opus-space-1) var(--opus-space-2);
@@ -272,6 +318,7 @@ export class App {
   private readonly loader = inject(PageLoaderService);
   private readonly gateway = inject(GatewayService);
   private readonly telemetry = inject(TelemetryService);
+  private readonly catalog = inject(CatalogService);
 
   protected readonly personas = PERSONAS;
 
@@ -292,6 +339,24 @@ export class App {
   protected readonly errorDetail = signal('');
   protected readonly initialParams = signal<Record<string, unknown>>({});
   protected readonly badgeData = signal<Record<string, readonly DataRow[]>>({});
+  protected readonly mode = signal<'viewer' | 'studio'>('viewer');
+
+  /**
+   * The catalog AS THIS PERSONA MAY SEE IT. Recomputed when the persona changes, which is
+   * the demonstrable point: switch to a persona without `edm.dq.read` and the generator
+   * cannot bind to exceptions at all — not because a prompt told it not to, but because
+   * the concepts are absent from the projection it reasons over.
+   */
+  protected readonly snapshot = signal<CatalogSnapshot | null>(null);
+
+  /** The generation author's identity, with data capabilities resolved as the gateway sees them. */
+  protected readonly generationUser = computed(() => {
+    const persona = this.session().persona;
+    return {
+      ...persona.user,
+      capabilities: [...persona.user.capabilities, ...persona.dataCapabilities],
+    };
+  });
 
   protected readonly theme = computed(() => {
     const configured = this.session().theme;
@@ -322,19 +387,21 @@ export class App {
     const session = this.session();
 
     try {
-      const tables = await loadFixtureTables(DATA_BASE);
+      // The catalog loads first: it holds the logical→physical mapping the gateway needs,
+      // and the projection the generator reasons over. Both are derived from one artifact.
+      await this.catalog.load(CATALOG_URL);
+      this.snapshot.set(this.catalog.projectionFor(this.generationUser()));
+
+      const tables = await loadFixtureTables(DATA_BASE, this.catalog);
       // Data entitlements are simulated on the *data*, resolved against the caller.
       this.gateway.configure({
         tables,
-        user: {
-          ...session.persona.user,
-          capabilities: [...session.persona.user.capabilities, ...session.persona.dataCapabilities],
-        },
+        user: this.generationUser(),
         simulate: session.simulate,
         latencyMs: 160,
       });
     } catch (error) {
-      this.fail('Could not load fixture data', error);
+      this.fail('Could not load the catalog or fixture data', error);
       return;
     }
 
@@ -346,6 +413,7 @@ export class App {
     this.experience.set(experience);
 
     const params = new URLSearchParams(window.location.search);
+    if (params.get('mode') === 'studio') this.mode.set('studio');
     const requested = params.get('page') ?? experience.navigation?.homePage;
     const pageId = requested ?? Object.keys(experience.pages)[0];
     if (!pageId) {
@@ -360,7 +428,7 @@ export class App {
   private paramsFromUrl(params: URLSearchParams): Record<string, unknown> {
     const out: Record<string, unknown> = {};
     for (const [key, value] of params.entries()) {
-      if (['page', 'persona', 'simulate', 'validate', 'theme'].includes(key)) continue;
+      if (['page', 'persona', 'simulate', 'validate', 'theme', 'mode'].includes(key)) continue;
       out[key] = value.includes(',') ? value.split(',') : value;
     }
     return out;
@@ -428,7 +496,14 @@ export class App {
     this.status.set('error');
   }
 
+  protected openStudio(): void {
+    this.mode.set('studio');
+    this.updateQueryParam('mode', 'studio');
+  }
+
   protected onNavigate(selection: NavigationSelection): void {
+    this.mode.set('viewer');
+    this.updateQueryParam('mode', null);
     if (selection.page) void this.openPage(selection.page, selection.params ?? {});
   }
 

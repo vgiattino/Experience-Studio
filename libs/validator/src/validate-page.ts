@@ -25,12 +25,20 @@ import { ExpressionSyntaxError, collectReferences, parseExpression } from '@opus
 
 import { compileSubSchema, validatorFor } from './schema-registry';
 import { summarize, type ValidationFinding, type ValidationLevel, type ValidationReport } from './types';
+import { validateSemantics, type SemanticCatalog } from './validate-semantic';
 
 export interface PageValidationOptions {
   /** Manifests for the component types the page uses. Enables level 2 and level 4. */
   manifests?: readonly ComponentManifest[];
   /** Component types the registry knows about. Enables the unknown-type check. */
   registeredTypes?: readonly string[];
+  /**
+   * The catalog to validate references against. Enables level 3. Omitted, level 3 is
+   * reported as NOT RUN rather than silently assumed to have passed — the distinction
+   * matters, because a definition whose references were never checked is not a validated
+   * definition.
+   */
+  catalog?: SemanticCatalog;
   /** Skip the ajv pass — used when a caller has already validated structurally. */
   skipStructural?: boolean;
 }
@@ -77,6 +85,12 @@ export function validatePage(
   // ── Level 2: component
   levelsRun.push('component');
   validateComponents(def, manifestByType, options.registeredTypes, findings);
+
+  // ── Level 3: semantic — only when a catalog was supplied
+  if (options.catalog) {
+    levelsRun.push('semantic');
+    validateSemantics(def, options.catalog, findings);
+  }
 
   // ── Level 4: binding
   levelsRun.push('binding');

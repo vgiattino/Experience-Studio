@@ -278,3 +278,141 @@ describe('sorting and paging', () => {
     expect(results[0]!.totalRows).toBe(4);
   });
 });
+
+/**
+ * The logical→physical boundary (schemas/README.md R6).
+ *
+ * The gateway is the only component that may hold both vocabularies. A definition names
+ * `security-id`; the store holds `security_id`; a catalog measure named `rows-processed`
+ * aggregates a column called `row-count`. Nothing between them needs to know, and if this
+ * translation is wrong an entirely valid page silently returns nulls.
+ */
+describe('logical to physical field resolution', () => {
+  const loads: MockEntityTable = {
+    entity: 'processing.file-load',
+    // Physical column names, deliberately different from the logical ids.
+    rows: [
+      { load_id: 'L1', load_status: 'FAILED', 'row-count': 0, src: 'Bloomberg' },
+      { load_id: 'L2', load_status: 'COMPLETE', 'row-count': 120, src: 'Bloomberg' },
+      { load_id: 'L3', load_status: 'COMPLETE', 'row-count': 380, src: 'Refinitiv' },
+    ],
+    fields: {
+      'load-id': 'load_id',
+      'load-status': 'load_status',
+      'source-system': 'src',
+    },
+    measureFields: {
+      // A stored column…
+      'rows-processed': 'row-count',
+      // …and a measure that counts rows, so it has no column of its own.
+      'failed-file-count': null,
+    },
+    primaryKey: ['load-id'],
+  };
+
+  const mapped = () =>
+    new MockGateway({
+      tables: [loads],
+      capabilities: [],
+      entitlementScopeHash: 'scope',
+      latencyMs: 0,
+      now: () => NOW,
+    });
+
+  it('projects mapped columns under the definition-declared aliases', async () => {
+    const source: DataSource = {
+      id: 'q',
+      entity: 'processing.file-load',
+      kind: 'list',
+      select: {
+        attributes: [
+          { attribute: 'load-id', alias: 'id' },
+          { attribute: 'source-system', alias: 'source' },
+        ],
+      },
+    };
+
+    const { results } = await mapped().queryBatch(request('q'), { q: source });
+    expect(results[0]!.rows[0]).toEqual({ id: 'L1', source: 'Bloomberg' });
+  });
+
+  it('resolves a filter target through the map', async () => {
+    const source: DataSource = {
+      id: 'q',
+      entity: 'processing.file-load',
+      kind: 'list',
+      select: { attributes: [{ attribute: 'load-id', alias: 'id' }] },
+      filter: { all: [{ target: 'load-status', operator: 'eq', value: 'FAILED' }] },
+    };
+
+    const { results } = await mapped().queryBatch(request('q'), { q: source });
+    expect(results[0]!.rows).toEqual([{ id: 'L1' }]);
+  });
+
+  it('aggregates a measure over its mapped column', async () => {
+    const source: DataSource = {
+      id: 'q',
+      entity: 'processing.file-load',
+      kind: 'aggregate',
+      select: { measures: [{ measure: 'rows-processed', aggregation: 'sum', alias: 'total' }] },
+    };
+
+    const { results } = await mapped().queryBatch(request('q'), { q: source });
+    expect(results[0]!.rows[0]!['total']).toBe(500);
+  });
+
+  it('counts rows for a measure that has no column, and distinct-counts by the key', async () => {
+    const count: DataSource = {
+      id: 'q',
+      entity: 'processing.file-load',
+      kind: 'aggregate',
+      select: { measures: [{ measure: 'failed-file-count', aggregation: 'count', alias: 'n' }] },
+      filter: { all: [{ target: 'load-status', operator: 'eq', value: 'COMPLETE' }] },
+    };
+    const distinct: DataSource = {
+      ...count,
+      select: {
+        measures: [{ measure: 'failed-file-count', aggregation: 'countDistinct', alias: 'n' }],
+      },
+    };
+
+    const counted = await mapped().queryBatch(request('q'), { q: count });
+    expect(counted.results[0]!.rows[0]!['n']).toBe(2);
+
+    // countDistinct on a column-less measure falls back to the primary key, which itself
+    // resolves through the map — a distinct count over `undefined` would always be 1.
+    const distincted = await mapped().queryBatch(request('q'), { q: distinct });
+    expect(distincted.results[0]!.rows[0]!['n']).toBe(2);
+  });
+
+  it('groups by a mapped dimension', async () => {
+    const source: DataSource = {
+      id: 'q',
+      entity: 'processing.file-load',
+      kind: 'aggregate',
+      select: {
+        measures: [{ measure: 'rows-processed', aggregation: 'sum', alias: 'total' }],
+        dimensions: [{ attribute: 'source-system', alias: 'source' }],
+      },
+    };
+
+    const { results } = await mapped().queryBatch(request('q'), { q: source });
+    expect(results[0]!.rows).toEqual([
+      { source: 'Bloomberg', total: 120 },
+      { source: 'Refinitiv', total: 380 },
+    ]);
+  });
+
+  it('treats an unmapped id as its own column, so a matching fixture needs no map', async () => {
+    const source: DataSource = {
+      id: 'q',
+      entity: 'processing.file-load',
+      kind: 'list',
+      // `row-count` has no entry in `fields`, and is also the physical name.
+      select: { attributes: [{ attribute: 'row-count', alias: 'rows' }] },
+    };
+
+    const { results } = await mapped().queryBatch(request('q'), { q: source });
+    expect(results[0]!.rows.map((r) => r['rows'])).toEqual([0, 120, 380]);
+  });
+});

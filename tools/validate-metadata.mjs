@@ -23,6 +23,7 @@ const ROOT = process.cwd();
 const SCHEMA_DIR = join(ROOT, 'schemas');
 const EXAMPLE_DIR = join(SCHEMA_DIR, 'examples');
 const DEFINITION_DIR = join(ROOT, 'apps/viewer/public/definitions');
+const CATALOG_DIR = join(ROOT, 'apps/viewer/public/catalog');
 const COMPONENT_DIR = join(ROOT, 'libs/components');
 
 const BASE = 'https://schemas.opus.gresham.com/experience-studio/v1/';
@@ -113,6 +114,7 @@ function validateArtifacts(label, dir) {
 
 validateArtifacts('Schema examples', EXAMPLE_DIR);
 validateArtifacts('Runtime definitions', DEFINITION_DIR);
+validateArtifacts('Runtime catalog', CATALOG_DIR);
 
 // ── 3. component manifests ──────────────────────────────────────────────────
 console.log('\nComponent manifests');
@@ -180,5 +182,6 @@ if (failures) {
   process.exit(1);
 }
 console.log('Structural validation passed.');
-console.log('Levels 2/4/7 run via @opus/validator in the browser and unit tests.');
-console.log('Levels 3/5/6/8 require the catalog service and Data Gateway — not run.\n');
+console.log('Levels 2/3/4/7 run via @opus/validator in the browser and unit tests.');
+console.log('Level 3 needs a catalog, which the generator supplies and the loader does not.');
+console.log('Levels 5/6/8 require the Data Gateway and an a11y pass — not run.\n');

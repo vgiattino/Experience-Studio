@@ -36,6 +36,30 @@ export interface MockEntityTable {
   restrictedAttributes?: Readonly<Record<string, string>>;
   /** Capability required to read any row at all — its absence produces `denied`. */
   rowCapability?: string;
+  /**
+   * Logical attribute id → physical column. Supplied by the catalog's `physical` block,
+   * which is server-side only and never appears in a definition or in anything the model
+   * sees (schemas/README.md R6).
+   *
+   * The gateway is where the two vocabularies meet, and it is the ONLY place they may.
+   * A definition says `security-id`; the store holds `security_id`; nothing between them
+   * needs to know. Without this, a generated page binds to catalog identifiers and reads
+   * nothing, and the natural fix — renaming catalog ids to match columns — would leak the
+   * physical schema into the semantic layer and make every EDM rename a breaking change
+   * to every page.
+   *
+   * An absent entry means the logical id is also the column, so a fixture that happens to
+   * match needs no map at all.
+   */
+  fields?: Readonly<Record<string, string>>;
+  /**
+   * Logical measure id → physical column. `null` means the measure needs no column
+   * because it counts rows (`late-file-count` is a count over a filter, not a stored
+   * number), in which case a distinct-count falls back to the primary key.
+   */
+  measureFields?: Readonly<Record<string, string | null>>;
+  /** Logical primary key, used when a countable measure has no column of its own. */
+  primaryKey?: readonly string[];
 }
 
 export interface MockGatewayOptions {
@@ -143,8 +167,8 @@ export class MockGateway {
       const deniedFields = this.deniedFieldsFor(source.select, table);
 
       let rows = simulate === 'empty' ? [] : [...table.rows];
-      rows = rows.filter((row) => this.matches(row, source.filter, query.params));
-      rows = this.project(rows, source, query.params, deniedFields);
+      rows = rows.filter((row) => this.matches(row, source.filter, query.params, table));
+      rows = this.project(rows, source, query.params, deniedFields, table);
       rows = this.sort(rows, source);
 
       const totalRows = rows.length;
@@ -183,24 +207,43 @@ export class MockGateway {
     return denied;
   }
 
+  // ── logical → physical resolution ─────────────────────────────────────────
+
+  /** The column an attribute id reads from. Unmapped ids are their own column. */
+  private column(table: MockEntityTable, attributeId: string): string {
+    return table.fields?.[attributeId] ?? attributeId;
+  }
+
+  /** The column a measure aggregates over, or null when it counts rows. */
+  private measureColumn(table: MockEntityTable, measureId: string): string | null {
+    const map = table.measureFields;
+    if (map && Object.prototype.hasOwnProperty.call(map, measureId)) {
+      const physical = map[measureId];
+      return physical ?? this.column(table, table.primaryKey?.[0] ?? measureId);
+    }
+    return this.column(table, measureId);
+  }
+
   // ── filtering ─────────────────────────────────────────────────────────────
 
   private matches(
     row: DataRow,
     node: FilterNode | undefined,
     params: Readonly<Record<string, unknown>>,
+    table: MockEntityTable,
   ): boolean {
     if (!node) return true;
-    if ('all' in node) return node.all.every((child) => this.matches(row, child, params));
-    if ('any' in node) return node.any.some((child) => this.matches(row, child, params));
-    if ('not' in node) return !this.matches(row, node.not, params);
-    return this.matchesClause(row, node, params);
+    if ('all' in node) return node.all.every((child) => this.matches(row, child, params, table));
+    if ('any' in node) return node.any.some((child) => this.matches(row, child, params, table));
+    if ('not' in node) return !this.matches(row, node.not, params, table);
+    return this.matchesClause(row, node, params, table);
   }
 
   private matchesClause(
     row: DataRow,
     clause: FilterClause,
     params: Readonly<Record<string, unknown>>,
+    table: MockEntityTable,
   ): boolean {
     /**
      * Resolution order matters, and getting it wrong is subtle.
@@ -214,7 +257,9 @@ export class MockGateway {
     const supplied =
       params[`${clause.target}@${clause.operator}`] ?? params[clause.target];
     const value = supplied ?? literalOf(clause.value);
-    const actual = row[clause.target] ?? null;
+    // The param channel is keyed logically — the client only ever speaks the semantic
+    // vocabulary — while the row is read through the physical map.
+    const actual = row[this.column(table, clause.target)] ?? null;
 
     // `skipWhenEmpty` defaults to true: an unset filter channel means "no
     // constraint", not "match nothing". Without it every dashboard needs
@@ -294,40 +339,44 @@ export class MockGateway {
     source: DataSource,
     params: Readonly<Record<string, unknown>>,
     deniedFields: readonly string[],
+    table: MockEntityTable,
   ): DataRow[] {
     const { select, kind } = source;
 
     if (kind === 'aggregate') {
-      return this.aggregate(rows, select);
+      return this.aggregate(rows, select, table);
     }
 
     if (kind === 'single') {
       const keyed = rows.filter((row) =>
         Object.entries(select.key ?? {}).every(([attribute]) =>
-          sameValue(row[attribute], params[attribute]),
+          sameValue(row[this.column(table, attribute)], params[attribute]),
         ),
       );
       const first = keyed[0] ?? rows[0];
-      return first ? [this.selectAttributes(first, select, deniedFields)] : [];
+      return first ? [this.selectAttributes(first, select, deniedFields, table)] : [];
     }
 
-    return rows.map((row) => this.selectAttributes(row, select, deniedFields));
+    return rows.map((row) => this.selectAttributes(row, select, deniedFields, table));
   }
 
   private selectAttributes(
     row: DataRow,
     select: Select,
     deniedFields: readonly string[],
+    table: MockEntityTable,
   ): DataRow {
     const out: Record<string, unknown> = {};
     for (const attribute of select.attributes ?? []) {
       if (deniedFields.includes(attribute.alias)) continue;
-      out[attribute.alias] = row[attribute.attribute] ?? null;
+      // Keyed by ALIAS, not by column: everything downstream of the gateway — bindings,
+      // expressions, sort specs — addresses the projected row, never the store.
+      out[attribute.alias] = row[this.column(table, attribute.attribute)] ?? null;
     }
     return out;
   }
 
-  private aggregate(rows: readonly DataRow[], select: Select): DataRow[] {
+  private aggregate(rows: readonly DataRow[], select: Select, table: MockEntityTable): DataRow[] {
     const dimensions = select.dimensions ?? [];
     const measures = select.measures ?? [];
 
@@ -335,7 +384,10 @@ export class MockGateway {
     for (const row of rows) {
       const key: Record<string, unknown> = {};
       for (const dimension of dimensions) {
-        key[dimension.alias] = bucket(row[dimension.attribute], dimension.granularity);
+        key[dimension.alias] = bucket(
+          row[this.column(table, dimension.attribute)],
+          dimension.granularity,
+        );
       }
       const signature = JSON.stringify(key);
       const existing = groups.get(signature);
@@ -355,7 +407,7 @@ export class MockGateway {
         record[measure.alias] = applyAggregation(
           measure.aggregation ?? 'count',
           groupRows,
-          measure.measure,
+          this.measureColumn(table, measure.measure) ?? measure.measure,
         );
       }
       out.push(record);
