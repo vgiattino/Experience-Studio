@@ -21,6 +21,17 @@ Do not recreate legacy Business Screens as a web clone. Design toward the future
 
 The goal is to allow business analysts to create dashboards, search experiences, workflows, and applications using natural language and visual design.
 
+## Before Implementing Any Feature
+
+1. Review existing architecture.
+2. Prefer reusable platform capabilities over one-off features.
+3. Update documentation before major implementation.
+4. Do not hardcode business experiences.
+5. Use metadata-driven designs.
+6. Build capabilities that allow AI generation.
+7. Optimize for business analysts, not developers.
+8. Treat Opus Experience Studio as an enterprise platform.
+
 ## Architecture Expectations
 
 Favor:
