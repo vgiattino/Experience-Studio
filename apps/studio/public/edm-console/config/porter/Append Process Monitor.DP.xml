@@ -1,0 +1,264 @@
+﻿<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<!--Markit EDM Serialised XML © Markit Group Limited-->
+<CadisXml>
+<Content Tr="CADIS.Base.ExportData, CADIS.Base">
+	<VersionNumber>20.1.15.0</VersionNumber>
+	<ProcessType>DataPorter</ProcessType>
+	<DataPorter Tr="CADIS.DataPorter.DataPort, CADIS.DPData">
+		<Name>Append Process Monitor</Name>
+		<Comment Tr="string" />
+		<BestPracticeActivated>True</BestPracticeActivated>
+		<EnableConcurrency>True</EnableConcurrency>
+		<Inputs>
+			<list Tr="list">
+				<Item>
+					<Name>Process Monitor</Name>
+					<ProcType>Port_Data</ProcType>
+					<Enabled>True</Enabled>
+					<Precedence>Previous_Step_Completed_OK</Precedence>
+					<Description>Process Monitor</Description>
+					<SourceType>Data_Source</SourceType>
+					<TargetUpgraded>True</TargetUpgraded>
+					<AutoTruncate>True</AutoTruncate>
+					<TransferSystem>BulkCopy</TransferSystem>
+					<SSISTrimDataForMaxColumns>True</SSISTrimDataForMaxColumns>
+					<UseDBTransferSystem>True</UseDBTransferSystem>
+					<PrettyPrintFormat>False</PrettyPrintFormat>
+					<EscapeQuotes>False</EscapeQuotes>
+					<SourceFile />
+					<SourceConnection>
+						<Type>Server</Type>
+						<DL>False</DL>
+					</SourceConnection>
+					<SourceFileProps />
+					<SourceDataSource>
+						<Name Tr="string" />
+						<Select>
+							<Phrasebook>
+								<Phrases Tr="dictionary">
+									<Item>
+										<key>{RUNTIME VARIABLE}.[Top Level RunID]</key>
+										<value>
+											<Code>{RUNTIME VARIABLE}.[Top Level RunID]</Code>
+											<Translation>{RUNTIME VARIABLE}.[Top Level RunID]</Translation>
+										</value>
+									</Item>
+									<Item>
+										<key>{CONFIGURABLE PARAMETER}.[TABLE_NAME]</key>
+										<value>
+											<Code>{CONFIGURABLE PARAMETER}.[TABLE_NAME]</Code>
+											<Translation>{CONFIGURABLE PARAMETER}.[TABLE_NAME]</Translation>
+										</value>
+									</Item>
+								</Phrases>
+							</Phrasebook>
+							<Text>SELECT
+	[ROW_COUNT] = COUNT(*)
+	
+FROM
+	{CONFIGURABLE PARAMETER}.[TABLE_NAME]
+WHERE
+	CADIS_SYSTEM_TOPRUNID = {RUNTIME VARIABLE}.[Top Level RunID]
+</Text>
+						</Select>
+						<DL>False</DL>
+						<Object />
+						<CacheMethod>NoCache</CacheMethod>
+						<CustomCacheTable />
+						<ManagedCacheTable />
+					</SourceDataSource>
+					<TargetFtp />
+					<SourceMsg />
+					<SourceXml />
+					<Globals>
+						<nv>
+							<list Tr="list" />
+						</nv>
+						<fv>
+							<list Tr="list" />
+						</fv>
+						<FileNameVariables>
+							<list Tr="list" />
+						</FileNameVariables>
+						<RuleBuilderVariables>
+							<list Tr="list" />
+						</RuleBuilderVariables>
+						<Global>False</Global>
+					</Globals>
+					<Custom />
+					<Email />
+					<Plugin />
+					<XmlSchema />
+					<XmlMapping />
+					<XmlValidation />
+					<External />
+					<FileAction />
+					<Targets>
+						<list Tr="list">
+							<Item>
+								<Enabled>True</Enabled>
+								<TargetType>Data_Source</TargetType>
+								<MaxFailedRows>0</MaxFailedRows>
+								<TargetFile />
+								<TargetConnection>
+									<Type>Server</Type>
+									<DL>False</DL>
+								</TargetConnection>
+								<TargetFileProps />
+								<TargetDataSource>
+									<Table>
+										<Name>EDM_PROCESSMONITOR</Name>
+										<Owner>CADIS</Owner>
+										<SystemObject>False</SystemObject>
+										<Type>Table</Type>
+										<QuoteString>"</QuoteString>
+									</Table>
+									<View />
+									<TargetType>Table</TargetType>
+								</TargetDataSource>
+								<TargetMsg />
+								<TargetXml />
+								<ColMapping>
+									<Mappings>
+										<list Tr="list">
+											<Item>
+												<Name>{TABLE}.[SOURCE]</Name>
+												<Value>{CONFIGURABLE PARAMETER}.[SOURCE]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[ENTITY]</Name>
+												<Value>{CONFIGURABLE PARAMETER}.[ENTITY]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[FILE_NAME]</Name>
+												<Value Tr="string" />
+											</Item>
+											<Item>
+												<Name>{TABLE}.[DIRECTION]</Name>
+												<Value>{CONFIGURABLE PARAMETER}.[DIRECTION]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[RUN_DATE]</Name>
+												<Value>{RUNTIME VARIABLE}.[Current Date]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[DESCRIPTION]</Name>
+												<Value>{CONFIGURABLE PARAMETER}.[DESCRIPTION]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[SOURCE_DATE]</Name>
+												<Value Tr="string" />
+											</Item>
+											<Item>
+												<Name>{TABLE}.[ROW_COUNT]</Name>
+												<Value>{DATA}.[ROW_COUNT]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[EXPECTED_ROW_COUNT]</Name>
+												<Value Tr="string" />
+											</Item>
+											<Item>
+												<Name>{TABLE}.[STATUS]</Name>
+												<Value>{CONFIGURABLE PARAMETER}.[STATUS]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[CADIS_SYSTEM_INSERTED]</Name>
+												<Value Tr="string" />
+											</Item>
+											<Item>
+												<Name>{TABLE}.[CADIS_SYSTEM_UPDATED]</Name>
+												<Value>{RUNTIME VARIABLE}.[Current Date]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[CADIS_SYSTEM_CHANGEDBY]</Name>
+												<Value>{RUNTIME VARIABLE}.[Current User]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[CADIS_SYSTEM_RUNID]</Name>
+												<Value>{RUNTIME VARIABLE}.[RunID]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[CADIS_SYSTEM_TOPRUNID]</Name>
+												<Value>{RUNTIME VARIABLE}.[Top Level RunID]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[CADIS_SYSTEM_LASTMODIFIED]</Name>
+												<Value>{RUNTIME VARIABLE}.[Current Date]</Value>
+											</Item>
+										</list>
+									</Mappings>
+								</ColMapping>
+								<UpdateControl>
+									<Type>Append</Type>
+									<Dedup>False</Dedup>
+									<Allowable>Overwrite, Append, Update</Allowable>
+									<PropText />
+								</UpdateControl>
+								<SourceXml />
+								<XmlMapping />
+								<FileContentsOutputProps />
+							</Item>
+						</list>
+					</Targets>
+					<Bulkload />
+					<XsltFile />
+					<DeleteDataSource />
+					<DeleteDataCondition />
+					<SrcChangeTolerance />
+				</Item>
+			</list>
+		</Inputs>
+		<configdefaults>
+			<list Tr="list">
+				<Item>
+					<Name>DESCRIPTION</Name>
+					<Value Tr="string" />
+				</Item>
+				<Item>
+					<Name>DIRECTION</Name>
+					<Value Tr="string" />
+				</Item>
+				<Item>
+					<Name>ENTITY</Name>
+					<Value Tr="string" />
+				</Item>
+				<Item>
+					<Name>SOURCE</Name>
+					<Value Tr="string" />
+				</Item>
+				<Item>
+					<Name>STATUS</Name>
+					<Value Tr="string" />
+				</Item>
+				<Item>
+					<Name>TABLE_NAME</Name>
+					<Value>dbo.T_IVT_LEGAL_ENTITY_STAGE</Value>
+				</Item>
+			</list>
+		</configdefaults>
+		<ProcessParams>
+			<Connections>
+				<list Tr="list" />
+			</Connections>
+			<Locations>
+				<list Tr="list" />
+			</Locations>
+			<Variables>
+				<nv>
+					<list Tr="list" />
+				</nv>
+				<fv>
+					<list Tr="list" />
+				</fv>
+				<FileNameVariables>
+					<list Tr="list" />
+				</FileNameVariables>
+				<RuleBuilderVariables>
+					<list Tr="list" />
+				</RuleBuilderVariables>
+				<Global>True</Global>
+			</Variables>
+		</ProcessParams>
+	</DataPorter>
+</Content>
+</CadisXml>

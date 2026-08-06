@@ -1,0 +1,222 @@
+﻿<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<!--Markit EDM Serialised XML © Markit Group Limited-->
+<CadisXml>
+<Content Tr="CADIS.Base.ExportData, CADIS.Base">
+	<VersionNumber>20.1.15.0</VersionNumber>
+	<ProcessType>DataPorter</ProcessType>
+	<DataPorter Tr="CADIS.DataPorter.DataPort, CADIS.DPData">
+		<Name>Create Bloomberg Per Security Request</Name>
+		<Comment Tr="string" />
+		<Enabled>False</Enabled>
+		<BestPracticeActivated>True</BestPracticeActivated>
+		<Inputs>
+			<list Tr="list">
+				<Item>
+					<Name>Master</Name>
+					<ProcType>Port_Data</ProcType>
+					<Enabled>True</Enabled>
+					<Precedence>Previous_Step_Completed_OK</Precedence>
+					<Description>Master</Description>
+					<SourceType>Data_Source</SourceType>
+					<TargetUpgraded>True</TargetUpgraded>
+					<AutoTruncate>True</AutoTruncate>
+					<TransferSystem>BulkCopy</TransferSystem>
+					<SSISTrimDataForMaxColumns>True</SSISTrimDataForMaxColumns>
+					<UseDBTransferSystem>True</UseDBTransferSystem>
+					<PrettyPrintFormat>False</PrettyPrintFormat>
+					<EscapeQuotes>False</EscapeQuotes>
+					<SourceFile />
+					<SourceConnection>
+						<Type>Server</Type>
+						<DL>False</DL>
+					</SourceConnection>
+					<SourceFileProps />
+					<SourceDataSource>
+						<Name Tr="string" />
+						<Select>
+							<Phrasebook>
+								<Phrases Tr="dictionary" />
+							</Phrasebook>
+							<Text>SELECT DISTINCT ID_BB_GLOBAL, ISIN AS 'ID_ISIN', CUSIP AS 'ID_CUSIP', SEDOL AS 'ID_SEDOL', 'MASTER' AS SOURCE , A.EDM_SEC_ID
+FROM T_MASTER_SEC AS A 
+INNER JOIN T_MASTER_SEC_UNIVERSE AS  B
+ON A.EDM_SEC_ID = B.EDM_SEC_ID
+WHERE (ID_BB_GLOBAL IS NOT NULL OR ISIN IS NOT NULL OR CUSIP IS NOT NULL OR SEDOL IS NOT NULL)
+AND B.STATUS = 'Active'</Text>
+						</Select>
+						<DL>False</DL>
+						<Object />
+						<CacheMethod>NoCache</CacheMethod>
+						<CustomCacheTable />
+						<ManagedCacheTable />
+					</SourceDataSource>
+					<TargetFtp />
+					<SourceMsg />
+					<SourceXml />
+					<Globals>
+						<nv>
+							<list Tr="list" />
+						</nv>
+						<fv>
+							<list Tr="list" />
+						</fv>
+						<FileNameVariables>
+							<list Tr="list" />
+						</FileNameVariables>
+						<RuleBuilderVariables>
+							<list Tr="list" />
+						</RuleBuilderVariables>
+						<Global>False</Global>
+					</Globals>
+					<Custom />
+					<Email />
+					<Plugin />
+					<XmlSchema />
+					<XmlMapping />
+					<XmlValidation />
+					<External />
+					<FileAction />
+					<Targets>
+						<list Tr="list">
+							<Item>
+								<Enabled>True</Enabled>
+								<TargetType>Data_Source</TargetType>
+								<MaxFailedRows>0</MaxFailedRows>
+								<TargetFile />
+								<TargetConnection>
+									<Type>Server</Type>
+									<DL>False</DL>
+								</TargetConnection>
+								<TargetFileProps />
+								<TargetDataSource>
+									<Table>
+										<Name>T_BPS_SEC_REQUEST</Name>
+										<Owner>dbo</Owner>
+										<SystemObject>False</SystemObject>
+										<Type>Table</Type>
+										<QuoteString>"</QuoteString>
+									</Table>
+									<View />
+									<TargetType>Table</TargetType>
+								</TargetDataSource>
+								<TargetMsg />
+								<TargetXml />
+								<ColMapping>
+									<Mappings>
+										<list Tr="list">
+											<Item>
+												<Name>{TABLE}.[SOURCE]</Name>
+												<Value>{DATA}.[SOURCE]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[SOURCE_ID]</Name>
+												<Value>{DATA}.[EDM_SEC_ID]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[ID_BB_GLOBAL]</Name>
+												<Value>{DATA}.[ID_BB_GLOBAL]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[ID_ISIN]</Name>
+												<Value>{DATA}.[ID_ISIN]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[ID_CUSIP]</Name>
+												<Value>{DATA}.[ID_CUSIP]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[CADIS_SYSTEM_INSERTED]</Name>
+												<Value>{RUNTIME VARIABLE}.[Current Date]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[CADIS_SYSTEM_UPDATED]</Name>
+												<Value>{RUNTIME VARIABLE}.[Current Date]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[CADIS_SYSTEM_CHANGEDBY]</Name>
+												<Value>{RUNTIME VARIABLE}.[Current User]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[CADIS_SYSTEM_RUNID]</Name>
+												<Value>{RUNTIME VARIABLE}.[RunID]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[CADIS_SYSTEM_TOPRUNID]</Name>
+												<Value>{RUNTIME VARIABLE}.[Top Level RunID]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[ID_BB]</Name>
+												<Value Tr="string" />
+											</Item>
+											<Item>
+												<Name>{TABLE}.[ID_SEDOL]</Name>
+												<Value>{DATA}.[ID_SEDOL]</Value>
+											</Item>
+										</list>
+									</Mappings>
+								</ColMapping>
+								<UpdateControl>
+									<Type>Overwrite</Type>
+									<Dedup>True</Dedup>
+									<Allowable>Overwrite, Append, Update</Allowable>
+									<PropText />
+									<Truncate>True</Truncate>
+									<DedupKeys Tr="dictionary">
+										<Item>
+											<key>ID_BB_GLOBAL</key>
+											<value>ID_BB_GLOBAL</value>
+										</Item>
+										<Item>
+											<key>ID_ISIN</key>
+											<value>ID_ISIN</value>
+										</Item>
+										<Item>
+											<key>ID_CUSIP</key>
+											<value>ID_CUSIP</value>
+										</Item>
+									</DedupKeys>
+									<Functions Tr="dictionary" />
+								</UpdateControl>
+								<SourceXml />
+								<XmlMapping />
+								<FileContentsOutputProps />
+							</Item>
+						</list>
+					</Targets>
+					<Bulkload />
+					<XsltFile />
+					<DeleteDataSource />
+					<DeleteDataCondition />
+					<SrcChangeTolerance />
+				</Item>
+			</list>
+		</Inputs>
+		<configdefaults>
+			<list Tr="list" />
+		</configdefaults>
+		<ProcessParams>
+			<Connections>
+				<list Tr="list" />
+			</Connections>
+			<Locations>
+				<list Tr="list" />
+			</Locations>
+			<Variables>
+				<nv>
+					<list Tr="list" />
+				</nv>
+				<fv>
+					<list Tr="list" />
+				</fv>
+				<FileNameVariables>
+					<list Tr="list" />
+				</FileNameVariables>
+				<RuleBuilderVariables>
+					<list Tr="list" />
+				</RuleBuilderVariables>
+				<Global>True</Global>
+			</Variables>
+		</ProcessParams>
+	</DataPorter>
+</Content>
+</CadisXml>

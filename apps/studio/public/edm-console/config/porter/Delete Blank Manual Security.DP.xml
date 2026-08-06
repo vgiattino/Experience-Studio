@@ -1,0 +1,149 @@
+﻿<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<!--Markit EDM Serialised XML © Markit Group Limited-->
+<CadisXml>
+<Content Tr="CADIS.Base.ExportData, CADIS.Base">
+	<VersionNumber>20.1.15.0</VersionNumber>
+	<ProcessType>DataPorter</ProcessType>
+	<DataPorter Tr="CADIS.DataPorter.DataPort, CADIS.DPData">
+		<Name>Delete Blank Manual Security</Name>
+		<Comment Tr="string" />
+		<BestPracticeActivated>True</BestPracticeActivated>
+		<Inputs>
+			<list Tr="list">
+				<Item>
+					<Name>Delete Blank Security</Name>
+					<ProcType>Delete_Data</ProcType>
+					<Enabled>True</Enabled>
+					<Precedence>Previous_Step_Completed_OK</Precedence>
+					<Description>Delete Blank Security</Description>
+					<SourceType>Data_Source</SourceType>
+					<TargetUpgraded>True</TargetUpgraded>
+					<AutoTruncate>True</AutoTruncate>
+					<TransferSystem>BulkCopy</TransferSystem>
+					<SSISTrimDataForMaxColumns>True</SSISTrimDataForMaxColumns>
+					<UseDBTransferSystem>True</UseDBTransferSystem>
+					<PrettyPrintFormat>False</PrettyPrintFormat>
+					<EscapeQuotes>False</EscapeQuotes>
+					<SourceFile />
+					<SourceConnection>
+						<Type>Server</Type>
+						<DL>False</DL>
+					</SourceConnection>
+					<SourceFileProps />
+					<SourceDataSource />
+					<TargetFtp />
+					<SourceMsg />
+					<SourceXml />
+					<Globals>
+						<nv>
+							<list Tr="list" />
+						</nv>
+						<fv>
+							<list Tr="list" />
+						</fv>
+						<FileNameVariables>
+							<list Tr="list" />
+						</FileNameVariables>
+						<RuleBuilderVariables>
+							<list Tr="list" />
+						</RuleBuilderVariables>
+						<Global>False</Global>
+					</Globals>
+					<Custom />
+					<Email />
+					<Plugin />
+					<XmlSchema />
+					<XmlMapping />
+					<XmlValidation />
+					<External />
+					<FileAction />
+					<Targets>
+						<list Tr="list">
+							<Item>
+								<Enabled>True</Enabled>
+								<TargetType>Data_Source</TargetType>
+								<MaxFailedRows>0</MaxFailedRows>
+								<TargetFile />
+								<TargetConnection />
+								<TargetFileProps />
+								<TargetDataSource />
+								<TargetMsg />
+								<TargetXml />
+								<ColMapping />
+								<UpdateControl />
+								<SourceXml />
+								<XmlMapping />
+								<FileContentsOutputProps />
+							</Item>
+						</list>
+					</Targets>
+					<Bulkload />
+					<XsltFile />
+					<DeleteDataSource>
+						<Table>
+							<Name>T_MANUAL_SEC</Name>
+							<Owner>dbo</Owner>
+							<SystemObject>False</SystemObject>
+							<Type>Table</Type>
+							<QuoteString>"</QuoteString>
+						</Table>
+						<View />
+						<TargetType>Table</TargetType>
+					</DeleteDataSource>
+					<DeleteDataCondition>
+						<ParameterisedFilterClause>
+							<Phrasebook>
+								<Phrases Tr="dictionary">
+									<Item>
+										<key>"MAN_SEC_ID" </key>
+										<value>
+											<Code>"MAN_SEC_ID" </Code>
+											<Translation>"MAN_SEC_ID"</Translation>
+										</value>
+									</Item>
+								</Phrases>
+							</Phrasebook>
+							<Text>"MAN_SEC_ID" IN (SELECT MAN_SEC_ID FROM T_MANUAL_SEC WHERE ISNULL(ASSET_TYPE_CODE,'') = '' AND 
+CAST(CADIS_SYSTEM_UPDATED as DATE) &lt;= CAST(DATEADD(DAY,-1,CAST(GETDATE()as DATE)) as DATE))
+</Text>
+						</ParameterisedFilterClause>
+						<FixedFilterClause>
+							<Phrasebook>
+								<Phrases Tr="dictionary" />
+							</Phrasebook>
+							<Text Tr="string" />
+						</FixedFilterClause>
+					</DeleteDataCondition>
+					<SrcChangeTolerance />
+				</Item>
+			</list>
+		</Inputs>
+		<configdefaults>
+			<list Tr="list" />
+		</configdefaults>
+		<ProcessParams>
+			<Connections>
+				<list Tr="list" />
+			</Connections>
+			<Locations>
+				<list Tr="list" />
+			</Locations>
+			<Variables>
+				<nv>
+					<list Tr="list" />
+				</nv>
+				<fv>
+					<list Tr="list" />
+				</fv>
+				<FileNameVariables>
+					<list Tr="list" />
+				</FileNameVariables>
+				<RuleBuilderVariables>
+					<list Tr="list" />
+				</RuleBuilderVariables>
+				<Global>True</Global>
+			</Variables>
+		</ProcessParams>
+	</DataPorter>
+</Content>
+</CadisXml>

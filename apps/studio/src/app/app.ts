@@ -75,6 +75,7 @@ import {
 } from '@opus/studio-ui';
 import type { ValidationReport } from '@opus/validator';
 
+import { EdmConsoleComponent } from './edm-console.component';
 import { AUTHOR } from './session';
 
 const DEFINITIONS_BASE = 'definitions';
@@ -84,6 +85,17 @@ const EXPERIENCE_URL = `${DEFINITIONS_BASE}/securities-operations.experience.jso
 
 /** What the left column holds. The rail switches between these; there is no router. */
 type LeftPanel = 'pages' | 'add' | 'structure';
+
+/**
+ * Which workspace fills the main panel.
+ *
+ * A workspace is a coarser thing than a left panel: `builder` is this application, and `edm-console`
+ * is *another* application shown in a frame for comparison. Separate state rather than a fourth
+ * `LeftPanel` value, because the console has no left panel, no page, and nothing to do with the
+ * artifact being edited — collapsing the two would put "which panel" and "which product" in one
+ * signal and every consumer would have to know the difference anyway.
+ */
+type Workspace = 'builder' | 'edm-console';
 
 /** What the right dock holds. */
 type RightTab = 'inspector' | 'history' | 'json';
@@ -109,6 +121,19 @@ const NAV_SECTIONS: readonly NavSection[] = [
       { id: 'add', label: 'Add a widget', icon: 'grid' },
       { id: 'structure', label: 'Page structure', icon: 'layers' },
     ],
+  },
+  {
+    /**
+     * Reference, not navigation to a feature.
+     *
+     * The Opus EDM console prototype is vendored under `apps/studio/public/edm-console/` so the two
+     * products can be compared without switching applications. It is a snapshot of someone else's
+     * code — see its PROVENANCE.md — and it is in its own rail section so nobody mistakes it for part
+     * of this one.
+     */
+    label: 'Reference',
+    mini: 'REF',
+    items: [{ id: 'edm-console', label: 'Opus EDM console', icon: 'database' }],
   },
 ];
 
@@ -137,6 +162,7 @@ const PREVIEW_ICONS: Record<PreviewSize['id'], { name: string; size: number }> =
   imports: [
     AssistPanelComponent,
     CanvasComponent,
+    EdmConsoleComponent,
     HistoryPanelComponent,
     IconComponent,
     InspectorComponent,
@@ -181,7 +207,7 @@ const PREVIEW_ICONS: Record<PreviewSize['id'], { name: string; size: number }> =
       <div class="opus-body">
         <opus-nav-rail
           [sections]="navSections"
-          [activeId]="leftPanel()"
+          [activeId]="workspace() === 'builder' ? leftPanel() : workspace()"
           label="Studio navigation"
           (select)="onRailSelect($event)"
         />
@@ -193,6 +219,16 @@ const PREVIEW_ICONS: Record<PreviewSize['id'], { name: string; size: number }> =
               <span>{{ note.text }}</span>
             </p>
           }
+
+          @if (workspace() === 'edm-console') {
+            <!--
+              Another application, in a frame. Rendered instead of the workbench rather than beside it:
+              two full products in one viewport is a screenshot, not something either can be used in.
+              The builder's state is untouched while this shows — switching back finds the same page
+              open, the same selection, the same undo history.
+            -->
+            <opus-edm-console />
+          } @else {
 
           <div class="opus-workbench" [class.list-collapsed]="listCollapsed()">
             @switch (leftPanel()) {
@@ -534,6 +570,8 @@ const PREVIEW_ICONS: Record<PreviewSize['id'], { name: string; size: number }> =
               </div>
             </div>
           </div>
+
+          }
         </div>
       </div>
     </div>
@@ -805,6 +843,7 @@ export class StudioApp {
   protected readonly listings = this.drafts.listings;
   protected readonly openPageId = signal<string | null>(null);
   protected readonly leftPanel = signal<LeftPanel>('pages');
+  protected readonly workspace = signal<Workspace>('builder');
   protected readonly listCollapsed = signal(false);
   protected readonly rightTab = signal<RightTab>('inspector');
   /** `kind` maps straight onto the chrome banner variants, so the shell never translates. */
@@ -947,7 +986,14 @@ export class StudioApp {
    * an invisible panel would read as a dead control.
    */
   protected onRailSelect(id: string): void {
+    if (id === 'edm-console') {
+      this.workspace.set('edm-console');
+      return;
+    }
     if (id !== 'pages' && id !== 'add' && id !== 'structure') return;
+    // Any authoring destination comes back to the builder: the rail is one list, and a click on
+    // "Pages" while the console is open plainly means "show me the pages again".
+    this.workspace.set('builder');
     this.leftPanel.set(id);
     this.listCollapsed.set(false);
   }

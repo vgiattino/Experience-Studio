@@ -1,0 +1,1373 @@
+﻿<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<!--Markit EDM Serialised XML © Markit Group Limited-->
+<CadisXml>
+<Content Tr="CADIS.Base.ExportData, CADIS.Base">
+	<VersionNumber>20.1.15.0</VersionNumber>
+	<ProcessType>DataPorter</ProcessType>
+	<DataPorter Tr="CADIS.DataPorter.DataPort, CADIS.DPData">
+		<Name>In Gearbox API</Name>
+		<Comment Tr="string" />
+		<BestPracticeActivated>True</BestPracticeActivated>
+		<Inputs>
+			<list Tr="list">
+				<Item>
+					<Name>Generate gearbox Request</Name>
+					<ProcType>Port_Data</ProcType>
+					<Enabled>True</Enabled>
+					<Precedence>Previous_Step_Completed_OK</Precedence>
+					<Description>Generate gearbox Request</Description>
+					<SourceType>Data_Source</SourceType>
+					<TargetUpgraded>True</TargetUpgraded>
+					<AutoTruncate>True</AutoTruncate>
+					<TransferSystem>BulkCopy</TransferSystem>
+					<SSISTrimDataForMaxColumns>True</SSISTrimDataForMaxColumns>
+					<UseDBTransferSystem>True</UseDBTransferSystem>
+					<PrettyPrintFormat>False</PrettyPrintFormat>
+					<EscapeQuotes>False</EscapeQuotes>
+					<SourceFile />
+					<SourceConnection>
+						<Type>Server</Type>
+						<DL>False</DL>
+					</SourceConnection>
+					<SourceFileProps />
+					<SourceDataSource>
+						<Name Tr="string" />
+						<Select>
+							<Phrasebook>
+								<Phrases Tr="dictionary" />
+							</Phrasebook>
+							<Text>WITH CTE AS( SELECT TOP 1 CADIS_SYSTEM_RUNID RUNID FROM T_SPG_GBX_REQUEST WHERE CADIS_SYSTEM_TOPRUNID = {RUNTIME VARIABLE}.[Top Level RunID] ORDER BY CADIS_SYSTEM_RUNID DESC)
+
+SELECT 
+ID,
+URI,
+REQUEST_METHOD,
+NAME,
+CADIS.Create_Gearbox_Request(RUNID,1) AS REQUEST_CONTENT
+ FROM T_REF_GBX_REQUESTS,CTE
+WHERE NAME = 'REQUEST'</Text>
+						</Select>
+						<DL>False</DL>
+						<Object />
+						<CacheMethod>NoCache</CacheMethod>
+						<CustomCacheTable />
+						<ManagedCacheTable />
+					</SourceDataSource>
+					<TargetFtp />
+					<SourceMsg />
+					<SourceXml />
+					<Globals>
+						<nv>
+							<list Tr="list">
+								<Item>
+									<Name>STATUS</Name>
+									<Value>Ready</Value>
+								</Item>
+								<Item>
+									<Name>GROUP</Name>
+									<Value>GBX</Value>
+								</Item>
+							</list>
+						</nv>
+						<fv>
+							<list Tr="list" />
+						</fv>
+						<FileNameVariables>
+							<list Tr="list" />
+						</FileNameVariables>
+						<RuleBuilderVariables>
+							<list Tr="list" />
+						</RuleBuilderVariables>
+						<Global>False</Global>
+					</Globals>
+					<Custom />
+					<Email />
+					<Plugin />
+					<XmlSchema />
+					<XmlMapping />
+					<XmlValidation />
+					<External />
+					<FileAction />
+					<Targets>
+						<list Tr="list">
+							<Item>
+								<Enabled>True</Enabled>
+								<TargetType>Data_Source</TargetType>
+								<MaxFailedRows>0</MaxFailedRows>
+								<TargetFile />
+								<TargetConnection>
+									<Type>Server</Type>
+									<DL>False</DL>
+								</TargetConnection>
+								<TargetFileProps />
+								<TargetDataSource>
+									<Table>
+										<Name>T_GBX_API_REQUEST</Name>
+										<Owner>dbo</Owner>
+										<SystemObject>False</SystemObject>
+										<Type>Table</Type>
+										<QuoteString>"</QuoteString>
+									</Table>
+									<View />
+									<TargetType>Table</TargetType>
+								</TargetDataSource>
+								<TargetMsg />
+								<TargetXml />
+								<ColMapping>
+									<Mappings>
+										<list Tr="list">
+											<Item>
+												<Name>{TABLE}.[REQUEST_ID]</Name>
+												<Value Tr="string" />
+											</Item>
+											<Item>
+												<Name>{TABLE}.[URI]</Name>
+												<Value>{DATA}.[URI]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[REQUEST_CONTENT]</Name>
+												<Value>{DATA}.[REQUEST_CONTENT]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[REQUEST_CONTENT_TYPE]</Name>
+												<Value Tr="string" />
+											</Item>
+											<Item>
+												<Name>{TABLE}.[REQUEST_METHOD]</Name>
+												<Value>{DATA}.[REQUEST_METHOD]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[NAME]</Name>
+												<Value>{DATA}.[NAME]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[USER_IDENTIFIER]</Name>
+												<Value>{INPUT VARIABLE}.[STATUS]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[HEADER_GROUP]</Name>
+												<Value>{INPUT VARIABLE}.[GROUP]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[RUNID]</Name>
+												<Value>{RUNTIME VARIABLE}.[RunID]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[TOP_LEVEL_RUNID]</Name>
+												<Value Tr="string" />
+											</Item>
+											<Item>
+												<Name>{TABLE}.[CADIS_SYSTEM_INSERTED]</Name>
+												<Value Tr="string" />
+											</Item>
+											<Item>
+												<Name>{TABLE}.[CADIS_SYSTEM_UPDATED]</Name>
+												<Value>{RUNTIME VARIABLE}.[Current Date]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[CADIS_SYSTEM_CHANGEDBY]</Name>
+												<Value>{RUNTIME VARIABLE}.[Current User]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[CADIS_SYSTEM_RUNID]</Name>
+												<Value>{RUNTIME VARIABLE}.[RunID]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[CADIS_SYSTEM_TOPRUNID]</Name>
+												<Value>{RUNTIME VARIABLE}.[Top Level RunID]</Value>
+											</Item>
+										</list>
+									</Mappings>
+								</ColMapping>
+								<UpdateControl>
+									<Type>Append</Type>
+									<Dedup>False</Dedup>
+									<Allowable>Overwrite, Append, Update</Allowable>
+									<PropText />
+								</UpdateControl>
+								<SourceXml />
+								<XmlMapping />
+								<FileContentsOutputProps />
+							</Item>
+						</list>
+					</Targets>
+					<Bulkload />
+					<XsltFile />
+					<DeleteDataSource />
+					<DeleteDataCondition />
+					<SrcChangeTolerance />
+				</Item>
+				<Item>
+					<Name>Request</Name>
+					<ProcType>Plug_In</ProcType>
+					<Enabled>True</Enabled>
+					<Precedence>Previous_Step_Completed_OK</Precedence>
+					<Description>Request</Description>
+					<SourceType>Data_Source</SourceType>
+					<TargetUpgraded>True</TargetUpgraded>
+					<AutoTruncate>True</AutoTruncate>
+					<TransferSystem>BulkCopy</TransferSystem>
+					<SSISTrimDataForMaxColumns>True</SSISTrimDataForMaxColumns>
+					<UseDBTransferSystem>True</UseDBTransferSystem>
+					<PrettyPrintFormat>False</PrettyPrintFormat>
+					<EscapeQuotes>False</EscapeQuotes>
+					<SourceFile />
+					<SourceConnection />
+					<SourceFileProps />
+					<SourceDataSource />
+					<TargetFtp />
+					<SourceMsg />
+					<SourceXml />
+					<Globals>
+						<nv>
+							<list Tr="list" />
+						</nv>
+						<fv>
+							<list Tr="list" />
+						</fv>
+						<FileNameVariables>
+							<list Tr="list" />
+						</FileNameVariables>
+						<RuleBuilderVariables>
+							<list Tr="list" />
+						</RuleBuilderVariables>
+						<Global>False</Global>
+					</Globals>
+					<Custom />
+					<Email />
+					<Plugin>
+						<AssemblyFileName>CADIS.DPInternetUtilities.dll</AssemblyFileName>
+						<TypeName>CADIS.DataPorter.PlugIn.MultiRequests</TypeName>
+						<InputParameterMappings>
+							<list Tr="list">
+								<Item>
+									<Name>Request table schema</Name>
+									<Value>dbo</Value>
+									<Tag>Optional: Schema name for tables containing the multi request information. Default is dbo</Tag>
+								</Item>
+								<Item>
+									<Name>Requests table name</Name>
+									<Value>T_GBX_API_Request</Value>
+									<Tag>Required: Table name containing the multi request information. E.g. T_MULTI_REQUEST'</Tag>
+								</Item>
+								<Item>
+									<Name>Request key column</Name>
+									<Value>REQUEST_ID</Value>
+									<Tag>Optional: Key column in the multi request table. Default is Id. The columns value will be used in creating the response rows key</Tag>
+								</Item>
+								<Item>
+									<Name>Request headers table schema</Name>
+									<Value Tr="string" />
+									<Tag>Optional: Schema name for tables containing the request headers information. Default is dbo</Tag>
+								</Item>
+								<Item>
+									<Name>Request headers table name</Name>
+									<Value>T_REF_GBX_REQUEST_HEADERS</Value>
+									<Tag>Optional: Table name for table containing the request headers information. E.g. T_MULTI_REQUEST_HEADER</Tag>
+								</Item>
+								<Item>
+									<Name>Request headers group column name</Name>
+									<Value Tr="string" />
+									<Tag>Optional: Column name that specifies the request headers group. Default is HEADER_GROUP</Tag>
+								</Item>
+								<Item>
+									<Name>Response table schema</Name>
+									<Value Tr="string" />
+									<Tag>Optional: Schema name for tables containing the multi response information. Default is dbo</Tag>
+								</Item>
+								<Item>
+									<Name>Response table name</Name>
+									<Value>T_GBX_API_RESPONSE</Value>
+									<Tag>Required: Table name for writing responses based on the request table and common key. E.g. T_MULTI_RESPONSE</Tag>
+								</Item>
+								<Item>
+									<Name>Response key column</Name>
+									<Value>REQUEST_ID</Value>
+									<Tag>Optional: Key column in the multi response table as a non-identity column. Default is Id. The columns value will be taken from the request rows key</Tag>
+								</Item>
+								<Item>
+									<Name>Max concurrent</Name>
+									<Value />
+									<Tag>Optional: Number of concurrent HTTP requests that could be made. Default is 10. If the count exceeds the plugin waits till responses are received</Tag>
+								</Item>
+								<Item>
+									<Name>Timeout</Name>
+									<Value />
+									<Tag>Optional: Timeout per request in seconds. Default is 100 seconds</Tag>
+								</Item>
+								<Item>
+									<Name>Content Type</Name>
+									<Value>application/json</Value>
+									<Tag>Optional: HTTP request's content type. Default is text/xml. E.g. text/xml;charset=UTF-8. Read from {DATA}.[REQUEST_CONTENT_TYPE] in the request table if not provided</Tag>
+								</Item>
+								<Item>
+									<Name>Uri</Name>
+									<Value />
+									<Tag>Optional: Uri/Url of the resource being accessed. E.g. http://ptsv2.com/t/DemoOnly/post/{DATA}.[NAME]/{DATA}.[ID]. Read from {DATA}.[URI] in the request table if not provided</Tag>
+								</Item>
+								<Item>
+									<Name>Request method</Name>
+									<Value />
+									<Tag>Optional: Request Method. If not provided, is read from {DATA}.[REQUEST_METHOD] in the request table. Currently supported methods are GET, POST, PUT, DELETE, MERGE, or PATCH. Default is GET</Tag>
+								</Item>
+								<Item>
+									<Name>Request content</Name>
+									<Value />
+									<Tag>Optional: Content of the HTTP request. E.g. 'This is my request content'. Required for all request methods except GET. Read from {DATA}.[REQUEST_CONTENT] in the request table if not provided</Tag>
+								</Item>
+								<Item>
+									<Name>Client certificate for Data URI</Name>
+									<Value />
+									<Tag>Optional: Absolute path to client certificate file if mTLS is required for data URI. E.g: C:\temp\cert.pem</Tag>
+								</Item>
+								<Item>
+									<Name>Client Key for Data URI</Name>
+									<Value />
+									<Tag>Optional: Absolute path to client's private key if mTLS is required for data URI. E.g: C:\temp\priv.key</Tag>
+								</Item>
+								<Item>
+									<Name>Client key password for Data URI</Name>
+									<Value />
+									<Tag>Optional: Password to decrypt the private key associated with client certificate for the data URI</Tag>
+								</Item>
+								<Item>
+									<Name>Request filter custom</Name>
+									<Value>CADIS_SYSTEM_TOPRUNID={RUNTIME VARIABLE}.[Top Level RunID]</Value>
+									<Tag>Optional: Filter the request table using a custom WHERE clause. E.g. [RESPONSE_IS_SUCCESS] = 0 AND [USER_IDENTIFIER] = '{RUNTIME_VARIABLE}.[CurrentUser]' AND [RUNID] = {RUNTIME_VARIABLE}.[RUNID]</Tag>
+								</Item>
+								<Item>
+									<Name>Request filter user</Name>
+									<Value>Ready</Value>
+									<Tag>Optional: Filter the request table via the 'USER_IDENTIFIER' column for a specific usernane. E.g. MyDomain\MyUsername or {RUNTIME VARIABLE}.[USER_IDENTIFIER]</Tag>
+								</Item>
+								<Item>
+									<Name>Request filter runid</Name>
+									<Value />
+									<Tag>Optional: Filter the request table via the 'RUNID' column for a specific Runid. E.g. 101 or {RUNTIME VARIABLE}.[RUNID]</Tag>
+								</Item>
+								<Item>
+									<Name>Request filter top level runid</Name>
+									<Value />
+									<Tag>Optional: Filter the request table via the 'TOP_LEVEL_RUNID' column for a specific Top Level RunId. E.g. 100 or {RUNTIME VARIABLE}.[TOP_LEVEL_RUNID]</Tag>
+								</Item>
+								<Item>
+									<Name>Authentication Uri</Name>
+									<Value Tr="string" />
+									<Tag>Optional: The Authentication Uri of the target API. Only used if the target API uses authentication type OAuth 2.0 / Bearer Tokens with a standard response format. Read from {DATA}.[REQUEST_AUTHENTICATION_URI] in the request table if not provided</Tag>
+								</Item>
+								<Item>
+									<Name>Authentication Content</Name>
+									<Value Tr="string" />
+									<Tag>Optional: The Authentication Content to be used with the Authentication Uri. Only used if the target API uses authentication type OAuth 2.0 / Bearer Tokens with a standard response format. Read from {DATA}.[REQUEST_AUTHENTICATION_CONTENT] in the request table if not provided</Tag>
+								</Item>
+								<Item>
+									<Name>Client certificate for authentication URI</Name>
+									<Value />
+									<Tag>Optional: Absolute path to client certificate file if mTLS is required for authentication URI. E.g: C:\temp\cert.pem</Tag>
+								</Item>
+								<Item>
+									<Name>Client Key for authentication URI</Name>
+									<Value />
+									<Tag>Optional: Absolute path to client's private key if mTLS is required for authentication URI. E.g: C:\temp\priv.key</Tag>
+								</Item>
+								<Item>
+									<Name>Client key password for authentication URI</Name>
+									<Value />
+									<Tag>Optional: Password to decrypt the private key associated with client certificate for the authentication URI</Tag>
+								</Item>
+								<Item>
+									<Name>Proxy</Name>
+									<Value />
+									<Tag>Optional: The address of the proxy. Read from {DATA}.[REQUEST_PROXY] in the request table if not provided</Tag>
+								</Item>
+								<Item>
+									<Name>Proxy User</Name>
+									<Value />
+									<Tag>Optional: The address of the proxy. Read from {DATA}.[REQUEST_PROXY_USER] in the request table if not provided</Tag>
+								</Item>
+								<Item>
+									<Name>Proxy Password</Name>
+									<Value />
+									<Tag>Optional: The address of the proxy. Read from {DATA}.[REQUEST_PROXY_PASSWORD] in the request table if not provided</Tag>
+								</Item>
+								<Item>
+									<Name>Verbose Logging</Name>
+									<Value Tr="string" />
+									<Tag>Optional: Verbose logging (optional, Y/N, default: N). Not intended for production use</Tag>
+								</Item>
+							</list>
+						</InputParameterMappings>
+						<PluginType>DataPorterPlugin</PluginType>
+					</Plugin>
+					<XmlSchema />
+					<XmlMapping />
+					<XmlValidation />
+					<External />
+					<FileAction />
+					<Targets />
+					<Bulkload />
+					<XsltFile />
+					<DeleteDataSource />
+					<DeleteDataCondition />
+					<SrcChangeTolerance />
+				</Item>
+				<Item>
+					<Name>Response_Stage</Name>
+					<ProcType>Port_Data</ProcType>
+					<Enabled>True</Enabled>
+					<Precedence>Previous_Step_Completed_OK</Precedence>
+					<Description>Response_Stage</Description>
+					<SourceType>Data_Source</SourceType>
+					<TargetUpgraded>True</TargetUpgraded>
+					<AutoTruncate>True</AutoTruncate>
+					<TransferSystem>BulkCopy</TransferSystem>
+					<SSISTrimDataForMaxColumns>True</SSISTrimDataForMaxColumns>
+					<UseDBTransferSystem>True</UseDBTransferSystem>
+					<PrettyPrintFormat>False</PrettyPrintFormat>
+					<EscapeQuotes>False</EscapeQuotes>
+					<SourceFile />
+					<SourceConnection>
+						<Type>Server</Type>
+						<DL>False</DL>
+					</SourceConnection>
+					<SourceFileProps />
+					<SourceDataSource>
+						<Name Tr="string" />
+						<Select>
+							<Phrasebook>
+								<Phrases Tr="dictionary">
+									<Item>
+										<key>{RUNTIME VARIABLE}.[RunID]</key>
+										<value>
+											<Code>{RUNTIME VARIABLE}.[RunID]</Code>
+											<Translation>{RUNTIME VARIABLE}.[RunID]</Translation>
+										</value>
+									</Item>
+								</Phrases>
+							</Phrasebook>
+							<Text>SELECT API.RESPONSE_TEXT AS CONTENT
+FROM "dbo"."T_GBX_API_RESPONSE" API
+INNER JOIN
+T_GBX_API_REQUEST REQ
+ON API.REQUEST_ID = REQ.REQUEST_ID
+WHERE 
+REQ.CADIS_SYSTEM_RUNID = {RUNTIME VARIABLE}.[RunID]
+AND REQ.NAME = 'REQUEST'
+AND RESPONSE_IS_SUCCESS = 1
+</Text>
+						</Select>
+						<DL>False</DL>
+						<Object />
+						<CacheMethod>NoCache</CacheMethod>
+						<CustomCacheTable />
+						<ManagedCacheTable />
+					</SourceDataSource>
+					<TargetFtp />
+					<SourceMsg />
+					<SourceXml />
+					<Globals>
+						<nv>
+							<list Tr="list" />
+						</nv>
+						<fv>
+							<list Tr="list" />
+						</fv>
+						<FileNameVariables>
+							<list Tr="list" />
+						</FileNameVariables>
+						<RuleBuilderVariables>
+							<list Tr="list" />
+						</RuleBuilderVariables>
+						<Global>False</Global>
+					</Globals>
+					<Custom />
+					<Email />
+					<Plugin />
+					<XmlSchema />
+					<XmlMapping />
+					<XmlValidation />
+					<External />
+					<FileAction />
+					<Targets>
+						<list Tr="list">
+							<Item>
+								<Enabled>True</Enabled>
+								<TargetType>Data_Source</TargetType>
+								<MaxFailedRows>0</MaxFailedRows>
+								<TargetFile />
+								<TargetConnection>
+									<Type>Server</Type>
+									<DL>False</DL>
+								</TargetConnection>
+								<TargetFileProps />
+								<TargetDataSource>
+									<Table>
+										<Name>T_GBX_API_REPONSE_STAGE</Name>
+										<Owner>dbo</Owner>
+										<SystemObject>False</SystemObject>
+										<Type>Table</Type>
+										<QuoteString>"</QuoteString>
+									</Table>
+									<View />
+									<TargetType>Table</TargetType>
+								</TargetDataSource>
+								<TargetMsg />
+								<TargetXml />
+								<ColMapping>
+									<Mappings>
+										<list Tr="list">
+											<Item>
+												<Name>{TABLE}.[REQUEST_ID]</Name>
+												<Value Tr="string" />
+											</Item>
+											<Item>
+												<Name>{TABLE}.[CONTENT]</Name>
+												<Value>{DATA}.[CONTENT]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[CADIS_SYSTEM_INSERTED]</Name>
+												<Value>{RUNTIME VARIABLE}.[Current Date]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[CADIS_SYSTEM_UPDATED]</Name>
+												<Value>{RUNTIME VARIABLE}.[Current Date]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[CADIS_SYSTEM_CHANGEDBY]</Name>
+												<Value>{RUNTIME VARIABLE}.[Current User]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[CADIS_SYSTEM_RUNID]</Name>
+												<Value>{RUNTIME VARIABLE}.[RunID]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[CADIS_SYSTEM_TOPRUNID]</Name>
+												<Value>{RUNTIME VARIABLE}.[Top Level RunID]</Value>
+											</Item>
+										</list>
+									</Mappings>
+								</ColMapping>
+								<UpdateControl>
+									<Type>Append</Type>
+									<Dedup>False</Dedup>
+									<Allowable>Overwrite, Append, Update</Allowable>
+									<PropText />
+								</UpdateControl>
+								<SourceXml />
+								<XmlMapping />
+								<FileContentsOutputProps />
+							</Item>
+						</list>
+					</Targets>
+					<Bulkload />
+					<XsltFile />
+					<DeleteDataSource />
+					<DeleteDataCondition />
+					<SrcChangeTolerance />
+				</Item>
+				<Item>
+					<Name>Update Request User Identifier</Name>
+					<ProcType>Port_Data</ProcType>
+					<Enabled>True</Enabled>
+					<Precedence>Previous_Step_Completed_OK</Precedence>
+					<Description>Update Request User Identifier</Description>
+					<SourceType>Data_Source</SourceType>
+					<TargetUpgraded>True</TargetUpgraded>
+					<AutoTruncate>True</AutoTruncate>
+					<TransferSystem>BulkCopy</TransferSystem>
+					<SSISTrimDataForMaxColumns>True</SSISTrimDataForMaxColumns>
+					<UseDBTransferSystem>True</UseDBTransferSystem>
+					<PrettyPrintFormat>False</PrettyPrintFormat>
+					<EscapeQuotes>False</EscapeQuotes>
+					<SourceFile />
+					<SourceConnection>
+						<Type>Server</Type>
+						<DL>False</DL>
+					</SourceConnection>
+					<SourceFileProps />
+					<SourceDataSource>
+						<Name Tr="string" />
+						<Select>
+							<Phrasebook>
+								<Phrases Tr="dictionary" />
+							</Phrasebook>
+							<Text>SELECT * FROM T_GBX_API_REQUEST  WHERE CADIS_SYSTEM_TOPRUNID = {RUNTIME VARIABLE}.[Top Level RunID] AND  USER_IDENTIFIER = 'READY' AND NAME = 'REQUEST'</Text>
+						</Select>
+						<DL>False</DL>
+						<Object />
+						<CacheMethod>NoCache</CacheMethod>
+						<CustomCacheTable />
+						<ManagedCacheTable />
+					</SourceDataSource>
+					<TargetFtp />
+					<SourceMsg />
+					<SourceXml />
+					<Globals>
+						<nv>
+							<list Tr="list">
+								<Item>
+									<Name>USER_IDENTIFIER</Name>
+									<Value>REQUESTED</Value>
+								</Item>
+							</list>
+						</nv>
+						<fv>
+							<list Tr="list" />
+						</fv>
+						<FileNameVariables>
+							<list Tr="list" />
+						</FileNameVariables>
+						<RuleBuilderVariables>
+							<list Tr="list" />
+						</RuleBuilderVariables>
+						<Global>False</Global>
+					</Globals>
+					<Custom />
+					<Email />
+					<Plugin />
+					<XmlSchema />
+					<XmlMapping />
+					<XmlValidation />
+					<External />
+					<FileAction />
+					<Targets>
+						<list Tr="list">
+							<Item>
+								<Enabled>True</Enabled>
+								<TargetType>Data_Source</TargetType>
+								<MaxFailedRows>0</MaxFailedRows>
+								<TargetFile />
+								<TargetConnection>
+									<Type>Server</Type>
+									<DL>False</DL>
+								</TargetConnection>
+								<TargetFileProps />
+								<TargetDataSource>
+									<Table>
+										<Name>T_GBX_API_REQUEST</Name>
+										<Owner>dbo</Owner>
+										<SystemObject>False</SystemObject>
+										<Type>Table</Type>
+										<QuoteString>"</QuoteString>
+									</Table>
+									<View />
+									<TargetType>Table</TargetType>
+								</TargetDataSource>
+								<TargetMsg />
+								<TargetXml />
+								<ColMapping>
+									<Mappings>
+										<list Tr="list">
+											<Item>
+												<Name>{TABLE}.[REQUEST_ID]</Name>
+												<Value>{DATA}.[REQUEST_ID]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[URI]</Name>
+												<Value>{DATA}.[URI]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[REQUEST_CONTENT]</Name>
+												<Value>{DATA}.[REQUEST_CONTENT]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[REQUEST_CONTENT_TYPE]</Name>
+												<Value>{DATA}.[REQUEST_CONTENT_TYPE]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[REQUEST_METHOD]</Name>
+												<Value>{DATA}.[REQUEST_METHOD]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[NAME]</Name>
+												<Value>{DATA}.[NAME]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[USER_IDENTIFIER]</Name>
+												<Value>{INPUT VARIABLE}.[USER_IDENTIFIER]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[HEADER_GROUP]</Name>
+												<Value>{DATA}.[HEADER_GROUP]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[RUNID]</Name>
+												<Value>{DATA}.[RUNID]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[TOP_LEVEL_RUNID]</Name>
+												<Value>{DATA}.[TOP_LEVEL_RUNID]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[CADIS_SYSTEM_INSERTED]</Name>
+												<Value Tr="string" />
+											</Item>
+											<Item>
+												<Name>{TABLE}.[CADIS_SYSTEM_UPDATED]</Name>
+												<Value>{RUNTIME VARIABLE}.[Current Date]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[CADIS_SYSTEM_CHANGEDBY]</Name>
+												<Value>{RUNTIME VARIABLE}.[Current User]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[CADIS_SYSTEM_RUNID]</Name>
+												<Value>{DATA}.[RUNID]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[CADIS_SYSTEM_TOPRUNID]</Name>
+												<Value>{RUNTIME VARIABLE}.[Top Level RunID]</Value>
+											</Item>
+										</list>
+									</Mappings>
+								</ColMapping>
+								<UpdateControl>
+									<Type>Update</Type>
+									<Dedup>False</Dedup>
+									<Allowable>Overwrite, Append, Update</Allowable>
+									<PropText />
+									<Keys Tr="dictionary">
+										<Item>
+											<key>REQUEST_ID</key>
+											<value>REQUEST_ID</value>
+										</Item>
+									</Keys>
+									<AutoCastKeys>False</AutoCastKeys>
+								</UpdateControl>
+								<SourceXml />
+								<XmlMapping />
+								<FileContentsOutputProps />
+							</Item>
+						</list>
+					</Targets>
+					<Bulkload />
+					<XsltFile />
+					<DeleteDataSource />
+					<DeleteDataCondition />
+					<SrcChangeTolerance />
+				</Item>
+				<Item>
+					<Name>Add data</Name>
+					<ProcType>Port_Data</ProcType>
+					<Enabled>True</Enabled>
+					<Precedence>Previous_Step_Completed_OK</Precedence>
+					<Description>Add data</Description>
+					<SourceType>Data_Source</SourceType>
+					<TargetUpgraded>True</TargetUpgraded>
+					<AutoTruncate>True</AutoTruncate>
+					<TransferSystem>BulkCopy</TransferSystem>
+					<SSISTrimDataForMaxColumns>True</SSISTrimDataForMaxColumns>
+					<UseDBTransferSystem>True</UseDBTransferSystem>
+					<PrettyPrintFormat>False</PrettyPrintFormat>
+					<EscapeQuotes>False</EscapeQuotes>
+					<SourceFile />
+					<SourceConnection>
+						<Type>Server</Type>
+						<DL>False</DL>
+					</SourceConnection>
+					<SourceFileProps />
+					<SourceDataSource>
+						<Name Tr="string" />
+						<Select>
+							<Phrasebook>
+								<Phrases Tr="dictionary">
+									<Item>
+										<key>{RUNTIME VARIABLE}.[RunID]</key>
+										<value>
+											<Code>{RUNTIME VARIABLE}.[RunID]</Code>
+											<Translation>{RUNTIME VARIABLE}.[RunID]</Translation>
+										</value>
+									</Item>
+								</Phrases>
+							</Phrasebook>
+							<Text>Select 
+SUBSTRING(UID,1,charindex('_',UID)-1) AS SOURCE
+,SUBSTRING(UID,charindex('_',UID)+1,len(UID)) AS SOURCE_KEY
+,CASE WHEN Score &gt;= '80.00' THEN 'High'
+WHEN SCORE &gt;='70.00' AND SCORE &lt; '80.00' THEN 'Medium'
+WHEN  SCORE &gt;='50.00' AND SCORE &lt; '70.00' THEN 'Low'
+WHEN SCORE &gt;'0' AND SCORE &lt; '50.00' THEN 'Below Tolerance'
+WHEN SCORE = '0' THEN 'No Crossref Match' END AS Rank
+,Score
+,CIQCOMPANYID as CIQ_COMPANY_ID
+,SP_COMPANY_ID
+,SEARCHABLEFLAG as SEARCHABLE_FLAG
+,CIQCOMPANYSTATUS as CIQ_COMPANY_STATUS
+,COMPANYNAME as  COMPANY_NAME
+,ALTERNATECOMPANYNAMES as ALTERNATE_COMPANY_NAMES
+,PREVIOUSCOMPANYNAMES as PREVIOUS_COMPANY_NAMES
+,ISOCOUNTRYCODEA2 as ISO_COUNTRY_CODEA2
+,ISOCOUNTRYCODEA3 as ISO_COUNTRY_CODEA3
+,STREETADDRESS1 as STREET_ADDRESS1
+,CITY
+,ZIPCODE
+,YEARESTABLISHED as YEAR_ESTABLISHED
+,MIINDUSTRYID as MI_INDUSTRY_ID
+,MIINDUSTRY as MI_INDUSTRY
+,CIQINDUSTRYID as CIQ_INDUSTRY_ID
+,CIQINDUSTRY as CIQ_INDUSTRY
+,WEBSITEURL as WEBSITE_URL
+,EMAIL
+,PHONE
+,LEGALFORM as LEGAL_FORM
+,STATEID as STATE_ID
+,STATENAME as STATE_NAME
+,COUNTRYNAME as COUNTRY_NAME
+,STREETADDRESS2 as STREET_ADDRESS2
+,STREETADDRESS3 as STREET_ADDRESS3
+,STREETADDRESS4 as STREET_ADDRESS4
+,CIQCOMPANYTYPE as CIQ_COMPANY_TYPE
+,TRADINGCOMPANYNAME as TRADING_COMPANY_NAME
+,UNIVERSE
+
+from (
+SELECT
+    JSON_VALUE(record.value, '$.inputRecord.values[0].value') AS UID,
+    fact.rank AS Rank,
+    fact.score AS Score,
+    nameValuePairs.name,
+    nameValuePairs.value
+FROM
+    T_GBX_API_REPONSE_STAGE
+CROSS APPLY OPENJSON(content, '$.results') AS record
+CROSS APPLY OPENJSON(record.value, '$.linkedRecord')
+with (
+factTileChain nvarchar(max) '$.factTileChains' as json,
+[values] nvarchar(max) '$.values' as json)
+AS linkedRecord
+CROSS APPLY OPENJSON(linkedRecord.factTileChain) WITH (
+rank NVARCHAR(255) '$.rank',
+score NVARCHAR(255) '$.score') as fact
+CROSS APPLY OPENJSON(linkedRecord.[values]) WITH (
+    name NVARCHAR(255) '$.name',
+    value NVARCHAR(255) '$.value'
+) AS nameValuePairs
+where CADIS_SYSTEM_RUNID = {RUNTIME VARIABLE}.[RunID]
+
+UNION ALL
+
+SELECT
+    JSON_VALUE(record.value, '$.inputRecord.values[0].value') AS UID,
+    fact.rank AS Rank,
+    fact.score AS Score,
+    nameValuePairs.[name],
+    nameValuePairs.[value]
+FROM
+    T_GBX_API_REPONSE_STAGE
+CROSS APPLY OPENJSON(content, '$.results') AS record
+CROSS APPLY OPENJSON(record.value, '$.otherRecords')
+with (
+factTileChain nvarchar(max) '$.factTileChains' as json,
+[values] nvarchar(max) '$.values' as json)
+AS otherRecords
+CROSS APPLY OPENJSON(otherRecords.factTileChain) WITH (
+rank NVARCHAR(255) '$.rank',
+score NVARCHAR(255) '$.score') as fact
+CROSS APPLY OPENJSON(otherRecords.[values]) WITH (
+    name NVARCHAR(255) '$.name',
+    value NVARCHAR(255) '$.value'
+) AS nameValuePairs
+where CADIS_SYSTEM_RUNID = {RUNTIME VARIABLE}.[RunID]
+) a 
+pivot
+( max([value]) for [name] in (
+CIQCOMPANYID
+,SP_COMPANY_ID
+,SEARCHABLEFLAG
+,CIQCOMPANYSTATUS
+,COMPANYNAME
+,ALTERNATECOMPANYNAMES
+,PREVIOUSCOMPANYNAMES
+,ISOCOUNTRYCODEA2
+,ISOCOUNTRYCODEA3
+,STREETADDRESS1
+,CITY
+,ZIPCODE
+,YEARESTABLISHED
+,MIINDUSTRYID
+,MIINDUSTRY
+,CIQINDUSTRYID
+,CIQINDUSTRY
+,WEBSITEURL
+,EMAIL
+,PHONE
+,LEGALFORM
+,STATEID
+,STATENAME
+,COUNTRYNAME
+,STREETADDRESS2
+,STREETADDRESS3
+,STREETADDRESS4
+,CIQCOMPANYTYPE
+,TRADINGCOMPANYNAME
+,UNIVERSE))a
+WHERE ciqCompanyId IS NOT NULL</Text>
+						</Select>
+						<DL>False</DL>
+						<Object />
+						<CacheMethod>NoCache</CacheMethod>
+						<CustomCacheTable />
+						<ManagedCacheTable />
+					</SourceDataSource>
+					<TargetFtp />
+					<SourceMsg />
+					<SourceXml />
+					<Globals>
+						<nv>
+							<list Tr="list" />
+						</nv>
+						<fv>
+							<list Tr="list" />
+						</fv>
+						<FileNameVariables>
+							<list Tr="list" />
+						</FileNameVariables>
+						<RuleBuilderVariables>
+							<list Tr="list" />
+						</RuleBuilderVariables>
+						<Global>False</Global>
+					</Globals>
+					<Custom />
+					<Email />
+					<Plugin />
+					<XmlSchema />
+					<XmlMapping />
+					<XmlValidation />
+					<External />
+					<FileAction />
+					<Targets>
+						<list Tr="list">
+							<Item>
+								<Enabled>True</Enabled>
+								<TargetType>Data_Source</TargetType>
+								<MaxFailedRows>0</MaxFailedRows>
+								<TargetFile />
+								<TargetConnection>
+									<Type>Server</Type>
+									<DL>False</DL>
+								</TargetConnection>
+								<TargetFileProps />
+								<TargetDataSource>
+									<Table>
+										<Name>T_SPG_GBX_RESPONSE</Name>
+										<Owner>dbo</Owner>
+										<SystemObject>False</SystemObject>
+										<Type>Table</Type>
+										<QuoteString>"</QuoteString>
+									</Table>
+									<View />
+									<TargetType>Table</TargetType>
+								</TargetDataSource>
+								<TargetMsg />
+								<TargetXml />
+								<ColMapping>
+									<Mappings>
+										<list Tr="list">
+											<Item>
+												<Name>{TABLE}.[SOURCE]</Name>
+												<Value>{DATA}.[SOURCE]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[SOURCE_KEY]</Name>
+												<Value>{DATA}.[SOURCE_KEY]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[CITY]</Name>
+												<Value>{DATA}.[city]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[ZIPCODE]</Name>
+												<Value>{DATA}.[zipCode]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[EMAIL]</Name>
+												<Value>{DATA}.[email]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[PHONE]</Name>
+												<Value>{DATA}.[phone]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[UNIVERSE]</Name>
+												<Value>{DATA}.[universe]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[CADIS_SYSTEM_INSERTED]</Name>
+												<Value Tr="string" />
+											</Item>
+											<Item>
+												<Name>{TABLE}.[CADIS_SYSTEM_UPDATED]</Name>
+												<Value>{RUNTIME VARIABLE}.[Current Date]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[CADIS_SYSTEM_CHANGEDBY]</Name>
+												<Value>{RUNTIME VARIABLE}.[Current User]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[CADIS_SYSTEM_RUNID]</Name>
+												<Value>{RUNTIME VARIABLE}.[RunID]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[CADIS_SYSTEM_TOPRUNID]</Name>
+												<Value>{RUNTIME VARIABLE}.[Top Level RunID]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[SCORE]</Name>
+												<Value>{DATA}.[Score]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[RANK]</Name>
+												<Value>{DATA}.[Rank]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[SP_COMPANY_ID]</Name>
+												<Value>{DATA}.[SP_COMPANY_ID]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[CIQ_COMPANY_ID]</Name>
+												<Value>{DATA}.[CIQ_COMPANY_ID]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[SEARCHABLE_FLAG]</Name>
+												<Value>{DATA}.[SEARCHABLE_FLAG]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[CIQ_COMPANY_STATUS]</Name>
+												<Value>{DATA}.[CIQ_COMPANY_STATUS]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[COMPANY_NAME]</Name>
+												<Value>{DATA}.[COMPANY_NAME]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[ALTERNATE_COMPANY_NAMES]</Name>
+												<Value>{DATA}.[ALTERNATE_COMPANY_NAMES]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[PREVIOUS_COMPANY_NAMES]</Name>
+												<Value>{DATA}.[PREVIOUS_COMPANY_NAMES]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[ISO_COUNTRY_CODEA2]</Name>
+												<Value>{DATA}.[ISO_COUNTRY_CODEA2]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[ISO_COUNTRY_CODEA3]</Name>
+												<Value>{DATA}.[ISO_COUNTRY_CODEA3]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[STREET_ADDRESS1]</Name>
+												<Value>{DATA}.[STREET_ADDRESS1]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[YEAR_ESTABLISHED]</Name>
+												<Value>{DATA}.[YEAR_ESTABLISHED]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[MI_INDUSTRY_ID]</Name>
+												<Value>{DATA}.[MI_INDUSTRY_ID]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[MI_INDUSTRY]</Name>
+												<Value>{DATA}.[MI_INDUSTRY]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[CIQ_INDUSTRY_ID]</Name>
+												<Value>{DATA}.[CIQ_INDUSTRY_ID]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[CIQ_INDUSTRY]</Name>
+												<Value>{DATA}.[CIQ_INDUSTRY]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[WEBSITE_URL]</Name>
+												<Value>{DATA}.[WEBSITE_URL]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[LEGAL_FORM]</Name>
+												<Value>{DATA}.[LEGAL_FORM]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[STATE_ID]</Name>
+												<Value>{DATA}.[STATE_ID]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[STATE_NAME]</Name>
+												<Value>{DATA}.[STATE_NAME]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[COUNTRY_NAME]</Name>
+												<Value>{DATA}.[COUNTRY_NAME]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[STREET_ADDRESS2]</Name>
+												<Value>{DATA}.[STREET_ADDRESS2]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[STREET_ADDRESS3]</Name>
+												<Value>{DATA}.[STREET_ADDRESS3]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[STREET_ADDRESS4]</Name>
+												<Value>{DATA}.[STREET_ADDRESS4]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[CIQ_COMPANY_TYPE]</Name>
+												<Value>{DATA}.[CIQ_COMPANY_TYPE]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[TRADING_COMPANY_NAME]</Name>
+												<Value>{DATA}.[TRADING_COMPANY_NAME]</Value>
+											</Item>
+										</list>
+									</Mappings>
+								</ColMapping>
+								<UpdateControl>
+									<Type>Update</Type>
+									<Dedup>False</Dedup>
+									<Allowable>Overwrite, Append, Update</Allowable>
+									<PropText />
+									<Keys Tr="dictionary">
+										<Item>
+											<key>SOURCE_KEY</key>
+											<value>SOURCE_KEY</value>
+										</Item>
+										<Item>
+											<key>SOURCE</key>
+											<value>SOURCE</value>
+										</Item>
+										<Item>
+											<key>CIQ_COMPANY_ID</key>
+											<value>CIQ_COMPANY_ID</value>
+										</Item>
+									</Keys>
+									<AutoCastKeys>False</AutoCastKeys>
+								</UpdateControl>
+								<SourceXml />
+								<XmlMapping />
+								<FileContentsOutputProps />
+							</Item>
+						</list>
+					</Targets>
+					<Bulkload />
+					<XsltFile />
+					<DeleteDataSource />
+					<DeleteDataCondition />
+					<SrcChangeTolerance />
+				</Item>
+				<Item>
+					<Name>Add Key</Name>
+					<ProcType>Port_Data</ProcType>
+					<Enabled>True</Enabled>
+					<Precedence>Previous_Step_Completed_OK</Precedence>
+					<Description>Add Key</Description>
+					<SourceType>Data_Source</SourceType>
+					<TargetUpgraded>True</TargetUpgraded>
+					<AutoTruncate>True</AutoTruncate>
+					<TransferSystem>BulkCopy</TransferSystem>
+					<SSISTrimDataForMaxColumns>True</SSISTrimDataForMaxColumns>
+					<UseDBTransferSystem>True</UseDBTransferSystem>
+					<PrettyPrintFormat>False</PrettyPrintFormat>
+					<EscapeQuotes>False</EscapeQuotes>
+					<SourceFile />
+					<SourceConnection>
+						<Type>Server</Type>
+						<DL>False</DL>
+					</SourceConnection>
+					<SourceFileProps />
+					<SourceDataSource>
+						<Name Tr="string" />
+						<Select>
+							<Phrasebook>
+								<Phrases Tr="dictionary">
+									<Item>
+										<key>{RUNTIME VARIABLE}.[RunID]</key>
+										<value>
+											<Code>{RUNTIME VARIABLE}.[RunID]</Code>
+											<Translation>{RUNTIME VARIABLE}.[RunID]</Translation>
+										</value>
+									</Item>
+								</Phrases>
+							</Phrasebook>
+							<Text>SELECT *,
+CASE WHEN ROW_NUM = 1 AND SCORE &gt;= 95 THEN 'RESOLVED' ELSE 'INBOXED' END AS ACTION,
+CASE WHEN ROW_NUM = 1 AND SCORE &gt;= 95 THEN 'ACCEPTED' ELSE 'NEW' END AS STATUS
+FROM
+(
+SELECT 
+    RES.SOURCE,
+    RES.SOURCE_KEY,
+    RES.CIQ_COMPANY_ID,
+	RANK() OVER (PARTITION BY SOURCE,SOURCE_KEY ORDER BY SCORE DESC) ROW_NUM,
+	SCORE
+FROM T_SPG_GBX_RESPONSE RES
+WHERE CADIS_SYSTEM_RUNID = {RUNTIME VARIABLE}.[RunID]
+) A</Text>
+						</Select>
+						<DL>False</DL>
+						<Object />
+						<CacheMethod>NoCache</CacheMethod>
+						<CustomCacheTable />
+						<ManagedCacheTable />
+					</SourceDataSource>
+					<TargetFtp />
+					<SourceMsg />
+					<SourceXml />
+					<Globals>
+						<nv>
+							<list Tr="list" />
+						</nv>
+						<fv>
+							<list Tr="list" />
+						</fv>
+						<FileNameVariables>
+							<list Tr="list" />
+						</FileNameVariables>
+						<RuleBuilderVariables>
+							<list Tr="list" />
+						</RuleBuilderVariables>
+						<Global>False</Global>
+					</Globals>
+					<Custom />
+					<Email />
+					<Plugin />
+					<XmlSchema />
+					<XmlMapping />
+					<XmlValidation />
+					<External />
+					<FileAction />
+					<Targets>
+						<list Tr="list">
+							<Item>
+								<Enabled>True</Enabled>
+								<TargetType>Data_Source</TargetType>
+								<MaxFailedRows>0</MaxFailedRows>
+								<TargetFile />
+								<TargetConnection>
+									<Type>Server</Type>
+									<DL>False</DL>
+								</TargetConnection>
+								<TargetFileProps />
+								<TargetDataSource>
+									<Table>
+										<Name>T_SPG_GBX_RESPONSE_KEY_STATUS</Name>
+										<Owner>dbo</Owner>
+										<SystemObject>False</SystemObject>
+										<Type>Table</Type>
+										<QuoteString>"</QuoteString>
+									</Table>
+									<View />
+									<TargetType>Table</TargetType>
+								</TargetDataSource>
+								<TargetMsg />
+								<TargetXml />
+								<ColMapping>
+									<Mappings>
+										<list Tr="list">
+											<Item>
+												<Name>{TABLE}.[SOURCE]</Name>
+												<Value>{DATA}.[SOURCE]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[SOURCE_KEY]</Name>
+												<Value>{DATA}.[SOURCE_KEY]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[CIQ_COMPANY_ID]</Name>
+												<Value>{DATA}.[CIQ_COMPANY_ID]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[OWNER]</Name>
+												<Value>{RUNTIME VARIABLE}.[Current User]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[ACTION]</Name>
+												<Value>{DATA}.[ACTION]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[STATUS]</Name>
+												<Value>{DATA}.[STATUS]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[CADIS_SYSTEM_INSERTED]</Name>
+												<Value Tr="string" />
+											</Item>
+											<Item>
+												<Name>{TABLE}.[CADIS_SYSTEM_UPDATED]</Name>
+												<Value>{RUNTIME VARIABLE}.[Current Date]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[CADIS_SYSTEM_CHANGEDBY]</Name>
+												<Value>{RUNTIME VARIABLE}.[Current User]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[CADIS_SYSTEM_RUNID]</Name>
+												<Value>{RUNTIME VARIABLE}.[RunID]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[CADIS_SYSTEM_TOPRUNID]</Name>
+												<Value>{RUNTIME VARIABLE}.[Top Level RunID]</Value>
+											</Item>
+										</list>
+									</Mappings>
+								</ColMapping>
+								<UpdateControl>
+									<Type>Update</Type>
+									<Dedup>False</Dedup>
+									<Allowable>Overwrite, Append, Update</Allowable>
+									<PropText />
+									<Keys Tr="dictionary">
+										<Item>
+											<key>SOURCE</key>
+											<value>SOURCE</value>
+										</Item>
+										<Item>
+											<key>SOURCE_KEY</key>
+											<value>SOURCE_KEY</value>
+										</Item>
+									</Keys>
+									<AutoCastKeys>True</AutoCastKeys>
+								</UpdateControl>
+								<SourceXml />
+								<XmlMapping />
+								<FileContentsOutputProps />
+							</Item>
+						</list>
+					</Targets>
+					<Bulkload />
+					<XsltFile />
+					<DeleteDataSource />
+					<DeleteDataCondition />
+					<SrcChangeTolerance />
+				</Item>
+			</list>
+		</Inputs>
+		<configdefaults>
+			<list Tr="list" />
+		</configdefaults>
+		<ProcessParams>
+			<Connections>
+				<list Tr="list" />
+			</Connections>
+			<Locations>
+				<list Tr="list" />
+			</Locations>
+			<Variables>
+				<nv>
+					<list Tr="list" />
+				</nv>
+				<fv>
+					<list Tr="list" />
+				</fv>
+				<FileNameVariables>
+					<list Tr="list" />
+				</FileNameVariables>
+				<RuleBuilderVariables>
+					<list Tr="list" />
+				</RuleBuilderVariables>
+				<Global>True</Global>
+			</Variables>
+		</ProcessParams>
+	</DataPorter>
+</Content>
+</CadisXml>

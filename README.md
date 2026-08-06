@@ -57,6 +57,7 @@ Delivered:
 | Visual page builder | Drag, drop, inspect, re-layout, preview responsively, save — editing the *same* JSON the runtime interprets — [`docs/VISUAL-BUILDER.md`](./docs/VISUAL-BUILDER.md) |
 | Experience Builder prototype | Prompt → Experience JSON → rendered page, with a Node/REST backend, local JSON storage and a swappable model provider — [`docs/implementation-status.md`](./docs/implementation-status.md) |
 | EDM business templates | Four templates over governed EDM metadata — master dashboard, security overview, party overview, exception workspace — with drill-down between them and tabs generated from data — [`docs/EDM-TEMPLATES.md`](./docs/EDM-TEMPLATES.md) |
+| EDM console, side by side | MDE's console prototype vendored into the builder's rail, so both products can be used in one app — [`docs/EDM-CONSOLE-REFERENCE.md`](./docs/EDM-CONSOLE-REFERENCE.md) |
 | AI assist in the builder | Ask what a page is missing; suggestions grounded in the entitled catalog, each accepted one as a single undoable patch — [`docs/AI-ASSIST.md`](./docs/AI-ASSIST.md) |
 | CODA design language | The Opus EDM console's look and feel as a token layer plus shared chrome — one palette swap re-themes every app, every widget and every generated page — [`docs/CODA-DESIGN-SYSTEM.md`](./docs/CODA-DESIGN-SYSTEM.md) |
 | Metadata model | Twenty JSON Schemas, expression grammar, worked examples — [`schemas/README.md`](./schemas/README.md) |

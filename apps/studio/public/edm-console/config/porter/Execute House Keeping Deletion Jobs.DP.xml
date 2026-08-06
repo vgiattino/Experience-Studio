@@ -1,0 +1,128 @@
+﻿<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<!--Markit EDM Serialised XML © Markit Group Limited-->
+<CadisXml>
+<Content Tr="CADIS.Base.ExportData, CADIS.Base">
+	<VersionNumber>20.1.15.0</VersionNumber>
+	<ProcessType>DataPorter</ProcessType>
+	<DataPorter Tr="CADIS.DataPorter.DataPort, CADIS.DPData">
+		<Name>Execute House Keeping Deletion Jobs</Name>
+		<Comment Tr="string" />
+		<Enabled>False</Enabled>
+		<BestPracticeActivated>True</BestPracticeActivated>
+		<Inputs>
+			<list Tr="list">
+				<Item>
+					<Name>SP</Name>
+					<ProcType>DB_Process</ProcType>
+					<Enabled>False</Enabled>
+					<Precedence>Previous_Step_Completed_OK</Precedence>
+					<Description>SP</Description>
+					<SourceType>Data_Source</SourceType>
+					<TargetUpgraded>True</TargetUpgraded>
+					<AutoTruncate>True</AutoTruncate>
+					<TransferSystem>BulkCopy</TransferSystem>
+					<SSISTrimDataForMaxColumns>True</SSISTrimDataForMaxColumns>
+					<UseDBTransferSystem>True</UseDBTransferSystem>
+					<PrettyPrintFormat>False</PrettyPrintFormat>
+					<EscapeQuotes>False</EscapeQuotes>
+					<SourceFile />
+					<SourceConnection />
+					<SourceFileProps />
+					<SourceDataSource />
+					<TargetFtp />
+					<SourceMsg />
+					<SourceXml />
+					<Globals>
+						<nv>
+							<list Tr="list" />
+						</nv>
+						<fv>
+							<list Tr="list" />
+						</fv>
+						<FileNameVariables>
+							<list Tr="list" />
+						</FileNameVariables>
+						<RuleBuilderVariables>
+							<list Tr="list" />
+						</RuleBuilderVariables>
+						<Global>False</Global>
+					</Globals>
+					<Custom>
+						<SelectedProc Tr="CADIS.SqlHelper.StoredProcDescriptor, CADIS.SqlHData">
+							<Name>SP_HOUSEKEEPING_DELETION</Name>
+							<Owner>CADIS</Owner>
+							<SystemObject>False</SystemObject>
+							<Type>StoredProc</Type>
+							<QuoteString>"</QuoteString>
+						</SelectedProc>
+						<ParmText Tr="string" />
+						<Invoke>EXEC</Invoke>
+						<Edited>False</Edited>
+					</Custom>
+					<Email />
+					<Plugin />
+					<XmlSchema />
+					<XmlMapping />
+					<XmlValidation />
+					<External />
+					<FileAction />
+					<Targets>
+						<list Tr="list">
+							<Item>
+								<Enabled>True</Enabled>
+								<TargetType>Data_Source</TargetType>
+								<MaxFailedRows>0</MaxFailedRows>
+								<TargetFile />
+								<TargetConnection>
+									<Type>Server</Type>
+									<DL>False</DL>
+								</TargetConnection>
+								<TargetFileProps />
+								<TargetDataSource />
+								<TargetMsg />
+								<TargetXml />
+								<ColMapping />
+								<UpdateControl />
+								<SourceXml />
+								<XmlMapping />
+								<FileContentsOutputProps />
+							</Item>
+						</list>
+					</Targets>
+					<Bulkload />
+					<XsltFile />
+					<DeleteDataSource />
+					<DeleteDataCondition />
+					<SrcChangeTolerance />
+				</Item>
+			</list>
+		</Inputs>
+		<configdefaults>
+			<list Tr="list" />
+		</configdefaults>
+		<ProcessParams>
+			<Connections>
+				<list Tr="list" />
+			</Connections>
+			<Locations>
+				<list Tr="list" />
+			</Locations>
+			<Variables>
+				<nv>
+					<list Tr="list" />
+				</nv>
+				<fv>
+					<list Tr="list" />
+				</fv>
+				<FileNameVariables>
+					<list Tr="list" />
+				</FileNameVariables>
+				<RuleBuilderVariables>
+					<list Tr="list" />
+				</RuleBuilderVariables>
+				<Global>True</Global>
+			</Variables>
+		</ProcessParams>
+	</DataPorter>
+</Content>
+</CadisXml>

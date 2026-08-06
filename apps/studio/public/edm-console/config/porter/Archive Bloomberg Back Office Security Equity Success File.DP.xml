@@ -1,0 +1,434 @@
+﻿<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<!--Markit EDM Serialised XML © Markit Group Limited-->
+<CadisXml>
+<Content Tr="CADIS.Base.ExportData, CADIS.Base">
+	<VersionNumber>20.1.15.0</VersionNumber>
+	<ProcessType>DataPorter</ProcessType>
+	<DataPorter Tr="CADIS.DataPorter.DataPort, CADIS.DPData">
+		<Name>Archive Bloomberg Back Office Security Equity Success File</Name>
+		<Comment Tr="string" />
+		<BestPracticeActivated>True</BestPracticeActivated>
+		<Inputs>
+			<list Tr="list">
+				<Item>
+					<Name>Archive File</Name>
+					<ProcType>File_Function</ProcType>
+					<Enabled>True</Enabled>
+					<Precedence>Previous_Step_Completed_OK</Precedence>
+					<Description>Archive File</Description>
+					<SourceType>Data_Source</SourceType>
+					<TargetUpgraded>True</TargetUpgraded>
+					<AutoTruncate>True</AutoTruncate>
+					<TransferSystem>BulkCopy</TransferSystem>
+					<SSISTrimDataForMaxColumns>True</SSISTrimDataForMaxColumns>
+					<UseDBTransferSystem>True</UseDBTransferSystem>
+					<PrettyPrintFormat>False</PrettyPrintFormat>
+					<EscapeQuotes>False</EscapeQuotes>
+					<SourceFile>
+						<File />
+						<Type>Parameter</Type>
+						<UNC>True</UNC>
+						<FileName>{DATABASE VARIABLE}.[Wildcard BBO Equity Out File]</FileName>
+						<Folder>
+							<Name Tr="string" />
+							<Path>\\IMPLE-TEMPLATE\Data\In\BBO</Path>
+							<UNCPath>\\IMPLE-TEMPLATE\Data\In\BBO</UNCPath>
+							<Tag Tr="string" />
+						</Folder>
+						<DateFmt>yyyyMMdd</DateFmt>
+						<DateOffset>Days</DateOffset>
+						<DateUnits>0</DateUnits>
+						<Filter>All Files (*.*)|*.*</Filter>
+						<Encoding>1252</Encoding>
+						<Subtype>Database</Subtype>
+						<Name>BBO Security Equity In</Name>
+					</SourceFile>
+					<SourceConnection />
+					<SourceFileProps />
+					<SourceDataSource />
+					<TargetFtp />
+					<SourceMsg />
+					<SourceXml />
+					<Globals>
+						<nv>
+							<list Tr="list" />
+						</nv>
+						<fv>
+							<list Tr="list" />
+						</fv>
+						<FileNameVariables>
+							<list Tr="list" />
+						</FileNameVariables>
+						<RuleBuilderVariables>
+							<list Tr="list" />
+						</RuleBuilderVariables>
+						<Global>False</Global>
+					</Globals>
+					<Custom />
+					<Email />
+					<Plugin />
+					<XmlSchema />
+					<XmlMapping />
+					<XmlValidation />
+					<External />
+					<FileAction>
+						<Enabled>True</Enabled>
+						<ActionType>MoveFile</ActionType>
+						<RenameMode>False</RenameMode>
+						<OverWriteMode>True</OverWriteMode>
+						<SearchType>TopDirectoryOnly</SearchType>
+					</FileAction>
+					<Targets>
+						<list Tr="list">
+							<Item>
+								<Enabled>True</Enabled>
+								<TargetType>Data_Source</TargetType>
+								<MaxFailedRows>0</MaxFailedRows>
+								<TargetFile>
+									<File />
+									<Type>Parameter</Type>
+									<UNC>True</UNC>
+									<FileName>{SOURCE FILE NAME}_Processed_{RUNTIME VARIABLE}.[Current Date]_{RUNTIME VARIABLE}.[Top Level RunID]</FileName>
+									<Folder>
+										<Name Tr="string" />
+										<Path>C:\</Path>
+										<UNCPath>\\IMPLE-TEMPLATE\C$</UNCPath>
+										<Tag Tr="string" />
+									</Folder>
+									<DateFmt>yyyyMMdd</DateFmt>
+									<DateOffset>Days</DateOffset>
+									<DateUnits>0</DateUnits>
+									<Filter>All Files (*.*)|*.*</Filter>
+									<Encoding>1252</Encoding>
+									<Subtype>Database</Subtype>
+									<Name>BBO Security Equity Archive Success</Name>
+								</TargetFile>
+								<TargetConnection />
+								<TargetFileProps />
+								<TargetDataSource />
+								<TargetMsg />
+								<TargetXml />
+								<ColMapping />
+								<UpdateControl />
+								<SourceXml />
+								<XmlMapping />
+								<FileContentsOutputProps />
+							</Item>
+						</list>
+					</Targets>
+					<Bulkload />
+					<XsltFile />
+					<DeleteDataSource />
+					<DeleteDataCondition />
+					<SrcChangeTolerance />
+				</Item>
+				<Item>
+					<Name>Archive File list</Name>
+					<ProcType>File_Function</ProcType>
+					<Enabled>True</Enabled>
+					<Precedence>Previous_Step_Completed_OK</Precedence>
+					<Description>Archive File list</Description>
+					<SourceType>Data_Source</SourceType>
+					<TargetUpgraded>True</TargetUpgraded>
+					<AutoTruncate>True</AutoTruncate>
+					<TransferSystem>BulkCopy</TransferSystem>
+					<SSISTrimDataForMaxColumns>True</SSISTrimDataForMaxColumns>
+					<UseDBTransferSystem>True</UseDBTransferSystem>
+					<PrettyPrintFormat>False</PrettyPrintFormat>
+					<EscapeQuotes>False</EscapeQuotes>
+					<SourceFile>
+						<File />
+						<Type>Parameter</Type>
+						<UNC>True</UNC>
+						<FileName>{DATABASE VARIABLE}.[FileList BBO Sec Equity]</FileName>
+						<Folder>
+							<Name Tr="string" />
+							<Path>C:\</Path>
+							<UNCPath>\\A2MADVEDMSQAP01\C$</UNCPath>
+							<Tag Tr="string" />
+						</Folder>
+						<DateFmt>yyyyMMdd</DateFmt>
+						<DateOffset>Days</DateOffset>
+						<DateUnits>0</DateUnits>
+						<Filter>All Files (*.*)|*.*</Filter>
+						<Encoding>1252</Encoding>
+						<Subtype>Database</Subtype>
+						<Name>BBO Security Equity In</Name>
+					</SourceFile>
+					<SourceConnection />
+					<SourceFileProps />
+					<SourceDataSource />
+					<TargetFtp />
+					<SourceMsg />
+					<SourceXml />
+					<Globals>
+						<nv>
+							<list Tr="list" />
+						</nv>
+						<fv>
+							<list Tr="list" />
+						</fv>
+						<FileNameVariables>
+							<list Tr="list" />
+						</FileNameVariables>
+						<RuleBuilderVariables>
+							<list Tr="list" />
+						</RuleBuilderVariables>
+						<Global>False</Global>
+					</Globals>
+					<Custom />
+					<Email />
+					<Plugin />
+					<XmlSchema />
+					<XmlMapping />
+					<XmlValidation />
+					<External />
+					<FileAction>
+						<Enabled>True</Enabled>
+						<ActionType>MoveFile</ActionType>
+						<RenameMode>False</RenameMode>
+						<OverWriteMode>True</OverWriteMode>
+						<SearchType>TopDirectoryOnly</SearchType>
+					</FileAction>
+					<Targets>
+						<list Tr="list">
+							<Item>
+								<Enabled>True</Enabled>
+								<TargetType>Data_Source</TargetType>
+								<MaxFailedRows>0</MaxFailedRows>
+								<TargetFile>
+									<File />
+									<Type>Parameter</Type>
+									<UNC>True</UNC>
+									<FileName>{SOURCE FILE NAME}_Processed_{RUNTIME VARIABLE}.[Current Date]_{RUNTIME VARIABLE}.[Top Level RunID]</FileName>
+									<Folder>
+										<Name Tr="string" />
+										<Path>C:\</Path>
+										<UNCPath>\\A2MADVEDMSQAP01\C$</UNCPath>
+										<Tag Tr="string" />
+									</Folder>
+									<DateFmt>yyyyMMdd</DateFmt>
+									<DateOffset>Days</DateOffset>
+									<DateUnits>0</DateUnits>
+									<Filter>All Files (*.*)|*.*</Filter>
+									<Encoding>1252</Encoding>
+									<Subtype>Database</Subtype>
+									<Name>BBO Security Equity Archive Success</Name>
+								</TargetFile>
+								<TargetConnection />
+								<TargetFileProps />
+								<TargetDataSource />
+								<TargetMsg />
+								<TargetXml />
+								<ColMapping />
+								<UpdateControl />
+								<SourceXml />
+								<XmlMapping />
+								<FileContentsOutputProps />
+							</Item>
+						</list>
+					</Targets>
+					<Bulkload />
+					<XsltFile />
+					<DeleteDataSource />
+					<DeleteDataCondition />
+					<SrcChangeTolerance />
+				</Item>
+				<Item>
+					<Name>Update File Monitor</Name>
+					<ProcType>Port_Data</ProcType>
+					<Enabled>True</Enabled>
+					<Precedence>Previous_Step_Completed_OK</Precedence>
+					<Description>Update File Monitor</Description>
+					<SourceType>Data_Source</SourceType>
+					<TargetUpgraded>True</TargetUpgraded>
+					<AutoTruncate>True</AutoTruncate>
+					<TransferSystem>BulkCopy</TransferSystem>
+					<SSISTrimDataForMaxColumns>True</SSISTrimDataForMaxColumns>
+					<UseDBTransferSystem>True</UseDBTransferSystem>
+					<PrettyPrintFormat>False</PrettyPrintFormat>
+					<EscapeQuotes>False</EscapeQuotes>
+					<SourceFile />
+					<SourceConnection>
+						<Type>Server</Type>
+						<DL>False</DL>
+					</SourceConnection>
+					<SourceFileProps />
+					<SourceDataSource>
+						<Name Tr="string" />
+						<Select>
+							<Phrasebook>
+								<Phrases Tr="dictionary" />
+							</Phrasebook>
+							<Text>SELECT FILE_NAME, ID, PARENT_RUNID from CADIS.EDM_FILEMONITOR 
+WHERE CADIS_SYSTEM_TOPRUNID = {RUNTIME VARIABLE}.[Top Level RunID]
+and status = '{CONFIGURABLE PARAMETER}.[Current_Status]'</Text>
+						</Select>
+						<DL>False</DL>
+						<Object />
+						<CacheMethod>NoCache</CacheMethod>
+						<CustomCacheTable />
+						<ManagedCacheTable />
+					</SourceDataSource>
+					<TargetFtp />
+					<SourceMsg />
+					<SourceXml />
+					<Globals>
+						<nv>
+							<list Tr="list" />
+						</nv>
+						<fv>
+							<list Tr="list" />
+						</fv>
+						<FileNameVariables>
+							<list Tr="list" />
+						</FileNameVariables>
+						<RuleBuilderVariables>
+							<list Tr="list" />
+						</RuleBuilderVariables>
+						<Global>False</Global>
+					</Globals>
+					<Custom />
+					<Email />
+					<Plugin />
+					<XmlSchema />
+					<XmlMapping />
+					<XmlValidation />
+					<External />
+					<FileAction />
+					<Targets>
+						<list Tr="list">
+							<Item>
+								<Enabled>True</Enabled>
+								<TargetType>Data_Source</TargetType>
+								<MaxFailedRows>0</MaxFailedRows>
+								<TargetFile />
+								<TargetConnection>
+									<Type>Server</Type>
+									<DL>False</DL>
+								</TargetConnection>
+								<TargetFileProps />
+								<TargetDataSource>
+									<Table>
+										<Name>EDM_FILEMONITOR</Name>
+										<Owner>CADIS</Owner>
+										<SystemObject>False</SystemObject>
+										<Type>Table</Type>
+										<QuoteString>"</QuoteString>
+									</Table>
+									<View />
+									<TargetType>Table</TargetType>
+								</TargetDataSource>
+								<TargetMsg />
+								<TargetXml />
+								<ColMapping>
+									<Mappings>
+										<list Tr="list">
+											<Item>
+												<Name>{TABLE}.[ID]</Name>
+												<Value>{DATA}.[ID]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[FILE_NAME]</Name>
+												<Value>{DATA}.[FILE_NAME]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[STATUS]</Name>
+												<Value>{CONFIGURABLE PARAMETER}.[New_Status]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[PARENT_RUNID]</Name>
+												<Value>{DATA}.[PARENT_RUNID]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[CADIS_SYSTEM_INSERTED]</Name>
+												<Value>{RUNTIME VARIABLE}.[Current Date]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[CADIS_SYSTEM_UPDATED]</Name>
+												<Value>{RUNTIME VARIABLE}.[Current Date]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[CADIS_SYSTEM_CHANGEDBY]</Name>
+												<Value>{RUNTIME VARIABLE}.[Current User]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[CADIS_SYSTEM_RUNID]</Name>
+												<Value>{RUNTIME VARIABLE}.[RunID]</Value>
+											</Item>
+											<Item>
+												<Name>{TABLE}.[CADIS_SYSTEM_TOPRUNID]</Name>
+												<Value>{RUNTIME VARIABLE}.[Top Level RunID]</Value>
+											</Item>
+										</list>
+									</Mappings>
+								</ColMapping>
+								<UpdateControl>
+									<Type>Update</Type>
+									<Dedup>False</Dedup>
+									<Allowable>Overwrite, Append, Update</Allowable>
+									<PropText />
+									<Keys Tr="dictionary">
+										<Item>
+											<key>ID</key>
+											<value>ID</value>
+										</Item>
+										<Item>
+											<key>PARENT_RUNID</key>
+											<value>PARENT_RUNID</value>
+										</Item>
+									</Keys>
+									<AutoCastKeys>True</AutoCastKeys>
+								</UpdateControl>
+								<SourceXml />
+								<XmlMapping />
+								<FileContentsOutputProps />
+							</Item>
+						</list>
+					</Targets>
+					<Bulkload />
+					<XsltFile />
+					<DeleteDataSource />
+					<DeleteDataCondition />
+					<SrcChangeTolerance />
+				</Item>
+			</list>
+		</Inputs>
+		<configdefaults>
+			<list Tr="list">
+				<Item>
+					<Name>Current_Status</Name>
+					<Value Tr="string" />
+				</Item>
+				<Item>
+					<Name>New_Status</Name>
+					<Value Tr="string" />
+				</Item>
+			</list>
+		</configdefaults>
+		<ProcessParams>
+			<Connections>
+				<list Tr="list" />
+			</Connections>
+			<Locations>
+				<list Tr="list" />
+			</Locations>
+			<Variables>
+				<nv>
+					<list Tr="list" />
+				</nv>
+				<fv>
+					<list Tr="list" />
+				</fv>
+				<FileNameVariables>
+					<list Tr="list" />
+				</FileNameVariables>
+				<RuleBuilderVariables>
+					<list Tr="list" />
+				</RuleBuilderVariables>
+				<Global>True</Global>
+			</Variables>
+		</ProcessParams>
+	</DataPorter>
+</Content>
+</CadisXml>
