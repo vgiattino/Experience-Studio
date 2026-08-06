@@ -25,6 +25,14 @@ The builder wears the **Opus EDM console's chrome** — a hover-expanding icon r
 list, version and lifecycle pills, a zoomable canvas — because the analyst authoring an experience
 administers the EDM it reads from, and one product should look like one product.
 
+**And the builder shows the whole page, not only the canvas.** A shipped page carries eight data
+sources and fourteen actions; the canvas can show neither. The body is now split into aspects the way
+every Opus EDM console editor is — **Design · Data · Actions · Page · JSON · History** — so a source's
+filter, its aliases and *which widgets read it* are one click away, and so is what dispatches each
+action. Two badges are warnings rather than counts: a source nothing reads costs a query and shows
+nothing, and an action nothing can reach ships and never runs. That pair found three real defects in
+pages that had already shipped — [`docs/PAGE-BUILDER.md`](./docs/PAGE-BUILDER.md).
+
 **And the builder can tell you what the page is missing.** The ★ in the title row asks, and answers
 from the catalog the author is entitled to: a measure nothing on the page reads, a groupable date that
 would turn a figure into a trend, a widget still called "KPI Card". Each row carries the fact it rests
@@ -57,6 +65,7 @@ Delivered:
 | Visual page builder | Drag, drop, inspect, re-layout, preview responsively, save — editing the *same* JSON the runtime interprets — [`docs/VISUAL-BUILDER.md`](./docs/VISUAL-BUILDER.md) |
 | Experience Builder prototype | Prompt → Experience JSON → rendered page, with a Node/REST backend, local JSON storage and a swappable model provider — [`docs/implementation-status.md`](./docs/implementation-status.md) |
 | EDM business templates | Four templates over governed EDM metadata — master dashboard, security overview, party overview, exception workspace — with drill-down between them and tabs generated from data — [`docs/EDM-TEMPLATES.md`](./docs/EDM-TEMPLATES.md) |
+| Page builder aspects | The MDE editor structure: a page's data sources, actions and declarations as tabs beside the canvas, with the reverse indexes only the builder can compute — [`docs/PAGE-BUILDER.md`](./docs/PAGE-BUILDER.md) |
 | AI assist in the builder | Ask what a page is missing; suggestions grounded in the entitled catalog, each accepted one as a single undoable patch — [`docs/AI-ASSIST.md`](./docs/AI-ASSIST.md) |
 | CODA design language | The Opus EDM console's look and feel as a token layer plus shared chrome — one palette swap re-themes every app, every widget and every generated page — [`docs/CODA-DESIGN-SYSTEM.md`](./docs/CODA-DESIGN-SYSTEM.md) |
 | Metadata model | Twenty JSON Schemas, expression grammar, worked examples — [`schemas/README.md`](./schemas/README.md) |

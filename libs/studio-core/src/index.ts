@@ -50,6 +50,7 @@ export {
   duplicateNode,
   isRefusal,
   moveNode,
+  removeDataSourceIfUnused,
   removeNode,
   setBindingField,
   setComponentConfig,
@@ -75,6 +76,20 @@ export {
   type ApplyOutcome,
   type HistoryEntry,
 } from './definition-store.service';
+
+export {
+  aspectCounts,
+  describeAction,
+  describeFilter,
+  summariseActions,
+  summariseSource,
+  summariseSources,
+  tabSourceOf,
+  type ActionSummary,
+  type AspectCounts,
+  type SelectedField,
+  type SourceSummary,
+} from './describe';
 
 export { SelectionService, PREVIEW_SIZES, type PreviewSize } from './selection.service';
 export { DraftStore, type PageListing } from './draft-store.service';

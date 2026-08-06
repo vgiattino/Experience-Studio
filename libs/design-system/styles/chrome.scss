@@ -756,6 +756,164 @@
 }
 
 /* ==========================================================
+   Body idioms — how an MDE editor lays out an aspect
+
+   Three shapes cover almost every tab in the console: a two-column key/value
+   read-out, a two-column form grid, and an uppercase section label between them.
+   Ported because they are what make five different editors read as one product,
+   and because a panel that invents its own field layout looks like a different
+   application the moment it sits beside one that did not.
+   ========================================================== */
+.opus-kv-table {
+  border: 1px solid var(--opus-border);
+  border-radius: var(--opus-radius-md);
+  overflow: hidden;
+  font-size: var(--opus-text-md);
+  background: var(--opus-surface);
+}
+
+.opus-kv-head {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  background: var(--opus-surface-sunken);
+  border-block-end: 1px solid var(--opus-border);
+  font-weight: var(--opus-weight-semibold);
+  font-size: var(--opus-text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--opus-text-muted);
+
+  > span {
+    padding: 8px 12px;
+  }
+}
+
+.opus-kv-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border-block-end: 1px solid var(--opus-border);
+
+  &:last-child {
+    border-block-end: 0;
+  }
+
+  > span,
+  > dt,
+  > dd {
+    padding: 8px 12px;
+    margin: 0;
+    min-inline-size: 0;
+    overflow-wrap: anywhere;
+  }
+
+  > dt {
+    color: var(--opus-text-secondary);
+  }
+}
+
+/* A three-column variant, for a read-out that has a natural third column — an alias
+   beside a ref, a cost beside a count. Declared here rather than per panel so the
+   column rhythm stays the same across tabs. */
+.opus-kv-table.cols-3 {
+  .opus-kv-head,
+  .opus-kv-row {
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+
+.opus-props-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+  gap: 14px;
+  margin-block-end: 14px;
+}
+
+.opus-section-label {
+  font-size: var(--opus-text-xs);
+  font-weight: var(--opus-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--opus-text-muted);
+  margin: 18px 0 6px;
+
+  &:first-child {
+    margin-block-start: 0;
+  }
+}
+
+/* A tab's content region: the padding every aspect shares, so panels do not each pick one. */
+.opus-aspect {
+  padding: var(--opus-space-5) 20px var(--opus-space-7);
+  max-inline-size: var(--opus-page-max-width);
+}
+
+/* An aspect's empty state. A page with no actions is normal, and should read as a fact. */
+.opus-aspect-empty {
+  padding: var(--opus-space-5) 0;
+  font-size: var(--opus-text-md);
+  color: var(--opus-text-muted);
+  line-height: var(--opus-leading-normal);
+  max-inline-size: 46rem;
+}
+
+/* A card for one item within an aspect — one data source, one action group. */
+.opus-item-card {
+  border: 1px solid var(--opus-border);
+  border-radius: var(--opus-radius-md);
+  background: var(--opus-surface);
+  margin-block-end: var(--opus-space-3);
+  overflow: hidden;
+}
+
+.opus-item-head {
+  display: flex;
+  align-items: center;
+  gap: var(--opus-space-2);
+  padding: 10px 12px;
+  background: var(--opus-surface-sunken);
+  border-block-end: 1px solid var(--opus-border);
+  font-size: var(--opus-text-md);
+  flex-wrap: wrap;
+
+  .id {
+    font-family: var(--opus-font-mono);
+    font-size: var(--opus-text-sm);
+    font-weight: var(--opus-weight-semibold);
+    color: var(--opus-text);
+  }
+
+  .spacer {
+    flex: 1;
+  }
+}
+
+.opus-item-body {
+  padding: 12px;
+}
+
+/* A monospace ref, used wherever a catalog or artifact identifier is shown verbatim. */
+.opus-ref {
+  font-family: var(--opus-font-mono);
+  font-size: var(--opus-text-sm);
+  color: var(--opus-text-secondary);
+}
+
+/* A small neutral tag: a kind, an aggregation, a policy. Not an emphasis — it carries no
+   judgement, which is why it does not use the emphasis tokens. */
+.opus-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 7px;
+  border-radius: 10px;
+  border: 1px solid var(--opus-border);
+  background: var(--opus-surface-hover);
+  font-size: var(--opus-text-xs);
+  color: var(--opus-text-secondary);
+  white-space: nowrap;
+}
+
+/* ==========================================================
    AI panel
    ========================================================== */
 .opus-ai-panel {

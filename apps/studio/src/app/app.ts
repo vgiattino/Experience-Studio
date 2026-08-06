@@ -38,6 +38,7 @@ import {
   HostListener,
   inject,
   signal,
+  untracked,
 } from '@angular/core';
 import { CatalogService } from '@opus/catalog';
 import { GatewayService, loadFixtureTables, type PhysicalResolver } from '@opus/data-client';
@@ -53,6 +54,7 @@ import {
 } from '@opus/design-system';
 import { TelemetryService } from '@opus/platform';
 import {
+  aspectCounts,
   DefinitionStore,
   DraftStore,
   PREVIEW_SIZES,
@@ -62,6 +64,7 @@ import {
   type PreviewSize,
 } from '@opus/studio-core';
 import {
+  ActionsPanelComponent,
   AssistPanelComponent,
   AssistService,
   CanvasComponent,
@@ -71,7 +74,9 @@ import {
   InspectorComponent,
   JsonViewComponent,
   OutlineComponent,
+  PagePanelComponent,
   PaletteComponent,
+  SourcesPanelComponent,
 } from '@opus/studio-ui';
 import type { ValidationReport } from '@opus/validator';
 
@@ -85,8 +90,20 @@ const EXPERIENCE_URL = `${DEFINITIONS_BASE}/securities-operations.experience.jso
 /** What the left column holds. The rail switches between these; there is no router. */
 type LeftPanel = 'pages' | 'add' | 'structure';
 
-/** What the right dock holds. */
-type RightTab = 'inspector' | 'history' | 'json';
+/**
+ * The body tabs: the ASPECTS of the artifact being edited.
+ *
+ * This is the Opus EDM console's defining move, and the reason the builder needed it is arithmetic: a
+ * shipped page carries 8–9 data sources, 10–14 actions, parameters, filter channels, security and
+ * performance policy, and the canvas can show exactly none of them. Everything that is not a widget
+ * lived in the JSON tab, which means the interactive behaviour of a page — every drill-down, every
+ * filter chip — was authored by reading an artifact by hand.
+ *
+ * `preview` is NOT a tab. It is a mode of the design canvas, toggled in the toolbar, because it shows
+ * the same aspect with the editing affordances off; making it a seventh tab would imply the author was
+ * looking at something else.
+ */
+type Aspect = 'design' | 'data' | 'actions' | 'page' | 'json' | 'history';
 
 /** Zoom stops, rather than a continuous slider: the author wants 100% back exactly. */
 const ZOOM_STEPS = [50, 67, 80, 100, 125, 150] as const;
@@ -113,6 +130,23 @@ const NAV_SECTIONS: readonly NavSection[] = [
 ];
 
 /**
+ * The aspect strip, as data.
+ *
+ * Ordered by how often an author needs it, not by the artifact's key order: the canvas first, then the
+ * two aspects that were previously unreachable, then the page's own declarations, then the artifact and
+ * the log. The same argument as the nav rail — a strip that is data can be filtered by entitlement or
+ * extended later; a strip that is markup cannot.
+ */
+const ASPECTS: readonly { id: Aspect; label: string; icon: string }[] = [
+  { id: 'design', label: 'Design', icon: 'grid' },
+  { id: 'data', label: 'Data', icon: 'database' },
+  { id: 'actions', label: 'Actions', icon: 'play' },
+  { id: 'page', label: 'Page', icon: 'settings' },
+  { id: 'json', label: 'JSON', icon: 'document' },
+  { id: 'history', label: 'History', icon: 'history' },
+];
+
+/**
  * The preview-width control, as icons. Labels stay as tooltips — a toolbar has no room for six.
  *
  * Six stops share four glyphs, so the pairs are separated by SIZE: a large phone draws a larger phone
@@ -135,6 +169,7 @@ const PREVIEW_ICONS: Record<PreviewSize['id'], { name: string; size: number }> =
   // state tier 2 is per-experience by design (§4.2). A second window opens a second session.
   providers: [DefinitionStore, SelectionService, DragStateService, EditorService, AssistService],
   imports: [
+    ActionsPanelComponent,
     AssistPanelComponent,
     CanvasComponent,
     HistoryPanelComponent,
@@ -144,7 +179,9 @@ const PREVIEW_ICONS: Record<PreviewSize['id'], { name: string; size: number }> =
     ListPanelComponent,
     NavRailComponent,
     OutlineComponent,
+    PagePanelComponent,
     PaletteComponent,
+    SourcesPanelComponent,
   ],
   template: `
     <div class="opus-app">
@@ -273,7 +310,7 @@ const PREVIEW_ICONS: Record<PreviewSize['id'], { name: string; size: number }> =
                     type="button"
                     class="opus-ver-pill"
                     title="Show the change log for this editing session"
-                    (click)="rightTab.set('history')"
+                    (click)="aspect.set('history')"
                   >
                     <opus-icon name="history" [size]="12" [weight]="2" />
                     v{{ artifactVersion() }}
@@ -460,77 +497,89 @@ const PREVIEW_ICONS: Record<PreviewSize['id'], { name: string; size: number }> =
                 </div>
               }
 
-              <div class="stage opus-wb-tab-body">
-                <div class="canvas-dock">
-                  @if (store.definition()) {
-                    <!--
-                      Zoom is a transform on a wrapper, and NOTHING ELSE. The renderer resolves its
-                      breakpoint from a ResizeObserver on its own element (§5.3), so anything that
-                      changes the layer's layout width changes which layout the author is looking at.
-                      A transform does not, which is why zooming out to see a whole dashboard leaves
-                      it on the desktop layout instead of silently switching it to the phone one.
-
-                      The first version of this backfilled the space a scaled-down layer leaves, by
-                      setting the layer's width to 100/scale per cent — and that measurably broke the
-                      guarantee: zooming from 100% to 67% moved the renderer from the md layout to the
-                      lg one. Zoom and responsive preview are two controls, and the width belongs to
-                      the other one. So the empty space stays.
-                    -->
-                    <div class="zoom-layer" [style.transform]="'scale(' + zoom() / 100 + ')'">
-                      <opus-canvas [user]="author" />
-                    </div>
-                  } @else {
-                    <div class="centred">
-                      <opus-icon name="page" [size]="28" />
-                      <p>Select a page to start editing.</p>
-                    </div>
-                  }
-                </div>
-
-                <aside class="dock">
-                  <nav class="opus-tabs">
-                    <button
-                      type="button"
-                      class="opus-tab"
-                      [class.active]="rightTab() === 'inspector'"
-                      (click)="rightTab.set('inspector')"
-                    >
-                      Properties
-                    </button>
-                    <button
-                      type="button"
-                      class="opus-tab"
-                      [class.active]="rightTab() === 'history'"
-                      (click)="rightTab.set('history')"
-                    >
-                      History
-                      @if (store.history().length) {
-                        <span class="opus-tab-badge">{{ store.history().length }}</span>
-                      }
-                    </button>
-                    <button
-                      type="button"
-                      class="opus-tab"
-                      [class.active]="rightTab() === 'json'"
-                      (click)="rightTab.set('json')"
-                    >
-                      JSON
-                    </button>
-                  </nav>
-                  <div class="dock-body">
-                    @switch (rightTab()) {
-                      @case ('inspector') {
-                        <opus-inspector />
-                      }
-                      @case ('history') {
-                        <opus-history-panel />
-                      }
-                      @case ('json') {
-                        <opus-json-view />
-                      }
+              <!--
+                The aspect strip. Badges are counts, and two of them are WARNINGS rather than counts —
+                an unread data source and an unreachable action both cost something and show nothing,
+                and this strip is the only place in the product that would ever mention them.
+              -->
+              <nav class="opus-tabs aspects" role="tablist" aria-label="Page aspects">
+                @for (tab of aspects; track tab.id) {
+                  <button
+                    type="button"
+                    role="tab"
+                    class="opus-tab"
+                    [class.active]="aspect() === tab.id"
+                    [attr.aria-selected]="aspect() === tab.id"
+                    [disabled]="!store.definition()"
+                    (click)="aspect.set(tab.id)"
+                  >
+                    <opus-icon [name]="tab.icon" [size]="14" />
+                    {{ tab.label }}
+                    @if (badgeFor(tab.id); as badge) {
+                      <span class="opus-tab-badge" [attr.data-warn]="badge.warn">{{ badge.text }}</span>
                     }
-                  </div>
-                </aside>
+                  </button>
+                }
+              </nav>
+
+              <div class="stage opus-wb-tab-body" [attr.data-aspect]="aspect()">
+                @switch (aspect()) {
+                  @case ('design') {
+                    <div class="canvas-dock">
+                      @if (store.definition()) {
+                        <!--
+                          Zoom is a transform on a wrapper, and NOTHING ELSE. The renderer resolves its
+                          breakpoint from a ResizeObserver on its own element (§5.3), so anything that
+                          changes the layer's layout width changes which layout the author is looking
+                          at. A transform does not, which is why zooming out to see a whole dashboard
+                          leaves it on the desktop layout instead of switching it to the phone one.
+
+                          The first version backfilled the space a scaled-down layer leaves, by setting
+                          the layer's width to 100/scale per cent — and that measurably broke the
+                          guarantee: zooming from 100% to 67% moved the renderer from md to lg. Zoom and
+                          responsive preview are two controls, and the width belongs to the other one.
+                        -->
+                        <div class="zoom-layer" [style.transform]="'scale(' + zoom() / 100 + ')'">
+                          <opus-canvas [user]="author" />
+                        </div>
+                      } @else {
+                        <div class="centred">
+                          <opus-icon name="page" [size]="28" />
+                          <p>Select a page to start editing.</p>
+                        </div>
+                      }
+                    </div>
+
+                    <!--
+                      The inspector stays a dock beside the canvas rather than becoming an aspect,
+                      because it describes the SELECTED NODE and the selection is made on the canvas.
+                      A tab would mean clicking a widget and then leaving the widget to read it.
+                    -->
+                    <aside class="dock">
+                      <nav class="opus-tabs">
+                        <button type="button" class="opus-tab active">Properties</button>
+                      </nav>
+                      <div class="dock-body">
+                        <opus-inspector />
+                      </div>
+                    </aside>
+                  }
+                  @case ('data') {
+                    <opus-sources-panel />
+                  }
+                  @case ('actions') {
+                    <opus-actions-panel />
+                  }
+                  @case ('page') {
+                    <opus-page-panel />
+                  }
+                  @case ('json') {
+                    <opus-json-view />
+                  }
+                  @case ('history') {
+                    <opus-history-panel />
+                  }
+                }
               </div>
             </div>
           </div>
@@ -596,12 +645,51 @@ const PREVIEW_ICONS: Record<PreviewSize['id'], { name: string; size: number }> =
       overflow-y: auto;
     }
 
-    /* Two-pane stage: canvas and the property dock. */
+    .opus-tabs.aspects {
+      padding-inline: 20px;
+      flex-shrink: 0;
+    }
+
+    /* A count reads as information; a warning has to read as one. Same element, different meaning. */
+    .opus-tab-badge[data-warn='true'] {
+      background: var(--opus-emphasis-warning);
+      color: var(--opus-text-inverse);
+    }
+
+    /*
+      The stage is a two-pane grid ONLY on the design aspect.
+      Every other aspect is a document that wants the full width — a kv-table squeezed into
+      "1fr minus 21rem" wraps its second column, and there is no selection for the inspector to
+      describe anyway.
+    */
     .stage {
+      display: block;
+      overflow: auto;
+      min-block-size: 0;
+    }
+
+    .stage[data-aspect='design'] {
       display: grid;
       grid-template-columns: minmax(0, 1fr) 21rem;
-      min-block-size: 0;
       overflow: hidden;
+    }
+
+    /*
+      The JSON aspect fills the height instead of scrolling the page.
+
+      The editor is a flex child with a 24rem floor, so in a plain block container it collapsed to
+      exactly that floor — a 384px window onto a 40,000-character artifact. It was designed for a
+      21rem dock; given the whole body it should use it.
+    */
+    .stage[data-aspect='json'] {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .stage[data-aspect='json'] > * {
+      flex: 1;
+      min-block-size: 0;
     }
 
     .canvas-dock {
@@ -737,7 +825,7 @@ const PREVIEW_ICONS: Record<PreviewSize['id'], { name: string; size: number }> =
 
     /* Below the laptop band the property dock stops being a column and stacks under the canvas. */
     @media (max-width: 1180px) {
-      .stage {
+      .stage[data-aspect='design'] {
         grid-template-columns: minmax(0, 1fr);
         grid-template-rows: minmax(0, 1fr) 18rem;
       }
@@ -756,7 +844,8 @@ const PREVIEW_ICONS: Record<PreviewSize['id'], { name: string; size: number }> =
       floor rather than a share, and the author scrolls from the page to its properties.
     */
     @media (max-width: 900px) {
-      .stage {
+      .stage,
+      .stage[data-aspect='design'] {
         display: block;
         overflow-y: auto;
       }
@@ -799,6 +888,7 @@ export class StudioApp {
   protected readonly author: UserContext = AUTHOR;
   protected readonly previewSizes = PREVIEW_SIZES;
   protected readonly navSections = NAV_SECTIONS;
+  protected readonly aspects = ASPECTS;
   protected readonly zoomSteps = ZOOM_STEPS;
 
   protected readonly experience = signal<ExperienceDefinition | null>(null);
@@ -806,7 +896,7 @@ export class StudioApp {
   protected readonly openPageId = signal<string | null>(null);
   protected readonly leftPanel = signal<LeftPanel>('pages');
   protected readonly listCollapsed = signal(false);
-  protected readonly rightTab = signal<RightTab>('inspector');
+  protected readonly aspect = signal<Aspect>('design');
   /** `kind` maps straight onto the chrome banner variants, so the shell never translates. */
   protected readonly message = signal<{ kind: 'info' | 'success' | 'error'; text: string } | null>(
     null,
@@ -858,6 +948,9 @@ export class StudioApp {
     return Boolean(id && this.listings().find((listing) => listing.id === id)?.hasDraft);
   });
 
+  /** Counts for the aspect badges, recomputed from the artifact — never maintained alongside it. */
+  protected readonly counts = computed(() => aspectCounts(this.store.definition()));
+
   protected readonly widgetCount = computed(
     () => Object.keys(this.store.definition()?.components ?? {}).length,
   );
@@ -897,6 +990,22 @@ export class StudioApp {
   constructor() {
     void this.bootstrap();
 
+    /**
+     * A selection made off the canvas brings the canvas back.
+     *
+     * The Data and Actions aspects both offer "select the widget that reads / fires this", and without
+     * this the click set the selection on a canvas the author could not see — a dead control. The
+     * effect lives in the shell rather than in the panels because the shell owns which aspect is
+     * showing; a panel that switched tabs itself would need to know about the strip, and every future
+     * panel would need to remember to.
+     */
+    effect(() => {
+      const selected = this.selection.selected();
+      untracked(() => {
+        if (selected && this.aspect() !== 'design') this.aspect.set('design');
+      });
+    });
+
     /** Validate continuously, with the catalog, so level 3 runs. */
     effect(() => {
       const definition = this.store.definition();
@@ -906,6 +1015,42 @@ export class StudioApp {
       }
       void this.validate(definition);
     });
+  }
+
+  /**
+   * The badge on an aspect tab.
+   *
+   * Two of the six are warnings rather than counts. An unread data source costs a gateway round trip
+   * and shows nothing; an unreachable action ships and can never run. Both are invisible everywhere
+   * else, and a count that quietly became a warning is the only way a tab strip can tell an author
+   * something is wrong without a seventh panel to put it in.
+   */
+  protected badgeFor(id: Aspect): { text: string; warn: boolean } | null {
+    const counts = this.counts();
+    switch (id) {
+      case 'data':
+        return counts.dataSources
+          ? counts.orphanSources
+            ? { text: `${counts.orphanSources} unread`, warn: true }
+            : { text: String(counts.dataSources), warn: false }
+          : null;
+      case 'actions':
+        return counts.actions
+          ? counts.unreachableActions
+            ? { text: `${counts.unreachableActions} unreachable`, warn: true }
+            : { text: String(counts.actions), warn: false }
+          : null;
+      case 'page': {
+        const declared = counts.parameters + counts.filters + counts.selections;
+        return declared ? { text: String(declared), warn: false } : null;
+      }
+      case 'history':
+        return this.store.history().length
+          ? { text: String(this.store.history().length), warn: false }
+          : null;
+      default:
+        return null;
+    }
   }
 
   protected previewIcon(id: PreviewSize['id']): { name: string; size: number } {
@@ -1036,6 +1181,8 @@ export class StudioApp {
     // offer the author a measure that is missing from the page they just closed.
     this.assist.reset();
     this.assistOpen.set(false);
+    // Back to the canvas: an aspect is a view of one document, and this is a different document.
+    this.aspect.set('design');
 
     const url = new URL(window.location.href);
     url.searchParams.set('page', listing.id);
@@ -1110,13 +1257,16 @@ export class StudioApp {
       );
       if (node) {
         this.selection.select(node.node.id);
-        this.rightTab.set('inspector');
+        // A finding about a widget is acted on ON the canvas, so jumping there is part of revealing it.
+        this.aspect.set('design');
         return;
       }
     }
 
-    const nodeMatch = /^\/layout/.test(path);
-    if (nodeMatch) this.rightTab.set('json');
+    // A finding about the layout tree itself has no widget to select, so the artifact is the answer.
+    if (/^\/layout/.test(path)) this.aspect.set('json');
+    else if (/^\/dataSources/.test(path)) this.aspect.set('data');
+    else if (/^\/actions/.test(path)) this.aspect.set('actions');
   }
 
   protected toggleMode(): void {

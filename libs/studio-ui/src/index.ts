@@ -17,6 +17,9 @@ export { InspectorComponent } from './inspector.component';
 export { JsonViewComponent } from './json-view.component';
 export { OutlineComponent } from './outline.component';
 export { PaletteComponent } from './palette.component';
+export { SourcesPanelComponent } from './sources-panel.component';
+export { ActionsPanelComponent } from './actions-panel.component';
+export { PagePanelComponent } from './page-panel.component';
 
 export { EditorService } from './editor.service';
 export {

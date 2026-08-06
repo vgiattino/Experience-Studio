@@ -38,7 +38,7 @@
       "boundToAttribute": "securities.security.asset-class",
       "syncToUrl": true,
       "clearable": true,
-      "description": "Set from the facet bar or by clicking a chart segment \u2014 both write the same channel, so the two stay consistent."
+      "description": "Set from the facet bar or by clicking a chart segment — both write the same channel, so the two stay consistent."
     },
     "review-status": {
       "label": "Review Status",
@@ -54,7 +54,7 @@
       "boundToAttribute": "securities.security.asset-class",
       "syncToUrl": true,
       "clearable": false,
-      "description": "Holds the active data-driven tab. Declaring it as a channel is what makes the generated tabs deep-linkable and readable by the tab template\u2019s own data source."
+      "description": "Holds the active data-driven tab. Declaring it as a channel is what makes the generated tabs deep-linkable and readable by the tab template’s own data source."
     }
   },
   "selections": {
@@ -886,7 +886,8 @@
           {
             "field": "issuer-name",
             "label": "Issuer",
-            "renderAs": "link"
+            "renderAs": "link",
+            "action": "drill-to-issuer"
           },
           {
             "field": "country-of-risk",
@@ -1080,7 +1081,7 @@
             "type": "panel",
             "title": "By asset class",
             "variant": "bordered",
-            "subtitle": "Tabs generated from the data \u2014 one per asset class present, badged with its count.",
+            "subtitle": "Tabs generated from the data — one per asset class present, badged with its count.",
             "children": [
               {
                 "kind": "container",

@@ -55,8 +55,13 @@ import { EditorService } from './editor.service';
     </div>
   `,
   styles: `
+    /*
+      A flex column rather than a block, so the editor fills whatever height its host gives it — a
+      21rem dock beside the canvas, or the whole body when JSON is the open aspect.
+    */
     :host {
-      display: block;
+      display: flex;
+      flex-direction: column;
       min-block-size: 0;
     }
 
