@@ -106,10 +106,6 @@
               {
                 "glob": "**/*",
                 "input": "apps/viewer/public"
-              },
-              {
-                "glob": "**/*",
-                "input": "apps/studio/public"
               }
             ],
             "styles": [

@@ -75,7 +75,7 @@ import {
 } from '@opus/studio-ui';
 import type { ValidationReport } from '@opus/validator';
 
-import { EdmConsoleComponent } from './edm-console.component';
+import { EdmAdministrationComponent } from './edm/administration.component';
 import { AUTHOR } from './session';
 
 const DEFINITIONS_BASE = 'definitions';
@@ -95,7 +95,7 @@ type LeftPanel = 'pages' | 'add' | 'structure';
  * artifact being edited — collapsing the two would put "which panel" and "which product" in one
  * signal and every consumer would have to know the difference anyway.
  */
-type Workspace = 'builder' | 'edm-console';
+type Workspace = 'builder' | 'edm-admin';
 
 /** What the right dock holds. */
 type RightTab = 'inspector' | 'history' | 'json';
@@ -126,14 +126,14 @@ const NAV_SECTIONS: readonly NavSection[] = [
     /**
      * Reference, not navigation to a feature.
      *
-     * The Opus EDM console prototype is vendored under `apps/studio/public/edm-console/` so the two
-     * products can be compared without switching applications. It is a snapshot of someone else's
-     * code — see its PROVENANCE.md — and it is in its own rail section so nobody mistakes it for part
-     * of this one.
+     * The Opus EDM console's Administration screen, recreated natively in this application's own
+     * design system so the two products can be compared without switching applications. Its own rail
+     * section rather than an authoring destination, because it edits nothing in this product — it is
+     * a recreation of another one's surface, and its seed data is mock.
      */
     label: 'Reference',
     mini: 'REF',
-    items: [{ id: 'edm-console', label: 'Opus EDM console', icon: 'database' }],
+    items: [{ id: 'edm-admin', label: 'EDM administration', icon: 'settings' }],
   },
 ];
 
@@ -162,7 +162,7 @@ const PREVIEW_ICONS: Record<PreviewSize['id'], { name: string; size: number }> =
   imports: [
     AssistPanelComponent,
     CanvasComponent,
-    EdmConsoleComponent,
+    EdmAdministrationComponent,
     HistoryPanelComponent,
     IconComponent,
     InspectorComponent,
@@ -220,14 +220,14 @@ const PREVIEW_ICONS: Record<PreviewSize['id'], { name: string; size: number }> =
             </p>
           }
 
-          @if (workspace() === 'edm-console') {
+          @if (workspace() === 'edm-admin') {
             <!--
-              Another application, in a frame. Rendered instead of the workbench rather than beside it:
-              two full products in one viewport is a screenshot, not something either can be used in.
-              The builder's state is untouched while this shows — switching back finds the same page
-              open, the same selection, the same undo history.
+              The console's Administration screen, native. Rendered instead of the workbench rather
+              than beside it: two full surfaces in one viewport is a screenshot, not something either
+              can be used in. The builder's state is untouched while this shows — switching back finds
+              the same page open, the same selection, the same undo history.
             -->
-            <opus-edm-console />
+            <opus-edm-administration />
           } @else {
 
           <div class="opus-workbench" [class.list-collapsed]="listCollapsed()">
@@ -986,8 +986,8 @@ export class StudioApp {
    * an invisible panel would read as a dead control.
    */
   protected onRailSelect(id: string): void {
-    if (id === 'edm-console') {
-      this.workspace.set('edm-console');
+    if (id === 'edm-admin') {
+      this.workspace.set('edm-admin');
       return;
     }
     if (id !== 'pages' && id !== 'add' && id !== 'structure') return;

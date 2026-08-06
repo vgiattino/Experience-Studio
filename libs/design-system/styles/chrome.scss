@@ -756,6 +756,332 @@
 }
 
 /* ==========================================================
+   Page idioms — a landing page rather than an editor
+
+   The console's administration surfaces are not workbenches: a padded page, a
+   two-column split with an aside, a grid of task cards, a list of resumable work.
+   Ported from the Opus EDM console with one substantive change — every colour is
+   a token.
+
+   THE ORIGINAL HARDCODES ITS ICON TILES: iconBg '#eaf2fc' with iconFg '#1968d3',
+   four pastel pairs repeated per card. That is fine in a product with one theme
+   and illegible in one with two — #eaf2fc on a dark surface is a white smear.
+   The tiles are emphasis variants here, so they keep the same four-way visual
+   grouping and survive the theme switch. That difference is the whole argument
+   for recreating the screen rather than framing it.
+   ========================================================== */
+.opus-page {
+  padding: var(--opus-space-5) var(--opus-space-6) var(--opus-space-7);
+  overflow-y: auto;
+  block-size: 100%;
+  max-inline-size: var(--opus-page-max-width);
+}
+
+.opus-page-head {
+  display: flex;
+  align-items: center;
+  gap: var(--opus-space-3);
+  margin-block-end: var(--opus-space-5);
+
+  h1 {
+    font-size: var(--opus-text-xl);
+    font-weight: var(--opus-weight-semibold);
+    color: var(--opus-text);
+    margin: 0;
+  }
+}
+
+/* Content beside an aside. The aside drops below the content when there is no room
+   for both, rather than squeezing into an unreadable column. */
+.opus-page-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: var(--opus-space-5);
+  align-items: start;
+}
+
+@media (max-width: 1100px) {
+  .opus-page-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.opus-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 13rem), 1fr));
+  gap: var(--opus-space-3);
+  margin-block-end: var(--opus-space-6);
+}
+
+.opus-task-card {
+  background: var(--opus-surface);
+  border: 1px solid var(--opus-border);
+  border-radius: var(--opus-radius-lg);
+  padding: var(--opus-space-4);
+  min-block-size: 8rem;
+  display: flex;
+  flex-direction: column;
+  gap: var(--opus-space-2);
+  cursor: pointer;
+  text-align: start;
+  font: inherit;
+  color: inherit;
+  transition:
+    box-shadow var(--opus-duration-fast) var(--opus-easing),
+    border-color var(--opus-duration-fast) var(--opus-easing);
+
+  &:hover {
+    box-shadow: var(--opus-shadow-raised);
+    border-color: var(--opus-border-strong);
+  }
+
+  .title {
+    font-size: var(--opus-text-md);
+    font-weight: var(--opus-weight-semibold);
+    color: var(--opus-text);
+  }
+
+  .desc {
+    font-size: var(--opus-text-sm);
+    color: var(--opus-text-muted);
+    line-height: var(--opus-leading-normal);
+  }
+}
+
+/* The four-way grouping the console uses to tell kinds of task apart at a glance. */
+.opus-icon-tile {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 40px;
+  block-size: 40px;
+  border-radius: var(--opus-radius-lg);
+  flex-shrink: 0;
+  background: var(--opus-emphasis-neutral-bg);
+  color: var(--opus-emphasis-neutral);
+
+  &.info {
+    background: var(--opus-emphasis-info-bg);
+    color: var(--opus-emphasis-info);
+  }
+
+  &.accent {
+    background: var(--opus-accent-soft);
+    color: var(--opus-accent);
+  }
+
+  &.positive {
+    background: var(--opus-emphasis-positive-bg);
+    color: var(--opus-emphasis-positive);
+  }
+
+  &.sm {
+    inline-size: 32px;
+    block-size: 32px;
+    border-radius: var(--opus-radius-md);
+  }
+}
+
+.opus-section-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--opus-space-4);
+  margin-block-end: var(--opus-space-3);
+  flex-wrap: wrap;
+
+  h2 {
+    font-size: var(--opus-text-lg);
+    font-weight: var(--opus-weight-semibold);
+    color: var(--opus-text);
+    margin: 0 0 2px;
+  }
+
+  .lead {
+    font-size: var(--opus-text-sm);
+    color: var(--opus-text-muted);
+  }
+
+  .controls {
+    display: flex;
+    align-items: center;
+    gap: var(--opus-space-2);
+    font-size: var(--opus-text-sm);
+    color: var(--opus-text-secondary);
+  }
+}
+
+/* A row of resumable work. Wraps rather than compresses: five columns in 430px is
+   four characters each. */
+.opus-work-row {
+  display: flex;
+  align-items: center;
+  gap: var(--opus-space-5);
+  padding: 14px 16px;
+  background: var(--opus-surface);
+  border: 1px solid var(--opus-border);
+  border-radius: var(--opus-radius-md);
+  margin-block-end: 6px;
+  transition: border-color var(--opus-duration-fast) var(--opus-easing);
+
+  &:hover {
+    border-color: var(--opus-border-strong);
+  }
+
+  .name {
+    font-size: var(--opus-text-md);
+    font-weight: var(--opus-weight-medium);
+    flex: 1;
+    min-inline-size: 8rem;
+  }
+
+  .name button {
+    color: var(--opus-text);
+    text-decoration: none;
+    background: none;
+    border: 0;
+    padding: 0;
+    font: inherit;
+    cursor: pointer;
+    text-align: start;
+  }
+
+  .name button:hover {
+    color: var(--opus-accent);
+    text-decoration: underline;
+  }
+}
+
+/* A label above a value. The uppercase key is how the console separates metadata
+   from content without introducing a second type size. */
+.opus-field-pair {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-inline-size: 0;
+
+  .k {
+    font-size: 10px;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--opus-text-muted);
+    font-weight: var(--opus-weight-semibold);
+  }
+
+  .v {
+    font-size: var(--opus-text-md);
+    color: var(--opus-text-secondary);
+    display: flex;
+    align-items: center;
+    gap: var(--opus-space-1);
+  }
+}
+
+.opus-progress {
+  block-size: 4px;
+  inline-size: 7.5rem;
+  background: var(--opus-surface-active);
+  border-radius: 2px;
+  overflow: hidden;
+
+  i {
+    display: block;
+    block-size: 100%;
+    background: var(--opus-accent);
+    border-radius: 2px;
+    transition: inline-size var(--opus-duration-normal) var(--opus-easing);
+  }
+}
+
+.opus-pill-count {
+  display: inline-block;
+  padding: 1px 6px;
+  background: var(--opus-surface-hover);
+  border: 1px solid var(--opus-border);
+  border-radius: 10px;
+  font-size: var(--opus-text-xs);
+  font-weight: var(--opus-weight-semibold);
+  color: var(--opus-text-secondary);
+  margin-block-end: var(--opus-space-1);
+}
+
+.opus-aside {
+  h2 {
+    font-size: var(--opus-text-lg);
+    font-weight: var(--opus-weight-semibold);
+    margin: 0 0 var(--opus-space-1);
+    color: var(--opus-text);
+  }
+
+  .lead {
+    font-size: var(--opus-text-sm);
+    color: var(--opus-text-muted);
+    margin-block-end: var(--opus-space-3);
+    line-height: var(--opus-leading-normal);
+  }
+}
+
+.opus-group-label {
+  font-size: var(--opus-text-xs);
+  font-weight: var(--opus-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--opus-text-muted);
+  padding: 10px 0 var(--opus-space-1);
+}
+
+.opus-recent-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: var(--opus-space-2) 0;
+  border-block-end: 1px solid var(--opus-border);
+  cursor: pointer;
+  inline-size: 100%;
+  text-align: start;
+  background: none;
+  border-inline: 0;
+  border-block-start: 0;
+  font: inherit;
+
+  &:hover .title {
+    color: var(--opus-accent);
+  }
+
+  .text {
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+  }
+
+  .title {
+    font-size: var(--opus-text-md);
+    font-weight: var(--opus-weight-medium);
+    color: var(--opus-text);
+  }
+
+  .sub {
+    font-size: var(--opus-text-xs);
+    color: var(--opus-text-muted);
+  }
+}
+
+@media (max-width: 760px) {
+  .opus-page {
+    padding-inline: var(--opus-space-4);
+  }
+
+  .opus-work-row {
+    flex-wrap: wrap;
+    gap: var(--opus-space-3);
+  }
+
+  .opus-work-row .name {
+    flex-basis: 100%;
+  }
+}
+
+/* ==========================================================
    AI panel
    ========================================================== */
 .opus-ai-panel {
