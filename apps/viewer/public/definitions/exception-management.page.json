@@ -885,7 +885,7 @@
           }
         }
       },
-      "description": "Open breaks past the team’s ageing threshold."
+      "description": "Open breaks past the team\u2019s ageing threshold."
     },
     "kpi-oldest": {
       "id": "kpi-oldest",
@@ -992,8 +992,7 @@
           {
             "field": "issuer-name",
             "label": "Issuer",
-            "renderAs": "link",
-            "action": "drill-to-issuer"
+            "renderAs": "link"
           },
           {
             "field": "severity",
@@ -1275,7 +1274,7 @@
             "type": "panel",
             "title": "By rule",
             "variant": "bordered",
-            "subtitle": "One tab per failing rule, generated from the data and badged with its open count — a remediation team works rule by rule.",
+            "subtitle": "One tab per failing rule, generated from the data and badged with its open count \u2014 a remediation team works rule by rule.",
             "headerActions": [
               "export-rule-queue"
             ],
@@ -1443,7 +1442,7 @@
       "label": "Ageing at 24h",
       "parameter": "age-threshold-hours",
       "value": 24,
-      "description": "Retunes what counts as ageing. A parameter change re-queries only the sources that read it — the trend and the queues are untouched."
+      "description": "Retunes what counts as ageing. A parameter change re-queries only the sources that read it \u2014 the trend and the queues are untouched."
     },
     "drill-to-security": {
       "id": "drill-to-security",

@@ -33,13 +33,11 @@ import type {
 } from '@opus/contracts';
 
 import { parsePointer, pointer, type PatchOp } from './json-patch';
-import { referencesTo } from './describe';
 import {
   childListsOf,
   locateNode,
   referencedComponentIds,
   referencedDataSourceIds,
-  walkLayout,
   wouldCreateCycle,
 } from './layout-tree';
 
@@ -972,45 +970,6 @@ function applyAddedWidget(definition: PageDefinition, ops: readonly PatchOp[]): 
     // never the tree, so folding the node in would be work with no reader.
   }
   return next;
-}
-
-/**
- * Remove a data source, but only when nothing reads it.
- *
- * A gap in the vocabulary until the Data aspect existed: `removeNode` drops a widget's source when
- * nothing else reads it, but there was no way to delete a source directly — so an orphan left behind
- * by an earlier edit was unremovable except in the JSON view.
- *
- * The readership check happens HERE rather than in the caller, against the definition the patch will
- * apply to. A panel computes its summary for a render; between that render and the click the author
- * may have bound a widget to this source, and a command that trusted the caller's stale view would
- * delete a source something reads and leave the page invalid.
- */
-export function removeDataSourceIfUnused(definition: PageDefinition, sourceId: Identifier): Command {
-  const label = `Remove ${sourceId}`;
-  if (!definition.dataSources?.[sourceId]) {
-    return { label, refused: `No data source "${sourceId}"` };
-  }
-
-  const readers = Object.values(definition.components)
-    .filter((component) => component.dataSource === sourceId)
-    .map((component) => component.id);
-  if (readers.length) {
-    return { label, refused: `${readers.join(', ')} still read${readers.length === 1 ? 's' : ''} it` };
-  }
-
-  /**
-   * ANY reference anywhere in the artifact blocks the delete, not a list of the consumers we thought
-   * of. Three enumerations in a row were wrong — a data-driven tab set, a panel's header action, and
-   * an expression reading `$data.<source>.<alias>` in a text widget's config — and each would have
-   * deleted something a working page depended on. See the note in `describe.ts`.
-   */
-  const references = referencesTo(definition, sourceId);
-  if (references.length) {
-    return { label, refused: `it is still referenced at ${references.slice(0, 3).join(', ')}` };
-  }
-
-  return { label, ops: [{ op: 'remove', path: pointer('dataSources', sourceId) }] };
 }
 
 // ── page-level ───────────────────────────────────────────────────────────────────────
