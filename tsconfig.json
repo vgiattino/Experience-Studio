@@ -40,6 +40,9 @@
       "@opus/catalog": [
         "libs/catalog/src/index.ts"
       ],
+      "@opus/catalog-ingest": [
+        "libs/catalog-ingest/src/index.ts"
+      ],
       "@opus/generation": [
         "libs/generation/src/index.ts"
       ],

@@ -85,6 +85,15 @@ export interface RawEntity {
     requiresFilter?: boolean;
   };
   aiHints?: { whenToUse?: string; exampleQuestions?: string[] };
+  /**
+   * SERVER-SIDE ONLY. The physical table this entity reads, and the source it was scanned from.
+   *
+   * Attributes and measures already carry their column; the table they live in was the one physical
+   * fact the catalog did not record, which made a re-scan unable to answer "which entity is built on
+   * the table that just changed". `projectionFor` builds `CatalogEntity` field by field and so never
+   * carries this to a client — the same rule as `RawAttribute.physical`.
+   */
+  physical?: { ref: string; sourceId?: string };
   attributes: Record<string, RawAttribute>;
   measures?: Record<string, RawMeasure>;
 }

@@ -23,7 +23,10 @@ export type {
   CatalogEntity,
   CatalogMeasure,
   CatalogSnapshot,
+  RawAttribute,
   RawCatalog,
   RawEntity,
+  RawMeasure,
+  RawPhysical,
   RawRelationship,
 } from './types';
