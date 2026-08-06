@@ -268,9 +268,9 @@ const CONTROL_FIELDS: readonly Field[] = [
         </div>
 
         <p class="pb-note">
-          Not yet ported from the console: Kendo grid paging and sorting, the
-          spline/funnel/radar/waterfall/scatter chart kinds, AI generation from a prompt, and
-          data-source binding.
+          Not yet ported from the console: Kendo grid paging and sorting, and the
+          spline/funnel/radar/waterfall/scatter chart kinds. Widgets carry literal values rather than a
+          data source, which is why a generated figure reads "—".
         </p>
       </div>
     }

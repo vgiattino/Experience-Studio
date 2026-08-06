@@ -35,8 +35,13 @@ export interface ModelRequest {
    * plan/fill/repair build a page, assist critiques one that exists. It shares the port because the
    * guardrails are identical — one prompt, one schema, one budget, one audit record — and a second
    * port would have meant a second place to forget the egress policy.
+   *
+   * `refine` is the third such question: change a page that exists, to an instruction. It is named
+   * separately from `plan` because its cost profile and its failure modes are different — a refine call
+   * is small, frequent and scoped to one selection, where a plan is large and rare — and cost
+   * attribution that cannot tell them apart cannot tell you which one is worth optimising.
    */
-  purpose: 'classify' | 'plan' | 'fill' | 'repair' | 'assist';
+  purpose: 'classify' | 'plan' | 'fill' | 'repair' | 'assist' | 'refine';
 }
 
 export interface ModelResponse {

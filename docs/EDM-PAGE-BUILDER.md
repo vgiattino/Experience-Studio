@@ -29,6 +29,7 @@ flow."*
 | Landed at | `apps/studio/src/app/edm/page-builder/` — `model.ts` and five components: the builder shell, `palette`, `structure`, `inspector`, `flow-map`, plus `widget-view` |
 | Modes | Edit · **Flow** · Preview |
 | Left dock | **Widgets** (palette) · **Structure** (the page as a tree) |
+| AI | a prompt bar, a design review, and undo — see [EDM-PAGE-BUILDER-AI.md](EDM-PAGE-BUILDER-AI.md) |
 | Grid | 12 columns × 40px rows, drag to move, corner-drag to resize |
 | Palette | 6 groups, 25 entries, 20 widget types |
 | Pages | 5 seeded, with icons, reorder, duplicate, delete, add |
@@ -147,8 +148,7 @@ than an absence that is labelled.
 |---|---|
 | **Kendo grid** paging, sorting, filtering, grouping, Excel export | The platform has no Kendo dependency. The grid renders its rows and says it is display-only. |
 | **spline · funnel · radar · waterfall · scatter** chart kinds | Column, bar, line, area, pie and donut are drawn in ~60 lines of inline SVG. The rest need a charting library. |
-| **AI generate from a prompt** | The original has a keyword heuristic and an optional local model. Experience Studio already has a generation pipeline — wiring *that* in is better than porting the heuristic. |
-| **Data-source binding** | The original binds widgets to mock sources. This port keeps literal arrays. |
+| **Data-source binding** | The original binds widgets to mock sources. This port keeps literal arrays, which is why the AI panel's figures read "—" rather than a number. |
 | The full property inspector (column configs, segment editors, legend and axis options) | Present for the common props per type; the rest is listed rather than half-built. |
 
 ## 6. The thing worth saying out loud
@@ -250,9 +250,8 @@ structure and paint orders), all three apps build with no budget warnings.
 ## 8. Next
 
 1. **Back it with `PageDefinition`.** See §6. This is the decision that determines whether the section
-   is a comparison or a product.
-2. **Wire the platform's generation pipeline** into the empty-page prompt, rather than porting the
-   original's keyword heuristic — the pipeline is already grounded in the catalog and validated.
-3. **Route edges around nodes, not through them.** The three bands keep every *label* clear, and a
+   is a comparison or a product — and the one that turns the AI panel's placeholder figures into real
+   ones.
+2. **Route edges around nodes, not through them.** The three bands keep every *label* clear, and a
    return that passes under a node is still a return crossing a node. Real orthogonal routing is the
    next honest improvement, and it is a bigger piece of work than the bands were.

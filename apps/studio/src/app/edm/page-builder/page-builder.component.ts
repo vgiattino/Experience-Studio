@@ -63,6 +63,10 @@ import {
 } from './model';
 import { FlowMapComponent } from './flow-map.component';
 import { PaletteComponent } from './palette.component';
+import { AiPanelComponent, type AcceptedPage } from './ai/ai-panel.component';
+import { applyEdits } from './ai/apply';
+import type { CanvasEdit } from './ai/decisions';
+import type { Finding } from './ai/review';
 import { InspectorComponent } from './inspector.component';
 import { StructureComponent } from './structure.component';
 import { WidgetViewComponent } from './widget-view.component';
@@ -78,6 +82,7 @@ type Dock = 'widgets' | 'structure';
   selector: 'opus-edm-page-builder',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    AiPanelComponent,
     FlowMapComponent,
     IconComponent,
     InspectorComponent,
@@ -100,6 +105,32 @@ type Dock = 'widgets' | 'structure';
           <opus-icon name="check" [size]="13" [weight]="2" />
           {{ savedLabel() }}
         </span>
+
+        <!--
+          Undo is not a convenience here, it is the precondition for the AI panel below. A feature that
+          rewrites a page in one press has to be reversible in one press, or a non-technical author
+          cannot afford to try it.
+        -->
+        <div class="pb-history">
+          <button
+            type="button"
+            class="opus-icon-btn"
+            [disabled]="!past().length"
+            [title]="undoTitle()"
+            (click)="undo()"
+          >
+            <opus-icon name="undo" [size]="16" />
+          </button>
+          <button
+            type="button"
+            class="opus-icon-btn"
+            [disabled]="!future().length"
+            [title]="redoTitle()"
+            (click)="redo()"
+          >
+            <opus-icon name="redo" [size]="16" />
+          </button>
+        </div>
         <div class="pb-modes" role="group" aria-label="Mode">
           <button type="button" [class.on]="mode() === 'edit'" (click)="setEdit()">
             <opus-icon name="edit" [size]="13" [weight]="2" />
@@ -167,6 +198,18 @@ type Dock = 'widgets' | 'structure';
           </button>
         }
       </nav>
+
+      @if (mode() === 'edit') {
+        <opus-pb-ai
+          [pages]="pages()"
+          [pageId]="currentId()"
+          [selected]="sel()"
+          [nextId]="seq + 1"
+          (acceptPage)="addGeneratedPage($event)"
+          (acceptEdits)="applyProposal($event.edits, $event.label)"
+          (reveal)="revealFinding($event)"
+        />
+      }
 
       <div class="pb-work" [attr.data-mode]="mode()">
         <!--
@@ -370,6 +413,10 @@ type Dock = 'widgets' | 'structure';
       gap: 4px;
       font-size: var(--opus-text-sm);
       color: var(--opus-emphasis-positive);
+    }
+
+    .pb-history {
+      display: inline-flex;
     }
 
     .pb-modes {
@@ -718,7 +765,7 @@ export class EdmPageBuilderComponent {
   /** Column width in px, measured from the canvas — the grid is proportional, not fixed. */
   protected readonly unitW = signal(80);
 
-  private seq = 1000;
+  protected seq = 1000;
 
   protected readonly page = computed(
     () => this.pages().find((page) => page.id === this.currentId()) ?? this.pages()[0]!,
@@ -766,6 +813,107 @@ export class EdmPageBuilderComponent {
     if (el) this.unitW.set((el.clientWidth - 8) / COLS);
   }
 
+  // ── undo, and the AI changes that need it ──────────────────────────────────────────
+
+  /**
+   * History as snapshots, not as a patch log.
+   *
+   * The platform's builder records JSON Patches against a `PageDefinition`, which is the right design
+   * *there*: the artifact is large, the ops are small, and the patch list is itself a reviewable record.
+   * Here a whole design is a handful of pages of plain objects — small enough that a snapshot is
+   * cheaper to hold than a patch is to compute, and impossible to get subtly wrong. Thirty deep, which
+   * is more than a session of hand editing produces and enough to walk back any single AI change.
+   *
+   * Marked *before* the change, with the change's name, so the button can say what it will undo.
+   */
+  protected readonly past = signal<{ pages: PageDef[]; label: string }[]>([]);
+  protected readonly future = signal<{ pages: PageDef[]; label: string }[]>([]);
+  /** The gesture currently being dragged, so a drag is one history entry rather than forty. */
+  private gesture: string | null = null;
+
+  protected undoTitle(): string {
+    const last = this.past().at(-1);
+    return last ? `Undo ${last.label}` : 'Nothing to undo';
+  }
+
+  protected redoTitle(): string {
+    const next = this.future()[0];
+    return next ? `Redo ${next.label}` : 'Nothing to redo';
+  }
+
+  /** Take a snapshot before a change. Call it with the name of the thing about to happen. */
+  private mark(label: string): void {
+    this.past.update((entries) => [...entries.slice(-29), { pages: clone(this.pages()), label }]);
+    this.future.set([]);
+  }
+
+  protected undo(): void {
+    const last = this.past().at(-1);
+    if (!last) return;
+    this.future.update((entries) => [{ pages: clone(this.pages()), label: last.label }, ...entries]);
+    this.past.update((entries) => entries.slice(0, -1));
+    this.restore(last.pages);
+  }
+
+  protected redo(): void {
+    const next = this.future()[0];
+    if (!next) return;
+    this.past.update((entries) => [...entries, { pages: clone(this.pages()), label: next.label }]);
+    this.future.update((entries) => entries.slice(1));
+    this.restore(next.pages);
+  }
+
+  /**
+   * Put a snapshot back, and keep the view pointing at something that exists.
+   *
+   * Undoing the creation of a page while looking at it would otherwise leave the builder on a page that
+   * is no longer in the list, and every computed that reads `page()` would fall back to the first one
+   * without the tab strip agreeing.
+   */
+  private restore(pages: PageDef[]): void {
+    this.pages.set(clone(pages));
+    if (!pages.some((page) => page.id === this.currentId())) {
+      this.currentId.set(pages[0]!.id);
+    }
+    if (!this.page().widgets.some((widget) => widget.id === this.selId())) this.selId.set(null);
+  }
+
+  /** A generated page arrives as a new page, selected, with the author looking at it. */
+  protected addGeneratedPage(page: AcceptedPage): void {
+    this.mark(`AI: page "${page.name}"`);
+    const id = `p${++this.seq}`;
+    // The assembler numbered its widgets from the counter it was given; move past them so the next
+    // hand-added widget cannot reuse an id.
+    this.seq += page.widgets.length + 1;
+    this.pages.update((pages) => [
+      ...pages,
+      { id, name: page.name, icon: 'model', widgets: page.widgets },
+    ]);
+    this.goToPage(id);
+  }
+
+  /**
+   * Apply a proposal the author accepted.
+   *
+   * One `mark`, so the whole set is one press of undo however many edits it contained — which is the
+   * promise the panel makes on screen, and the reason an author is willing to press Accept.
+   */
+  protected applyProposal(edits: readonly CanvasEdit[], label: string): void {
+    if (!edits.length) return;
+    this.mark(label);
+    const result = applyEdits(edits, this.pages(), this.currentId(), this.seq);
+    this.seq += edits.length + 1;
+    this.pages.set(result.pages);
+    if (result.selectId) this.selId.set(result.selectId);
+  }
+
+  /** Take the author to what a review finding is about. */
+  protected revealFinding(finding: Finding): void {
+    if (finding.pageId !== this.currentId()) this.goToPage(finding.pageId);
+    this.selId.set(finding.widgetId ?? null);
+    this.setEdit();
+  }
+
   // ── loading ────────────────────────────────────────────────────────────────────────
 
   /**
@@ -805,6 +953,7 @@ export class EdmPageBuilderComponent {
   }
 
   protected addPage(): void {
+    this.mark('Add page');
     const id = `p${++this.seq}`;
     this.pages.update((pages) => [
       ...pages,
@@ -815,6 +964,7 @@ export class EdmPageBuilderComponent {
 
   protected deletePage(id: string): void {
     if (this.pages().length <= 1) return;
+    this.mark('Delete page');
     const index = this.pages().findIndex((page) => page.id === id);
     this.pages.update((pages) => pages.filter((page) => page.id !== id));
     if (this.currentId() === id) {
@@ -824,6 +974,7 @@ export class EdmPageBuilderComponent {
   }
 
   protected duplicatePage(): void {
+    this.mark('Duplicate page');
     const source = this.page();
     const id = `p${++this.seq}`;
     // New widget ids, or the copy's nav buttons would share identity with the original's and the
@@ -838,11 +989,13 @@ export class EdmPageBuilderComponent {
   }
 
   protected clearPage(): void {
+    this.mark('Clear page');
     this.patchPage({ widgets: [] });
     this.selId.set(null);
   }
 
   protected movePage(direction: -1 | 1): void {
+    this.mark('Reorder pages');
     const pages = [...this.pages()];
     const from = pages.findIndex((page) => page.id === this.currentId());
     const to = from + direction;
@@ -853,10 +1006,12 @@ export class EdmPageBuilderComponent {
   }
 
   protected renamePage(name: string): void {
+    this.mark('Rename page');
     this.patchPage({ name: name.trim() || 'Untitled' });
   }
 
   protected setPageIcon(icon: string): void {
+    this.mark('Change page icon');
     this.patchPage({ icon });
   }
 
@@ -870,6 +1025,7 @@ export class EdmPageBuilderComponent {
   // ── widgets ────────────────────────────────────────────────────────────────────────
 
   protected addWidget(item: PaletteItem): void {
+    this.mark(`Add ${item.label}`);
     const size = DEF_SIZE[item.key] ?? { w: 4, h: 3 };
     const bottom = this.page().widgets.reduce((max, w) => Math.max(max, w.y + w.h), 0);
     const widget: Widget = {
@@ -897,6 +1053,7 @@ export class EdmPageBuilderComponent {
   }
 
   protected duplicateWidget(widget: Widget): void {
+    this.mark('Duplicate widget');
     const copy: Widget = {
       ...widget,
       id: `w${++this.seq}`,
@@ -908,6 +1065,7 @@ export class EdmPageBuilderComponent {
   }
 
   protected removeWidget(id: string): void {
+    this.mark('Delete widget');
     this.patchPage({ widgets: this.page().widgets.filter((widget) => widget.id !== id) });
     if (this.selId() === id) this.selId.set(null);
   }
@@ -923,6 +1081,7 @@ export class EdmPageBuilderComponent {
   protected setProp(key: string, value: unknown, numeric = false): void {
     const widget = this.sel();
     if (!widget) return;
+    this.mark(`Change ${key}`);
     const parsed = numeric ? (Number(value) || 0) : value;
     const next = { ...widget.props, [key]: parsed };
     // A caption toggle changes the minimum height, so the widget grows rather than clipping its label.
@@ -938,6 +1097,7 @@ export class EdmPageBuilderComponent {
    * what makes the structure panel's chip a "bring to front" button rather than a no-op at the top.
    */
   protected restack(move: { id: string; delta: number }): void {
+    this.mark('Restack widget');
     const widgets = [...this.page().widgets];
     const from = widgets.findIndex((widget) => widget.id === move.id);
     if (from < 0) return;
@@ -951,6 +1111,7 @@ export class EdmPageBuilderComponent {
   protected nudge(dim: 'w' | 'h', delta: number): void {
     const widget = this.sel();
     if (!widget) return;
+    this.mark('Resize widget');
     if (dim === 'w') {
       const w = Math.min(COLS - widget.x, Math.max(1, widget.w + delta));
       this.patchWidget(widget.id, { w });
@@ -995,6 +1156,7 @@ export class EdmPageBuilderComponent {
   }
 
   private begin(kind: 'move' | 'resize', event: MouseEvent, widget: Widget): void {
+    this.mark(kind === 'move' ? 'Move widget' : 'Resize widget');
     this.drag = {
       kind,
       id: widget.id,
@@ -1040,12 +1202,17 @@ export class EdmPageBuilderComponent {
   @HostListener('window:mouseup')
   protected endDrag(): void {
     this.drag = null;
+    this.gesture = null;
   }
 
   // ── what the flow map asks for ─────────────────────────────────────────────────────
 
   /** A node was dragged. Store where, so the layout stops deciding for this page. */
   protected placeNode(at: { id: string; x: number; y: number }): void {
+    if (this.gesture !== at.id) {
+      this.mark('Move a page on the flow map');
+      this.gesture = at.id;
+    }
     this.pages.update((pages) =>
       pages.map((page) => (page.id === at.id ? { ...page, fx: at.x, fy: at.y } : page)),
     );
@@ -1053,6 +1220,7 @@ export class EdmPageBuilderComponent {
 
   /** Hand every node back to the layout by forgetting where it was dragged. */
   protected autoArrange(): void {
+    this.mark('Auto-arrange the flow');
     this.pages.update((pages) => pages.map(({ fx, fy, ...rest }) => rest));
   }
 
@@ -1084,6 +1252,7 @@ export class EdmPageBuilderComponent {
     const already = this.links().some((link) => link.from === from && link.to === to);
     if (!source || already) return;
 
+    this.mark('Link pages');
     const bottom = source.widgets.reduce((max, widget) => Math.max(max, widget.y + widget.h), 0);
     const widget: Widget = {
       id: `w${++this.seq}`,
@@ -1110,6 +1279,7 @@ export class EdmPageBuilderComponent {
    * it linking to "(nowhere)" — a state the author can see and finish.
    */
   protected cutLink(link: PageLink): void {
+    this.mark('Cut link');
     this.pages.update((pages) =>
       pages.map((page) =>
         page.id !== link.from
@@ -1151,4 +1321,12 @@ export class EdmPageBuilderComponent {
 
   protected readonly typeLabel = typeLabelOf;
 
+}
+
+/** A deep-enough copy for a history entry: pages, their widgets, and each widget's props. */
+function clone(pages: readonly PageDef[]): PageDef[] {
+  return pages.map((page) => ({
+    ...page,
+    widgets: page.widgets.map((widget) => ({ ...widget, props: { ...widget.props } })),
+  }));
 }
