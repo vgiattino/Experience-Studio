@@ -25,6 +25,14 @@ import {
   type WidgetProps,
 } from '../model';
 import { BANDS, type Band, type CanvasPlan, type PlannedWidget } from './decisions';
+import {
+  bindingTitle,
+  checkBinding,
+  isBindable,
+  shapeOf,
+  type CatalogEntityView,
+  type WidgetBinding,
+} from '../data/binding';
 
 /** How wide each band's members are, and how many sit side by side. */
 const BAND_LAYOUT: Record<Band, { perRow: number }> = {
@@ -63,6 +71,7 @@ export function assemblePlan(
   plan: CanvasPlan,
   pages: readonly PageDef[],
   startId: number,
+  catalog: readonly CatalogEntityView[] = [],
 ): AssembleResult {
   const notes: string[] = [];
   let seq = startId;
@@ -80,7 +89,7 @@ export function assemblePlan(
   if (headingAt < 0) notes.push('Added a heading, so the page names itself.');
 
   let y = 0;
-  widgets.push(place(heading, 0, y, 12, 1, seq++, pages, plan));
+  widgets.push(place(heading, 0, y, 12, 1, seq++, pages, plan, catalog, notes));
   y += 1;
 
   for (const band of BANDS) {
@@ -101,7 +110,7 @@ export function assemblePlan(
         column = 0;
         tallest = 0;
       }
-      const widget = place(member, column, y, w, size.h, seq++, pages, plan);
+      const widget = place(member, column, y, w, size.h, seq++, pages, plan, catalog, notes);
       widgets.push(widget);
       column += widget.w;
       tallest = Math.max(tallest, widget.h);
@@ -130,6 +139,8 @@ function place(
   seq: number,
   pages: readonly PageDef[],
   plan: CanvasPlan,
+  catalog: readonly CatalogEntityView[],
+  notes: string[],
 ): Widget {
   const widget: Widget = {
     id: `w${seq}`,
@@ -140,8 +151,63 @@ function place(
     h,
     props: propsFor(planned, pages, plan),
   };
+
+  const bound = bindingFor(widget, planned, catalog, notes);
+  if (bound) {
+    widget.binding = bound;
+    // The catalog's own name wins over the plan's paraphrase. "Late File Count" is what the business
+    // calls it, and a page whose labels match the catalog is a page two people can discuss.
+    widget.props[titleKey(widget)] = bindingTitle(catalog, bound);
+  }
+
   widget.h = Math.max(widget.h, minH(widget));
   return widget;
+}
+
+/**
+ * The binding a planned widget asked for, checked against the author's catalog.
+ *
+ * Returns null — an unbound widget with literal placeholders — whenever the plan named nothing, named
+ * something that does not exist, or named a widget kind that cannot read data. Every rejection is
+ * *reported*, because "the chart is empty" and "you asked for a measure your catalog does not have" need
+ * different actions and look identical on a canvas.
+ */
+function bindingFor(
+  widget: Widget,
+  planned: PlannedWidget,
+  catalog: readonly CatalogEntityView[],
+  notes: string[],
+): WidgetBinding | null {
+  if (!planned.entityRef || !isBindable(widget) || !catalog.length) return null;
+
+  const wanted: WidgetBinding = {
+    entity: planned.entityRef,
+    ...(planned.measureRef ? { measure: planned.measureRef } : {}),
+    ...(planned.aggregation ? { aggregation: planned.aggregation as WidgetBinding['aggregation'] } : {}),
+    ...(planned.dimensionRef ? { dimension: planned.dimensionRef } : {}),
+    ...(planned.attributeRefs?.length ? { attributes: [...planned.attributeRefs] } : {}),
+  };
+
+  const checked = checkBinding(wanted, catalog);
+  for (const problem of checked.problems) notes.push(`${planned.title}: ${problem}`);
+  if (!checked.binding) return null;
+
+  // A shape needs its parts. A chart with a measure and no breakdown is one bar, which is a mistake
+  // that renders — the worst kind — so it stays unbound and says what is missing.
+  const shape = shapeOf(widget);
+  if (shape === 'figure' && !checked.binding.measure) return null;
+  if (shape === 'series' && (!checked.binding.measure || !checked.binding.dimension)) {
+    notes.push(`${planned.title}: needs a measure and something to break it down by, so it is not bound.`);
+    return null;
+  }
+  if (shape === 'list' && !checked.binding.attributes?.length) return null;
+
+  return checked.binding;
+}
+
+function titleKey(widget: Widget): string {
+  if (widget.type === 'kpi') return 'label';
+  return 'title';
 }
 
 /**
@@ -178,6 +244,8 @@ function propsFor(
     props['delta'] = '';
     props['dir'] = 'flat';
   }
+  // A bound widget's figure comes from the gateway, so the placeholder is only what shows if the query
+  // cannot be answered. Left in deliberately: see the fallback note in the renderer.
 
   if (planned.categories?.length) {
     if (Array.isArray(props['categories'])) {

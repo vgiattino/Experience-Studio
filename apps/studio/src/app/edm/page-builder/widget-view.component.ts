@@ -21,6 +21,7 @@ import { ChangeDetectionStrategy, Component, computed, input } from '@angular/co
 import { IconComponent } from '@opus/design-system';
 
 import { CONTROL_TYPES, type Segment, type Widget } from './model';
+import type { Resolved } from './data/data.service';
 
 /** A slice of a pie or donut, pre-computed as an SVG path. */
 interface Slice {
@@ -59,19 +60,36 @@ interface Slice {
       }
       @case ('kpi') {
         <div class="pb-kpi">
-          <span class="label">{{ str('label') }}</span>
-          <span class="value" [style.color]="raw('accent')">{{ str('value') }}</span>
-          <span class="delta" [attr.data-dir]="str('dir', 'flat')">
-            @if (str('dir', 'flat') !== 'flat') {
-              <opus-icon [name]="str('dir', 'flat') === 'up' ? 'chevron-up' : 'chevron-down'" [size]="12" [weight]="2" />
+          <span class="label">
+            {{ str('label') }}
+            @if (badge()) {
+              <span class="pb-live" [attr.data-tone]="tone()">{{ badge() }}</span>
             }
-            {{ str('delta') }}
           </span>
+          <span class="value" [style.color]="raw('accent')">{{ figure() }}</span>
+          @if (problem()) {
+            <span class="pb-problem">{{ problem() }}</span>
+          } @else {
+            <span class="delta" [attr.data-dir]="str('dir', 'flat')">
+              @if (str('dir', 'flat') !== 'flat') {
+                <opus-icon [name]="str('dir', 'flat') === 'up' ? 'chevron-up' : 'chevron-down'" [size]="12" [weight]="2" />
+              }
+              {{ str('delta') }}
+            </span>
+          }
         </div>
       }
       @case ('table') {
         <div class="pb-card">
-          <div class="pb-card-h">{{ str('title') }}</div>
+          <div class="pb-card-h">
+            {{ str('title') }}
+            @if (badge()) {
+              <span class="pb-live" [attr.data-tone]="tone()">{{ badge() }}</span>
+            }
+          </div>
+          @if (problem()) {
+            <div class="pb-problem row">{{ problem() }}</div>
+          }
           <div class="pb-scroll">
             <table class="pb-table">
               <thead>
@@ -103,8 +121,14 @@ interface Slice {
         <div class="pb-card">
           <div class="pb-card-h">
             {{ str('title') }}
+            @if (badge()) {
+              <span class="pb-live" [attr.data-tone]="tone()">{{ badge() }}</span>
+            }
             <span class="pb-note">reporting grid — display only in this port</span>
           </div>
+          @if (problem()) {
+            <div class="pb-problem row">{{ problem() }}</div>
+          }
           <div class="pb-scroll">
             <table class="pb-table grid">
               <thead>
@@ -129,7 +153,15 @@ interface Slice {
       }
       @case ('chart') {
         <div class="pb-card">
-          <div class="pb-card-h">{{ str('title') }}</div>
+          <div class="pb-card-h">
+            {{ str('title') }}
+            @if (badge()) {
+              <span class="pb-live" [attr.data-tone]="tone()">{{ badge() }}</span>
+            }
+          </div>
+          @if (problem()) {
+            <div class="pb-problem row">{{ problem() }}</div>
+          }
           <div class="pb-chart">
             @if (isPie()) {
               <svg [attr.viewBox]="'0 0 ' + PIE + ' ' + PIE" preserveAspectRatio="xMidYMid meet">
@@ -795,10 +827,54 @@ interface Slice {
       background: var(--opus-accent-soft);
       color: var(--opus-accent);
     }
+
+    /* Where a number came from. See the note on the badge computed. */
+    .pb-live {
+      margin-inline-start: 5px;
+      padding: 0 5px;
+      border-radius: 3px;
+      font-size: 9px;
+      font-weight: var(--opus-weight-semibold);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      vertical-align: middle;
+      background: var(--opus-emphasis-positive-bg);
+      color: var(--opus-emphasis-positive);
+    }
+
+    .pb-live[data-tone='negative'] {
+      background: var(--opus-emphasis-negative-bg);
+      color: var(--opus-emphasis-negative);
+    }
+
+    .pb-live[data-tone='warning'] {
+      background: var(--opus-emphasis-warning-bg);
+      color: var(--opus-emphasis-warning);
+    }
+
+    .pb-problem {
+      font-size: var(--opus-text-xs);
+      color: var(--opus-emphasis-warning);
+      line-height: var(--opus-leading-normal);
+    }
+
+    .pb-problem.row {
+      padding: 4px 10px;
+      background: var(--opus-emphasis-warning-bg);
+    }
   `,
 })
 export class WidgetViewComponent {
   readonly widget = input.required<Widget>();
+
+  /**
+   * What the gateway returned for this widget's binding, when it has one.
+   *
+   * An input rather than an injected service, so this component stays a pure function of what it is
+   * given: the same renderer draws a sketch with literal props and a bound widget with live rows, and it
+   * cannot tell — or need to tell — which page it is on or whether a query is in flight.
+   */
+  readonly resolved = input<Resolved | null>(null);
 
   /** Chart viewport. Fixed units with `preserveAspectRatio="none"`, so the SVG scales to the cell. */
   protected readonly CW = 300;
@@ -843,12 +919,65 @@ export class WidgetViewComponent {
   });
 
   protected readonly options = computed(() => (this.widget().props['options'] as string[]) ?? []);
-  protected readonly columns = computed(() => (this.widget().props['columns'] as string[]) ?? []);
-  protected readonly rows = computed(() => (this.widget().props['rows'] as string[][]) ?? []);
-  protected readonly categories = computed(
-    () => (this.widget().props['categories'] as string[]) ?? [],
+  /*
+    Resolved data first, the widget's own props second.
+
+    The fallback is not a nicety: a bound widget whose query was denied still has to draw *something*, and
+    its literal props are the last thing an author saw. Falling back keeps the layout stable while the
+    note says why the numbers are not live — where an empty render looks like a broken widget.
+  */
+  protected readonly columns = computed(
+    () => this.resolved()?.columns ?? (this.widget().props['columns'] as string[]) ?? [],
   );
-  protected readonly series = computed(() => (this.widget().props['series'] as number[]) ?? []);
+  protected readonly rows = computed(
+    () => this.resolved()?.rows ?? (this.widget().props['rows'] as string[][]) ?? [],
+  );
+
+  /** A figure: the gateway's formatted value, or the literal one. */
+  protected readonly figure = computed(() => this.resolved()?.value ?? this.str('value'));
+
+  /** Set when the author needs to know something: denied, unfilterable, corrected, unreachable. */
+  protected readonly problem = computed(() => this.resolved()?.note ?? '');
+
+  /**
+   * The badge on a bound widget, and why it is not decoration.
+   *
+   * An author looking at "1,284" has no way to tell a live figure from one somebody typed in, and the
+   * difference decides whether the page is finished. `denied` and `partial` earn a badge for a stronger
+   * reason: they answer "what will a reader with fewer entitlements see", at design time rather than
+   * after release.
+   */
+  protected readonly badge = computed(() => {
+    const resolved = this.resolved();
+    if (!this.widget().binding) return '';
+    if (!resolved) return 'binding';
+    switch (resolved.status) {
+      case 'ok':
+        return 'live';
+      case 'empty':
+        return 'no rows';
+      case 'invalid':
+      case 'unbound':
+        return 'incomplete';
+      default:
+        return resolved.status;
+    }
+  });
+
+  /** Three tones, decided here rather than in a list of attribute selectors saying one of three things. */
+  protected readonly tone = computed(() => {
+    const state = this.badge();
+    if (state === 'denied' || state === 'error') return 'negative';
+    if (state === 'live') return 'positive';
+    return 'warning';
+  });
+  protected readonly categories = computed(
+    () => this.resolved()?.categories ?? (this.widget().props['categories'] as string[]) ?? [],
+  );
+
+  protected readonly series = computed(
+    () => this.resolved()?.series ?? (this.widget().props['series'] as number[]) ?? [],
+  );
   protected readonly accent = computed(
     () => (this.widget().props['accent'] as string) ?? 'var(--opus-accent)',
   );

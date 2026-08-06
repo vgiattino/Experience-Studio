@@ -14,7 +14,16 @@
 import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
 import { IconComponent } from '@opus/design-system';
 
+import type { Aggregation } from '@opus/contracts';
+
 import { ACCENTS, COLS, typeLabelOf, type PageDef, type Widget } from './model';
+import {
+  entityIn,
+  isBindable,
+  shapeOf,
+  type CatalogEntityView,
+  type WidgetBinding,
+} from './data/binding';
 
 /** Icons a page may carry, matching the row of choices the original offers in page settings. */
 const PAGE_ICONS = ['page', 'grid', 'layers', 'database', 'model', 'shield', 'settings', 'flow'];
@@ -195,6 +204,117 @@ const CONTROL_FIELDS: readonly Field[] = [
           </label>
         }
 
+        <!--
+          ── Data ────────────────────────────────────────────────────────────────────────
+          The pickers offer the author's *entitlement-scoped* catalog and nothing else. An author who
+          cannot see a column is not shown it greyed out — the projection they were handed never
+          mentioned it, which is the difference between hiding a field and not disclosing that it exists.
+
+          Aggregations come from the measure's own allowed list, so "average of a count" is not
+          an option to be validated away later. It is simply not in the list.
+        -->
+        @if (bindable(widget)) {
+          <div class="pb-data">
+            <span class="pb-f-label">
+              Data
+              @if (suppliedNote()) {
+                <span class="pb-hint">{{ suppliedNote() }}</span>
+              }
+              @if (!entities().length) {
+                <span class="pb-hint">The catalog is not loaded, so nothing can be bound yet.</span>
+              }
+            </span>
+
+            @if (entities().length) {
+              <label class="pb-f">
+                Entity
+                <select class="opus-select" (change)="pickEntity($any($event.target).value)">
+                  <option value="" [selected]="!binding()">(not bound — literal values)</option>
+                  @for (entity of entities(); track entity.ref) {
+                    <option [value]="entity.ref" [selected]="binding()?.entity === entity.ref">
+                      {{ entity.plural }}
+                    </option>
+                  }
+                </select>
+              </label>
+
+              @if (boundEntity(); as entity) {
+                @if (shape(widget) !== 'list') {
+                  <label class="pb-f">
+                    Measure
+                    <select class="opus-select" (change)="pickMeasure($any($event.target).value)">
+                      <option value="">(pick one)</option>
+                      @for (measure of entity.measures; track measure.ref) {
+                        <option [value]="measure.ref" [selected]="binding()?.measure === measure.ref">
+                          {{ measure.name }}
+                        </option>
+                      }
+                    </select>
+                  </label>
+
+                  @if (boundMeasure(); as measure) {
+                    <label class="pb-f">
+                      Aggregation
+                      <select class="opus-select" (change)="pickAggregation($any($event.target).value)">
+                        @for (option of measure.allowedAggregations; track option) {
+                          <option [value]="option" [selected]="binding()?.aggregation === option">
+                            {{ option }}
+                          </option>
+                        }
+                      </select>
+                      @if (measure.description) {
+                        <span class="pb-hint">{{ measure.description }}</span>
+                      }
+                    </label>
+                  }
+                }
+
+                @if (shape(widget) === 'series') {
+                  <label class="pb-f">
+                    Break down by
+                    <select class="opus-select" (change)="pickDimension($any($event.target).value)">
+                      <option value="">(pick one)</option>
+                      @for (attribute of groupable(); track attribute.ref) {
+                        <option
+                          [value]="attribute.ref"
+                          [selected]="binding()?.dimension === attribute.ref"
+                        >
+                          {{ attribute.name }}
+                        </option>
+                      }
+                    </select>
+                  </label>
+                }
+
+                @if (shape(widget) === 'list') {
+                  <div class="pb-f">
+                    Columns
+                    <div class="pb-cols">
+                      @for (attribute of entity.attributes; track attribute.ref) {
+                        <label class="pb-col">
+                          <input
+                            type="checkbox"
+                            [checked]="hasColumn(attribute.ref)"
+                            (change)="toggleColumn(attribute.ref, $any($event.target).checked)"
+                          />
+                          {{ attribute.name }}
+                        </label>
+                      }
+                    </div>
+                  </div>
+                }
+
+                @if (entity.requiresFilter) {
+                  <p class="pb-hint">
+                    {{ entity.name }} is large enough that the gateway refuses an unfiltered query. This
+                    port cannot add filters yet, so bind a smaller entity or use literal values.
+                  </p>
+                }
+              }
+            }
+          </div>
+        }
+
         <div class="pb-size">
           <span class="pb-f-label">Size</span>
           <div class="pb-size-row">
@@ -371,6 +491,29 @@ const CONTROL_FIELDS: readonly Field[] = [
       color: var(--opus-accent);
     }
 
+    .pb-data {
+      padding-block-end: 6px;
+      margin-block-end: 10px;
+      border-block-end: 1px solid var(--opus-border);
+    }
+
+    .pb-cols {
+      display: grid;
+      gap: 2px;
+      max-block-size: 9rem;
+      overflow-y: auto;
+      margin-block-start: 4px;
+    }
+
+    .pb-col {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: var(--opus-text-xs);
+      font-weight: var(--opus-weight-regular);
+      color: var(--opus-text-secondary);
+    }
+
     .pb-size {
       padding-block: 4px 10px;
     }
@@ -430,7 +573,12 @@ export class InspectorComponent {
   readonly page = input.required<PageDef>();
   readonly pages = input.required<readonly PageDef[]>();
 
+  /** The author's entitlement-scoped catalog, flattened. Empty when it has not loaded. */
+  readonly entities = input<readonly CatalogEntityView[]>([]);
+
   readonly clear = output<void>();
+  /** A binding changed. `null` unbinds and returns the widget to its literal props. */
+  readonly bind = output<WidgetBinding | null>();
   /** A property changed. `numeric` says to coerce, because a number input still hands back a string. */
   readonly prop = output<{ key: string; value: unknown; numeric: boolean }>();
   readonly resize = output<{ dim: 'w' | 'h'; delta: number }>();
@@ -441,10 +589,115 @@ export class InspectorComponent {
   readonly duplicatePage = output<void>();
   readonly clearPage = output<void>();
 
+  protected readonly bindable = isBindable;
+  protected readonly shape = shapeOf;
+
+  protected readonly binding = computed(
+    () => (this.widget()?.binding as WidgetBinding | undefined) ?? null,
+  );
+
+  protected readonly boundEntity = computed(() => {
+    const binding = this.binding();
+    return binding ? entityIn(this.entities(), binding.entity) : undefined;
+  });
+
+  protected readonly boundMeasure = computed(() => {
+    const binding = this.binding();
+    return this.boundEntity()?.measures.find((measure) => measure.ref === binding?.measure);
+  });
+
+  /** Only attributes the catalog says can be grouped by. The rest would be rejected downstream. */
+  protected readonly groupable = computed(
+    () => this.boundEntity()?.attributes.filter((attribute) => attribute.groupable) ?? [],
+  );
+
+  protected pickEntity(ref: string): void {
+    if (!ref) {
+      this.bind.emit(null);
+      return;
+    }
+    const entity = entityIn(this.entities(), ref);
+    if (!entity) return;
+    /*
+      Picking an entity offers the obvious binding rather than an empty one.
+
+      A business user who chose "File Loads" wants to see file loads; making them then choose a measure
+      from a list of four to see anything at all is a form, not a builder. The first measure with its
+      default aggregation is a guess, but it is a visible one they can change in the control below.
+    */
+    const measure = entity.measures[0];
+    this.bind.emit({
+      entity: entity.ref,
+      ...(measure ? { measure: measure.ref, aggregation: measure.defaultAggregation } : {}),
+    });
+  }
+
+  protected pickMeasure(ref: string): void {
+    const binding = this.binding();
+    const entity = this.boundEntity();
+    if (!binding || !entity) return;
+    const measure = entity.measures.find((candidate) => candidate.ref === ref);
+    this.bind.emit({
+      ...binding,
+      measure: measure?.ref,
+      aggregation: measure?.defaultAggregation,
+    });
+  }
+
+  protected pickAggregation(value: string): void {
+    const binding = this.binding();
+    if (!binding) return;
+    this.bind.emit({ ...binding, aggregation: value as Aggregation });
+  }
+
+  protected pickDimension(ref: string): void {
+    const binding = this.binding();
+    if (!binding) return;
+    this.bind.emit({ ...binding, dimension: ref || undefined });
+  }
+
+  protected hasColumn(ref: string): boolean {
+    return (this.binding()?.attributes ?? []).includes(ref);
+  }
+
+  protected toggleColumn(ref: string, on: boolean): void {
+    const binding = this.binding();
+    if (!binding) return;
+    const current = binding.attributes ?? [];
+    const attributes = on ? [...current, ref] : current.filter((candidate) => candidate !== ref);
+    this.bind.emit({ ...binding, attributes });
+  }
+
+  /**
+   * Props the binding supplies, which the author must therefore not be offered.
+   *
+   * A bound KPI's figure comes from the gateway. Leaving the literal Value field on screen offers an
+   * edit that has no effect — the canvas keeps showing the live number — and a control that silently
+   * does nothing is worse than no control, because the author concludes the product is broken rather
+   * than that the field is irrelevant.
+   */
+  private static readonly SUPPLIED: Partial<Record<Widget['type'], readonly string[]>> = {
+    kpi: ['value', 'delta', 'dir'],
+    gauge: ['value', 'max'],
+    progress: ['value', 'max'],
+  };
+
   protected readonly fields = computed<readonly Field[]>(() => {
     const widget = this.widget();
     if (!widget) return [];
-    return FIELDS[widget.type] ?? CONTROL_FIELDS;
+    const all = FIELDS[widget.type] ?? CONTROL_FIELDS;
+    if (!this.binding()) return all;
+    const supplied = InspectorComponent.SUPPLIED[widget.type] ?? [];
+    return all.filter((field) => !supplied.includes(field.key));
+  });
+
+  /** Set when the binding has taken over some of the fields, so their absence is explained. */
+  protected readonly suppliedNote = computed(() => {
+    const widget = this.widget();
+    if (!widget || !this.binding()) return '';
+    const supplied = InspectorComponent.SUPPLIED[widget.type] ?? [];
+    if (!supplied.length) return '';
+    return 'The figure comes from the catalog, so there is nothing to type here.';
   });
 
   protected set(key: string, value: unknown, numeric = false): void {

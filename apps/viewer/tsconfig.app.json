@@ -1,0 +1,21 @@
+{
+  /*
+    One tsconfig per app, rather than one shared by all three.
+
+    The shared tsconfig.app.json included every app's sources, so EVERY APP COMPILED EVERY OTHER APP.
+    Two consequences, and the second is the one that bit: builds did three times the type-checking they
+    needed, and each app's component-style budget policed components it does not ship — the Viewer's 8kB
+    budget was failing a Studio-only renderer that is tree-shaken out of the Viewer's bundle entirely.
+    A budget that fires on code the app never loads teaches you to ignore budgets.
+
+    Each app now sees itself and the libraries. Nothing else changes: the compiler options, the path
+    aliases and the spec config are all still shared from the root.
+  */
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "outDir": "../../out-tsc/viewer",
+    "types": []
+  },
+  "include": ["src/**/*.ts", "../../libs/**/*.ts"],
+  "exclude": ["**/*.spec.ts"]
+}

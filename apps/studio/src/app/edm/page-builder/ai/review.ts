@@ -22,6 +22,7 @@
  */
 
 import { labelOf, linksOf, structureOf, type PageDef } from '../model';
+import { checkBinding, isBindable, type CatalogEntityView, type WidgetBinding } from '../data/binding';
 import type { CanvasEdit } from './decisions';
 
 export type Severity = 'issue' | 'polish';
@@ -65,7 +66,11 @@ const PLACEHOLDERS = new Set([
  * nothing links to, and a page with no way out — cannot be seen from inside a single page. That is also
  * why this takes the page list: the flow *is* part of the design.
  */
-export function review(pages: readonly PageDef[]): Finding[] {
+export function review(
+  pages: readonly PageDef[],
+  catalog: readonly CatalogEntityView[] = [],
+  resolved: ReadonlyMap<string, { status: string; value?: string }> = new Map(),
+): Finding[] {
   const findings: Finding[] = [];
   const links = linksOf(pages);
   const entry = pages[0];
@@ -178,6 +183,85 @@ export function review(pages: readonly PageDef[]): Finding[] {
         title: `Two widgets called "${label}"`,
         detail: `"${page.name}" has ${count} widgets with the same name. A reader cannot tell them apart, and neither can the structure panel.`,
       });
+    }
+
+    /*
+      ── Bindings ──────────────────────────────────────────────────────────────────────
+      Only when a catalog is loaded. Without one, "this figure is not bound" is not a finding about the
+      design — it is a finding about the environment, and telling an author to fix something they cannot
+      is how a review list gets ignored.
+    */
+    if (catalog.length) {
+      const unbound = page.widgets.filter((widget) => isBindable(widget) && !widget.binding);
+      if (unbound.length) {
+        findings.push({
+          id: `${page.id}:unbound`,
+          severity: 'polish',
+          pageId: page.id,
+          widgetId: unbound[0]!.id,
+          title: `${unbound.length} widget(s) show typed-in numbers`,
+          detail: `On "${page.name}", ${unbound
+            .slice(0, 3)
+            .map((widget) => `"${labelOf(widget)}"`)
+            .join(', ')} display literal values rather than reading the catalog. They will never change, whatever the data does. Bind them in the inspector's Data section.`,
+        });
+      }
+
+      for (const widget of page.widgets) {
+        if (!widget.binding) continue;
+        const checked = checkBinding(widget.binding as WidgetBinding, catalog);
+        if (!checked.problems.length) continue;
+        findings.push({
+          id: `${page.id}:${widget.id}:binding`,
+          severity: 'issue',
+          pageId: page.id,
+          widgetId: widget.id,
+          title: `"${labelOf(widget)}" cannot read what it asks for`,
+          detail: `${checked.problems.join(' ')} Either the catalog changed under this design, or it was bound to something you are no longer entitled to.`,
+        });
+      }
+    }
+
+    /*
+      ── Two names, one number ─────────────────────────────────────────────────────────
+      The only finding here that reads the *answers* rather than the design, and the reason it exists is
+      worth stating.
+
+      The fixture catalog defines `late-file-count` and `failed-file-count` as counts "over a filter" —
+      and does not say what the filter is. The gateway can only count rows, so both come back as the row
+      count, and a page ends up displaying "Late Files 90" beside "Files Processed 90". That is not a bug
+      in this builder and it is not something this builder can fix: the condition that makes a file late
+      is business meaning, and inventing it here would be worse than reporting it.
+
+      So it is reported. An author who sees two different labels over one number needs to know it is the
+      catalog that is under-specified, not their page — and the person who can fix it is their catalog
+      owner. A page builder that surfaces a catalog defect is doing its job; one that renders it
+      confidently is not.
+    */
+    if (resolved.size) {
+      const byAnswer = new Map<string, string[]>();
+      for (const widget of page.widgets) {
+        const binding = widget.binding as WidgetBinding | undefined;
+        const answer = resolved.get(widget.id);
+        if (!binding?.measure || !answer?.value || answer.status !== 'ok') continue;
+        const key = `${binding.entity}|${binding.aggregation ?? ''}|${answer.value}`;
+        byAnswer.set(key, [...(byAnswer.get(key) ?? []), widget.id]);
+      }
+      for (const [key, ids] of byAnswer) {
+        if (ids.length < 2) continue;
+        const names = ids.map((id) => {
+          const widget = page.widgets.find((candidate) => candidate.id === id)!;
+          return `"${labelOf(widget)}"`;
+        });
+        findings.push({
+          id: `${page.id}:same-answer:${key}`,
+          severity: 'issue',
+          pageId: page.id,
+          widgetId: ids[0],
+          title: `${ids.length} measures returning the same number`,
+          detail: `${names.join(', ')} all show ${key.split('|')[2]}. They are different measures on the same entity, so the catalog does not define what distinguishes them — nothing on this page can fix that, and a reader will take the figures at face value. Ask your catalog owner what makes each one different.`,
+        });
+      }
     }
 
     // A page with no way out.

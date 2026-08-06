@@ -23,7 +23,7 @@
           "options": {
             "browser": "apps/viewer/src/main.ts",
             "index": "apps/viewer/src/index.html",
-            "tsConfig": "tsconfig.app.json",
+            "tsConfig": "apps/viewer/tsconfig.app.json",
             "inlineStyleLanguage": "scss",
             "assets": [
               {
@@ -100,7 +100,7 @@
           "options": {
             "browser": "apps/studio/src/main.ts",
             "index": "apps/studio/src/index.html",
-            "tsConfig": "tsconfig.app.json",
+            "tsConfig": "apps/studio/tsconfig.app.json",
             "inlineStyleLanguage": "scss",
             "assets": [
               {
@@ -169,7 +169,7 @@
           "options": {
             "browser": "apps/experience-studio/src/main.ts",
             "index": "apps/experience-studio/src/index.html",
-            "tsConfig": "tsconfig.app.json",
+            "tsConfig": "apps/experience-studio/tsconfig.app.json",
             "inlineStyleLanguage": "scss",
             "assets": [
               {

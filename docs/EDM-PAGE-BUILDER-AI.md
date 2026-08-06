@@ -155,10 +155,10 @@ warnings.
 1. **Install a real model.** `PageBuilderAiService.useProvider()`, server-side, with the credentials and
    egress rules `docs/AI-GENERATION-WORKFLOW.md` §8 already specifies. The stand-in stays as the offline
    path and the test double.
-2. **Bind the data.** Every honesty caveat in §2 exists because this builder has no catalog binding. With
-   one, a plan names a measure and a dimension instead of a title, and the figures stop being placeholders
-   — which is also the point at which this UI should be backed by `PageDefinition` (see
-   `EDM-PAGE-BUILDER.md` §6).
+2. ~~**Bind the data.**~~ **Done** — see [EDM-PAGE-BUILDER-CATALOG.md](EDM-PAGE-BUILDER-CATALOG.md). A
+   plan now names a measure and a dimension by ref, the figures come from the Data Gateway, and the
+   honesty caveats in §2 apply only to widgets an author left unbound. The em-dash rule still holds for
+   those, and the review now flags them.
 3. **Multi-page generation.** "A drill-down from asset type to issuer to security" is three pages and two
    links. The plan schema and the flow map both already support it; the stand-in plans one page at a time.
 4. **A model in the review, beside the rules.** The rules cover what is checkable. "This dashboard has no

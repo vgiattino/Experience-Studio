@@ -16,6 +16,10 @@
  *   · an inspector: page settings, and properties for the selected widget
  *   · the **Flow map** — pages as draggable nodes, SVG edges, drag a port to link two pages, and an
  *     Auto-arrange that layers the workflow left to right from its entry pages
+ *   · a **structure** panel, the page as a tree derived from the geometry
+ *   · an **AI** bar: describe a page, instruct a change, be told what is wrong, undo any of it
+ *   · **catalog bindings** — a widget can read a governed measure through the same Data Gateway the
+ *     runtime uses, and shows what that gateway said, entitlements and all
  *   · Edit, Flow and Preview modes
  *   · the whole design persisted to localStorage, as the original does
  *
@@ -23,7 +27,8 @@
  *   · **Kendo fidelity**: the Data grid renders rows but does not page, sort, filter or group; the
  *     gauge and progress are SVG rather than Kendo widgets. The platform has no Kendo dependency.
  *   · the **spline, funnel, radar, waterfall and scatter** chart kinds.
- *   · **AI generate** from a prompt, and data-source binding.
+ *   · **filters on a binding** — the query shape supports them; there is no UI for them yet, so an
+ *     entity the gateway refuses unfiltered cannot be bound.
  * Each is named in the UI where its absence would otherwise read as a bug.
  *
  * ── AND THE THING WORTH SAYING OUT LOUD ───────────────────────────────────────────────
@@ -41,6 +46,7 @@ import {
   ViewChild,
   computed,
   effect,
+  inject,
   signal,
 } from '@angular/core';
 import { IconComponent } from '@opus/design-system';
@@ -64,9 +70,12 @@ import {
 import { FlowMapComponent } from './flow-map.component';
 import { PaletteComponent } from './palette.component';
 import { AiPanelComponent, type AcceptedPage } from './ai/ai-panel.component';
+import { PageBuilderDataService } from './data/data.service';
 import { applyEdits } from './ai/apply';
 import type { CanvasEdit } from './ai/decisions';
 import type { Finding } from './ai/review';
+import type { Resolved } from './data/data.service';
+import { bindingTitle, type WidgetBinding } from './data/binding';
 import { InspectorComponent } from './inspector.component';
 import { StructureComponent } from './structure.component';
 import { WidgetViewComponent } from './widget-view.component';
@@ -81,6 +90,7 @@ type Dock = 'widgets' | 'structure';
 @Component({
   selector: 'opus-edm-page-builder',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  providers: [PageBuilderDataService],
   imports: [
     AiPanelComponent,
     FlowMapComponent,
@@ -205,6 +215,8 @@ type Dock = 'widgets' | 'structure';
           [pageId]="currentId()"
           [selected]="sel()"
           [nextId]="seq + 1"
+          [catalog]="data.view()"
+          [resolved]="data.results()"
           (acceptPage)="addGeneratedPage($event)"
           (acceptEdits)="applyProposal($event.edits, $event.label)"
           (reveal)="revealFinding($event)"
@@ -290,7 +302,9 @@ type Dock = 'widgets' | 'structure';
                   [style.height.px]="widget.h * ROW_H"
                   (mousedown)="onWidgetDown($event, widget)"
                 >
-                  <div class="pb-w-inner"><opus-pb-widget [widget]="widget" /></div>
+                  <div class="pb-w-inner">
+                    <opus-pb-widget [widget]="widget" [resolved]="resolvedFor(widget)" />
+                  </div>
                   @if (mode() === 'edit') {
                     <span class="pb-w-type">{{ typeLabel(widget) }}</span>
                     <!--
@@ -336,7 +350,9 @@ type Dock = 'widgets' | 'structure';
             [widget]="sel()"
             [page]="page()"
             [pages]="pages()"
+            [entities]="data.view()"
             (clear)="selId.set(null)"
+            (bind)="setBinding($event)"
             (prop)="setProp($event.key, $event.value, $event.numeric)"
             (resize)="nudge($event.dim, $event.delta)"
             (duplicateWidget)="duplicateSelected()"
@@ -776,6 +792,13 @@ export class EdmPageBuilderComponent {
   );
 
   /** Three rows of headroom below the lowest widget, so there is always somewhere to drop. */
+  protected readonly data = inject(PageBuilderDataService);
+
+  /** What the gateway said about a widget, or null when it reads nothing. */
+  protected resolvedFor(widget: Widget): Resolved | null {
+    return this.data.results().get(widget.id) ?? null;
+  }
+
   /** The page's widgets in paint order — a container behind what it holds. */
   protected readonly painted = computed(() => paintOrder(this.page().widgets));
 
@@ -791,6 +814,23 @@ export class EdmPageBuilderComponent {
   );
 
   constructor() {
+    /*
+      Resolve the open page's bindings whenever they change.
+
+      Keyed on the *bindings*, not on the page: moving a widget or renaming a label must not re-query, and
+      an effect that watched `page()` would do exactly that on every drag frame. The gateway caches by
+      source and entitlement scope, so a repeat is cheap — but a repeat per mouse move is not.
+    */
+    effect(() => {
+      const page = this.page();
+      const signature = page.widgets
+        .map((widget) => (widget.binding ? JSON.stringify(widget.binding) : ''))
+        .join('|');
+      void signature;
+      void this.data.view();
+      void this.data.resolve(page);
+    });
+
     // Persist on every change. The original saves on each mutation; an effect says the same thing
     // once instead of at twenty call sites, and cannot be forgotten by a new one.
     effect(() => {
@@ -805,6 +845,9 @@ export class EdmPageBuilderComponent {
 
   ngAfterViewInit(): void {
     setTimeout(() => this.measure(), 0);
+    // The app's bootstrap loads the catalog; this reads whatever it managed to load, once the first
+    // paint is done so a slow catalog cannot hold up the canvas.
+    setTimeout(() => this.data.refreshCatalog(), 0);
   }
 
   @HostListener('window:resize')
@@ -1076,6 +1119,25 @@ export class EdmPageBuilderComponent {
         widget.id === id ? { ...widget, ...patch } : widget,
       ),
     });
+  }
+
+  /**
+   * Bind or unbind the selected widget.
+   *
+   * The title follows the binding, because a widget labelled "Coverage" that reads `late-file-count` is
+   * worse than one labelled wrong — an author trusts the label and the number contradicts it silently.
+   * Unbinding leaves the title alone: the author's own words are theirs to keep.
+   */
+  protected setBinding(binding: WidgetBinding | null): void {
+    const widget = this.sel();
+    if (!widget) return;
+    this.mark(binding ? 'Bind to the catalog' : 'Unbind from the catalog');
+    const patch: Partial<Widget> = { binding: binding ?? undefined };
+    if (binding) {
+      const key = widget.type === 'kpi' ? 'label' : 'title';
+      patch.props = { ...widget.props, [key]: bindingTitle(this.data.view(), binding) };
+    }
+    this.patchWidget(widget.id, patch);
   }
 
   protected setProp(key: string, value: unknown, numeric = false): void {

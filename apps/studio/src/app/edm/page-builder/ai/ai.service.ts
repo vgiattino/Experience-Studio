@@ -43,6 +43,7 @@ import {
   type CanvasPlan,
 } from './decisions';
 import { review, type Finding } from './review';
+import type { CatalogEntityView } from '../data/binding';
 import { CanvasStandIn, type CanvasDecisionInputs } from './stand-in';
 
 export type ProposalKind = 'page' | 'edits' | 'explain' | 'declined' | 'question';
@@ -71,12 +72,16 @@ export interface AskContext {
   selected: Widget | null;
   /** The builder's id counter, so assembled widgets cannot collide with existing ones. */
   nextId: number;
+  /** The author's entitlement-scoped catalog. Empty when it has not loaded. */
+  catalog: readonly CatalogEntityView[];
 }
 
 const SYSTEM_PLAN = [
   'You design pages for Opus Experience Studio\'s EDM Page Builder.',
-  'Return decisions only: which widgets, what each is called, and why it is there.',
-  'You may name axis labels and column headings. You may never supply figures, series values or table rows.',
+  'Return decisions only: which widgets, what each is called, why it is there, and what it reads.',
+  'Bind every figure, chart and table to the catalog concepts in the grounding pack, by ref.',
+  'Never invent an entity, measure or attribute. If the pack has nothing suitable, leave it unbound.',
+  'You may never supply figures, series values or table rows: those come from the Data Gateway.',
   'Use only the widget kinds in the provided palette vocabulary.',
 ].join(' ');
 
@@ -114,8 +119,12 @@ export class PageBuilderAiService {
   }
 
   /** The unasked review. Rules, no model, no call — see `review.ts`. */
-  findings(pages: readonly PageDef[]): Finding[] {
-    return review(pages);
+  findings(
+    pages: readonly PageDef[],
+    catalog: readonly CatalogEntityView[] = [],
+    resolved: ReadonlyMap<string, { status: string; value?: string }> = new Map(),
+  ): Finding[] {
+    return review(pages, catalog, resolved);
   }
 
   /**
@@ -149,7 +158,17 @@ export class PageBuilderAiService {
       return this.stash(this.explain(trimmed, context));
     }
 
-    const refine = result.intent === 'refine' || (hasContent && !!context.selected);
+    /*
+      Is this an instruction about a widget, or a request for a page?
+
+      `intake` classifies it, and a selection is a strong hint — but not a decisive one. Treating "a
+      selection plus any prompt" as a refine meant "a dashboard of file loads by source", typed while a
+      KPI happened to be selected, came back as "I did not understand that". A request that names a page
+      is a request for a page, whatever is selected.
+    */
+    const asksForAPage = /\b(dashboard|page|screen|view|report|workspace|experience)\b/i.test(trimmed);
+    const refine =
+      result.intent === 'refine' || (hasContent && !!context.selected && !asksForAPage);
     this.running.set(true);
     try {
       const inputs: CanvasDecisionInputs = {
@@ -158,6 +177,7 @@ export class PageBuilderAiService {
         pages: context.pages,
         pageId: context.pageId,
         selected: context.selected,
+        catalog: context.catalog,
       };
       // The stand-in reads the same decision inputs the prompt below was built from. A real provider
       // ignores this and loses nothing — the prompt and the schema are the whole contract.
@@ -165,7 +185,7 @@ export class PageBuilderAiService {
 
       const response = await this.provider.complete({
         system: refine ? SYSTEM_REFINE : SYSTEM_PLAN,
-        user: refine ? refinePrompt(trimmed, context) : planPrompt(trimmed, result.concepts),
+        user: refine ? refinePrompt(trimmed, context) : planPrompt(trimmed, result.concepts, context.catalog),
         responseSchema: refine ? CANVAS_EDIT_SCHEMA : CANVAS_PLAN_SCHEMA,
         temperature: 0,
         purpose: refine ? 'refine' : 'plan',
@@ -218,7 +238,7 @@ export class PageBuilderAiService {
   // ── building proposals ──────────────────────────────────────────────────────────────
 
   private fromPlan(prompt: string, plan: CanvasPlan, context: AskContext): Proposal {
-    const assembled = assemblePlan(plan, context.pages, context.nextId);
+    const assembled = assemblePlan(plan, context.pages, context.nextId, context.catalog);
     return {
       kind: 'page',
       prompt,
@@ -337,11 +357,40 @@ function nameOf(pages: readonly PageDef[], id: string): string {
  * is asked to respect. What goes here is the request and what was extracted from it, which is the part
  * that changes per call.
  */
-function planPrompt(prompt: string, concepts: { terms: string[] }): string {
+function planPrompt(
+  prompt: string,
+  concepts: { terms: string[] },
+  catalog: readonly CatalogEntityView[],
+): string {
+  /*
+    The grounding pack, inline.
+
+    Names *and* refs, because the model has to answer in refs and reason in names — and the two are
+    different strings. Aggregations are listed per measure so an illegal one is not a thing the model can
+    choose; groupability is marked so a dimension it picks can actually be grouped by. This is a smaller
+    version of what `@opus/catalog`'s `buildGroundingPack` produces for platform generation: same idea,
+    same reason, sized for a five-entity fixture rather than a tenant's whole catalog.
+  */
+  const pack = catalog.map((entity) => {
+    const measures = entity.measures
+      .map((measure) => `${measure.ref} "${measure.name}" [${measure.allowedAggregations.join('|')}]`)
+      .join('; ');
+    const attributes = entity.attributes
+      .map((attribute) => `${attribute.ref} "${attribute.name}"${attribute.groupable ? '' : ' (not groupable)'}`)
+      .join('; ');
+    return [
+      `- ${entity.ref} "${entity.plural}"${entity.requiresFilter ? ' (requires a filter)' : ''}`,
+      `    measures: ${measures || '(none)'}`,
+      `    attributes: ${attributes}`,
+    ].join('\n');
+  });
+
   return [
     `Request: ${prompt}`,
     `Key terms: ${concepts.terms.join(', ') || '(none extracted)'}`,
     'Lay the page out in bands: metrics, charts, detail, actions.',
+    pack.length ? 'Catalog you may bind to:' : 'No catalog is available: leave every widget unbound.',
+    ...pack,
   ].join('\n');
 }
 

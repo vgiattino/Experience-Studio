@@ -1,4 +1,11 @@
 {
+  /*
+    Everything at once, for a whole-repo type-check: npx tsc -p tsconfig.app.json --noEmit
+
+    The app *builds* no longer use this — each app has its own, so it compiles itself and the libraries
+    and nothing else. This one stays because "does the entire repository still type-check together" is a
+    question worth being able to ask in one command.
+  */
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "outDir": "./out-tsc/app",

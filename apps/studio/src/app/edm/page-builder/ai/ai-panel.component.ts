@@ -29,6 +29,7 @@ import type { PageDef, Widget } from '../model';
 import { PageBuilderAiService, type Proposal } from './ai.service';
 import type { CanvasEdit } from './decisions';
 import type { Finding } from './review';
+import type { CatalogEntityView } from '../data/binding';
 
 /**
  * What to type, for someone who has never done this.
@@ -425,6 +426,10 @@ export class AiPanelComponent {
   readonly pageId = input.required<string>();
   readonly selected = input<Widget | null>(null);
   readonly nextId = input.required<number>();
+  /** The author's entitlement-scoped catalog, so a plan can bind rather than only name. */
+  readonly catalog = input<readonly CatalogEntityView[]>([]);
+  /** What the gateway answered, so the review can read the answers and not only the design. */
+  readonly resolved = input<ReadonlyMap<string, { status: string; value?: string }>>(new Map());
 
   readonly acceptEdits = output<{ edits: CanvasEdit[]; label: string }>();
   readonly acceptPage = output<AcceptedPage>();
@@ -435,7 +440,9 @@ export class AiPanelComponent {
   protected readonly showReview = signal(false);
   protected readonly proposal = this.ai.proposal;
 
-  protected readonly findings = computed(() => this.ai.findings(this.pages()));
+  protected readonly findings = computed(() =>
+    this.ai.findings(this.pages(), this.catalog(), this.resolved()),
+  );
 
   protected readonly placeholder = computed(() =>
     this.selected()
@@ -509,6 +516,7 @@ export class AiPanelComponent {
       pageId: this.pageId(),
       selected: this.selected(),
       nextId: this.nextId(),
+      catalog: this.catalog(),
     };
   }
 }

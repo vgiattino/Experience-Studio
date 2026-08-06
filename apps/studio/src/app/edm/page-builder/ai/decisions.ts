@@ -63,6 +63,24 @@ export interface PlannedWidget {
   /** For a nav button: the id of an existing page, or the name of one the plan also asks for. */
   target?: string;
   band?: Band;
+
+  /*
+    ── What this widget reads from the catalog ────────────────────────────────────────────
+    The step that changes what a plan *is*. Without these a plan can only name things — "Late file
+    loads" is a title somebody has to bind later. With them the plan says `late-file-count` on
+    `processing.file-load` grouped by `source-system`, the assembler builds the binding, and the figure
+    on the canvas is the one the gateway returns.
+
+    Still optional, because a page of headings and buttons binds to nothing, and because a request the
+    catalog cannot serve should produce an *unbound* widget with a stated reason rather than a refusal
+    to draw anything. Grounding checks every ref against the author's projection before the author sees
+    the proposal, so a ref that does not exist never reaches a page.
+  */
+  entityRef?: string;
+  measureRef?: string;
+  aggregation?: string;
+  dimensionRef?: string;
+  attributeRefs?: string[];
 }
 
 export interface CanvasPlan {
@@ -171,6 +189,11 @@ export const CANVAS_PLAN_SCHEMA = {
           columns: { type: 'array', items: { type: 'string' }, maxItems: 8 },
           target: { type: 'string' },
           band: { type: 'string', enum: [...BANDS] },
+          entityRef: { type: 'string' },
+          measureRef: { type: 'string' },
+          aggregation: { type: 'string' },
+          dimensionRef: { type: 'string' },
+          attributeRefs: { type: 'array', items: { type: 'string' }, maxItems: 8 },
         },
         required: ['id', 'kind', 'title', 'purpose'],
         additionalProperties: false,

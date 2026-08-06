@@ -97,6 +97,22 @@ export interface Widget {
   w: number;
   h: number;
   props: WidgetProps;
+  /**
+   * What this widget reads from the governed catalog, when it reads anything.
+   *
+   * Optional, and that is the whole design of this step rather than a hedge. A widget with no binding
+   * behaves exactly as it did before — literal values in `props`, which is what a sketch needs. A widget
+   * *with* one shows what the Data Gateway returned for this author's entitlements, and its own props
+   * become the fallback for when the query cannot be answered.
+   *
+   * A sibling of `props` rather than a key inside it, because everything reads it: the renderer, the
+   * inspector's Data section, the design review, and the AI's grounding. A structural fact does not
+   * belong in the bag of per-type odds and ends.
+   *
+   * Typed as `unknown` here and narrowed by `data/binding.ts` on purpose: this file is the model, and
+   * the model does not depend on the query layer. See `WidgetBinding`.
+   */
+  binding?: unknown;
 }
 
 export interface PageDef {

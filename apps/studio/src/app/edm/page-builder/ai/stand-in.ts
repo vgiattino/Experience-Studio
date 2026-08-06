@@ -27,6 +27,7 @@ import {
 } from '@opus/generation';
 
 import { ACCENTS, labelOf, type PageDef, type Widget } from '../model';
+import type { CatalogEntityView, CatalogMeasureView } from '../data/binding';
 import { bandOf } from './assemble';
 import { CHART_KINDS, type Band, type CanvasEdit, type CanvasPlan, type PlannedWidget } from './decisions';
 
@@ -37,6 +38,14 @@ export interface CanvasDecisionInputs {
   pageId: string;
   /** The selected widget, when there is one. An instruction usually means "this". */
   selected: Widget | null;
+  /**
+   * The author's entitlement-scoped catalog.
+   *
+   * Empty when it has not loaded, and the plan then falls back to naming things instead of binding them —
+   * which is the behaviour this screen had before there was a catalog, kept as the degraded path rather
+   * than as a failure.
+   */
+  catalog: readonly CatalogEntityView[];
 }
 
 /** Chart words an author actually types, mapped to the kinds this builder draws. */
@@ -111,8 +120,17 @@ export class CanvasStandIn implements ModelProvider {
   // ── plan a whole page ───────────────────────────────────────────────────────────────
 
   private plan(inputs: CanvasDecisionInputs): CanvasPlan {
-    const { prompt, concepts } = inputs;
+    const { prompt, concepts, catalog } = inputs;
     const subject = subjectOf(prompt, concepts);
+    /*
+      Which entity the request is about, decided before anything else.
+
+      This is the inversion the catalog brings. Before, a plan was a list of widget kinds with invented
+      titles; now the first question is "which governed thing are we talking about", and the widgets
+      follow from what that thing actually has. An entity with no measures gets no metrics — not three
+      metrics with placeholder names.
+    */
+    const match = matchEntity(subject, prompt, catalog);
     const widgets: PlannedWidget[] = [];
     const add = (
       id: string,
@@ -124,43 +142,92 @@ export class CanvasStandIn implements ModelProvider {
       widgets.push({ id, kind, title, purpose, band: bandOf(kind), ...extra });
     };
 
-    add('title', 'heading', subject.title, 'Names the page.');
+    const title = match ? titleFor(match, subject) : subject.title;
+    add('title', 'heading', title, 'Names the page.');
 
-    // Filters first, because a page with a filter row reads as a tool and one without reads as a
-    // report — and "for the ops team to check daily" is a tool.
     if (/\b(filter|by date|as.of|search|look ?up|find)\b/i.test(prompt)) {
       add('as-of', 'date', 'As-of date', 'Lets the reader choose the day being looked at.');
-      if (subject.dimension) {
-        add('scope', 'dropdown', titleCase(subject.dimension), `Narrows the page to one ${subject.dimension}.`, {
-          band: 'detail',
+    }
+
+    if (match) {
+      // ── metrics: the entity's own measures, ranked by the request's words
+      const measures = rankMeasuresFor(match.entity, concepts, prompt).slice(0, 3);
+      measures.forEach((measure, index) => {
+        // The catalog's description when it has one, and a sentence that adds something when it does
+        // not — "Failed Files — Failed Files." is a line that makes the whole panel look automated.
+        const purpose = measure.description
+          ? measure.description
+          : `The headline figure for ${measure.name.toLowerCase()}, from the catalog.`;
+        add(`kpi-${index + 1}`, 'kpi', measure.name, purpose, {
+          entityRef: match.entity.ref,
+          measureRef: measure.ref,
+          aggregation: measure.defaultAggregation,
+        });
+      });
+
+      // ── a breakdown, when there is something to break down by
+      const dimension = matchDimension(match.entity, subject, prompt);
+      if (measures[0] && dimension) {
+        add(
+          'breakdown',
+          chartKindFor(prompt, 'column'),
+          `${measures[0].name} by ${dimension.name}`,
+          `Shows how ${measures[0].name.toLowerCase()} splits across ${dimension.name.toLowerCase()}.`,
+          {
+            entityRef: match.entity.ref,
+            measureRef: measures[0].ref,
+            aggregation: measures[0].defaultAggregation,
+            dimensionRef: dimension.ref,
+          },
+        );
+      }
+
+      // ── a trend, when the request mentions time and the entity has a date to trend over
+      const temporal = match.entity.attributes.find(
+        (attribute) => attribute.isTemporal && attribute.groupable,
+      );
+      const wantsTrend =
+        concepts.temporalHints.length ||
+        /\b(trend|over time|daily|weekly|monthly|history)\b/i.test(prompt);
+      if (wantsTrend && measures[0] && temporal) {
+        add('trend', 'line', `${measures[0].name} by ${temporal.name}`, 'Shows whether it is getting better or worse over time.', {
+          entityRef: match.entity.ref,
+          measureRef: measures[0].ref,
+          aggregation: measures[0].defaultAggregation,
+          dimensionRef: temporal.ref,
         });
       }
-    }
 
-    // Metrics. Three is the row width, and three is also as many as a reader takes in at a glance.
-    const metrics = metricTitles(subject, concepts);
-    metrics.forEach((title, index) => {
-      add(`kpi-${index + 1}`, 'kpi', title, `The headline figure for ${title.toLowerCase()}.`);
-    });
-
-    // A breakdown, when the request asks "by" something.
-    if (subject.dimension) {
-      const kind = chartKindFor(prompt, 'column');
-      add(
-        'breakdown',
-        kind,
-        `${subject.noun} by ${subject.dimension}`,
-        `Shows where the ${subject.noun.toLowerCase()} are concentrated.`,
-      );
-    }
-
-    // A trend, when the request mentions time.
-    if (concepts.temporalHints.length || /\b(trend|over time|daily|weekly|monthly|history)\b/i.test(prompt)) {
-      add('trend', 'line', `${subject.noun} over time`, 'Shows whether it is getting better or worse.');
-    }
-
-    // A record list, when the request asks for one — or when nothing else would carry the detail.
-    if (concepts.listHints.length || /\b(list|table|records?|detail|rows|breakdown of each)\b/i.test(prompt)) {
+      // ── the records behind the figures
+      const wantsList =
+        concepts.listHints.length ||
+        /\b(list|table|records?|detail|rows)\b/i.test(prompt) ||
+        widgets.length <= 3;
+      if (wantsList) {
+        const columns = match.entity.attributes.slice(0, 4);
+        add('records', 'table', `${match.entity.plural} detail`, 'The records behind the figures above.', {
+          entityRef: match.entity.ref,
+          attributeRefs: columns.map((column) => column.ref),
+        });
+      }
+    } else {
+      // ── no catalog, or nothing in it matches: name things, bind nothing, and the panel says so
+      const metrics = metricTitles(subject, concepts);
+      metrics.forEach((metric, index) => {
+        add(`kpi-${index + 1}`, 'kpi', metric, `The headline figure for ${metric.toLowerCase()}.`);
+      });
+      if (subject.dimension) {
+        add('breakdown', chartKindFor(prompt, 'column'), `${subject.noun} by ${subject.dimension}`,
+          `Shows where the ${subject.noun.toLowerCase()} are concentrated.`);
+      }
+      // The degraded path keeps every judgement the bound path makes — including this one. A request
+      // that mentions a trend gets a trend whether or not a catalog is there to bind it to.
+      if (
+        concepts.temporalHints.length ||
+        /\b(trend|over time|daily|weekly|monthly|history)\b/i.test(prompt)
+      ) {
+        add('trend', 'line', `${subject.noun} over time`, 'Shows whether it is getting better or worse.');
+      }
       add('records', 'table', `${subject.noun} detail`, 'The records behind the figures above.', {
         columns: subject.columns,
       });
@@ -170,18 +237,9 @@ export class CanvasStandIn implements ModelProvider {
       add('decide', 'buttonlist', 'Decision', 'The action a reviewer takes on the selected record.');
     }
 
-    // A page with metrics and nothing else is a page with nowhere to go next.
-    if (!widgets.some((widget) => widget.kind === 'table' || widget.kind === 'grid')) {
-      if (widgets.length <= 4) {
-        add('records', 'table', `${subject.noun} detail`, 'The records behind the figures above.', {
-          columns: subject.columns,
-        });
-      }
-    }
-
     return {
-      pageName: subject.title,
-      pageSummary: summaryOf(subject, widgets),
+      pageName: title,
+      pageSummary: summaryOf(subject, widgets, match, catalog),
       widgets,
     };
   }
@@ -334,6 +392,109 @@ export class CanvasStandIn implements ModelProvider {
   }
 }
 
+
+// ── matching the request to the catalog ────────────────────────────────────────────────
+
+interface EntityMatch {
+  entity: CatalogEntityView;
+  /** How the request pointed at it, shown to the author so a wrong guess is correctable. */
+  via: string;
+}
+
+/**
+ * Which governed entity the request is about.
+ *
+ * Word overlap against the entity's name, plural and measure names — the same shape of scoring
+ * `@opus/catalog`'s retriever does, kept local because this stand-in has the flattened view rather than
+ * the snapshot. A real provider gets a grounding pack built by the retriever proper and does not need
+ * this at all.
+ *
+ * Returns null rather than the best of a bad set. A page bound to the wrong entity is worse than a page
+ * bound to nothing, because the numbers on it are real and about something else.
+ */
+function matchEntity(
+  subject: Subject,
+  prompt: string,
+  catalog: readonly CatalogEntityView[],
+): EntityMatch | null {
+  if (!catalog.length) return null;
+  const words = new Set(
+    `${subject.noun} ${subject.dimension ?? ''} ${prompt}`
+      .toLowerCase()
+      .split(/[^a-z]+/)
+      .filter((word) => word.length > 2),
+  );
+
+  let best: { entity: CatalogEntityView; score: number; via: string } | null = null;
+  for (const entity of catalog) {
+    let score = 0;
+    let via = '';
+    for (const term of [entity.name, entity.plural]) {
+      const hits = term.toLowerCase().split(/[^a-z]+/).filter((word) => words.has(word)).length;
+      if (hits > score) {
+        score = hits * 3;
+        via = `its name, "${term}"`;
+      }
+    }
+    for (const measure of entity.measures) {
+      const hits = measure.name.toLowerCase().split(/[^a-z]+/).filter((word) => words.has(word)).length;
+      if (hits * 2 > score) {
+        score = hits * 2;
+        via = `its "${measure.name}" measure`;
+      }
+    }
+    if (score > 0 && (!best || score > best.score)) best = { entity, score, via };
+  }
+  return best ? { entity: best.entity, via: best.via } : null;
+}
+
+/** The entity's measures, most relevant to the request first. */
+function rankMeasuresFor(
+  entity: CatalogEntityView,
+  concepts: ExtractedConcepts,
+  prompt: string,
+): CatalogMeasureView[] {
+  const hints = [...concepts.measureHints, ...concepts.terms, prompt.toLowerCase()].join(' ');
+  return [...entity.measures].sort((a, b) => score(b) - score(a));
+
+  function score(measure: CatalogMeasureView): number {
+    const words = measure.name.toLowerCase().split(/[^a-z]+/).filter((word) => word.length > 2);
+    return words.filter((word) => hints.includes(word)).length;
+  }
+}
+
+/**
+ * What to break the figure down by.
+ *
+ * The request's own "by …" phrase first, matched against attribute names; then the first groupable
+ * non-temporal attribute, because a breakdown by something is more use than no breakdown — and unlike
+ * the entity choice, a wrong dimension is visibly wrong and one click from right.
+ */
+function matchDimension(entity: CatalogEntityView, subject: Subject, prompt: string) {
+  const groupable = entity.attributes.filter((attribute) => attribute.groupable);
+  if (!groupable.length) return undefined;
+
+  const wanted = (subject.dimension ?? '').toLowerCase();
+  if (wanted) {
+    const named = groupable.find(
+      (attribute) =>
+        attribute.name.toLowerCase().includes(wanted) || wanted.includes(attribute.name.toLowerCase()),
+    );
+    if (named) return named;
+  }
+  const mentioned = groupable.find((attribute) =>
+    prompt.toLowerCase().includes(attribute.name.toLowerCase()),
+  );
+  return mentioned ?? groupable.find((attribute) => !attribute.isTemporal) ?? groupable[0];
+}
+
+/** The page's title, in the catalog's words where the catalog has words for it. */
+function titleFor(match: EntityMatch, subject: Subject): string {
+  return subject.dimension
+    ? `${match.entity.plural} by ${titleWords(subject.dimension)}`
+    : match.entity.plural;
+}
+
 // ── reading the request ────────────────────────────────────────────────────────────────
 
 interface Subject {
@@ -359,7 +520,16 @@ const TRAILING = /\b(?:page|dashboard|screen|view|report|experience)\b/gi;
  */
 function subjectOf(prompt: string, concepts: ExtractedConcepts): Subject {
   const stripped = prompt.replace(FRAMING, '').trim();
-  const byMatch = /\bby\s+([a-z][a-z ]{2,24})/i.exec(stripped);
+  /*
+    "by source with a trend and a table" names one dimension, not six words of one.
+
+    The capture has to stop at the first conjunction or comma, or the page ends up titled "File Loads by
+    Source With a Trend and a" — which is what it was titled, and is worse than a wrong title because it
+    reads as a bug in the product rather than a bad guess about the request.
+  */
+  const byMatch = /\bby\s+([a-z][a-z ]{1,30}?)(?=\s+(?:with|and|for|showing|over|plus|,)\b|[,.]|$)/i.exec(
+    stripped,
+  );
   const dimension = byMatch?.[1] ? clean(byMatch[1]).toLowerCase() : undefined;
 
   let noun = stripped
@@ -416,7 +586,12 @@ function metricTitles(subject: Subject, concepts: ExtractedConcepts): string[] {
   return titles.slice(0, 3);
 }
 
-function summaryOf(subject: Subject, widgets: readonly PlannedWidget[]): string {
+function summaryOf(
+  subject: Subject,
+  widgets: readonly PlannedWidget[],
+  match: EntityMatch | null,
+  catalog: readonly CatalogEntityView[],
+): string {
   const counts = new Map<string, number>();
   for (const widget of widgets) {
     if (widget.kind === 'heading') continue;
@@ -424,7 +599,17 @@ function summaryOf(subject: Subject, widgets: readonly PlannedWidget[]): string 
     counts.set(label, (counts.get(label) ?? 0) + 1);
   }
   const parts = [...counts].map(([label, count]) => `${count} ${label}${count > 1 ? 's' : ''}`);
-  return `A page about ${subject.noun.toLowerCase()} with ${listWords(parts)}. Figures read "—" and chart values are sample shapes: this builder has no data binding yet, so nothing here is a real number.`;
+  const body = `${listWords(parts)}`;
+  if (!match) {
+    // Naming what the catalog *does* hold, when there is one. "Nothing matched" leaves an author with
+    // no next move; a list of what is available is the next move.
+    const available = catalog.length
+      ? ` Your catalog covers ${listWords(catalog.slice(0, 4).map((entity) => entity.plural.toLowerCase()))} — none of which matches this request, so the figures are placeholders.`
+      : ' The catalog has not loaded, so the figures are placeholders.';
+    return `A page about ${subject.noun.toLowerCase()} with ${body}.${available}`;
+  }
+  const bound = widgets.filter((widget) => widget.entityRef).length;
+  return `${match.entity.plural} from the catalog, with ${body}. ${bound} widget(s) read live data — matched to ${match.entity.name} by ${match.via}.`;
 }
 
 function groupLabel(kind: string): string {

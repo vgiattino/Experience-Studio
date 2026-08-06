@@ -16,6 +16,12 @@ import { type CanvasEdit, type CanvasPlan } from './decisions';
 import { review } from './review';
 import { CanvasStandIn, type CanvasDecisionInputs } from './stand-in';
 import { tidy } from './tidy';
+import { ALL_CAPABILITIES, CatalogService, testCatalog } from '@opus/catalog';
+
+import { catalogView, type CatalogEntityView } from '../data/binding';
+
+/** Every capability the fixture catalog knows about — an author who can see all of it. */
+const ALL_CAPS = [...ALL_CAPABILITIES];
 
 function widget(
   id: string,
@@ -39,6 +45,7 @@ async function ask(
   pages: readonly PageDef[] = [],
   pageId = 'p1',
   selected: Widget | null = null,
+  catalog: readonly CatalogEntityView[] = [],
 ): Promise<{ plan?: CanvasPlan; edits?: CanvasEdit[] }> {
   const standIn = new CanvasStandIn();
   const result = intake(prompt, pages.some((one) => one.id === pageId && one.widgets.length));
@@ -48,6 +55,7 @@ async function ask(
     pages,
     pageId,
     selected,
+    catalog,
   };
   standIn.useDecisionInputs(inputs);
   const refine = result.intent === 'refine' || !!selected;
@@ -563,5 +571,270 @@ describe('the palette vocabulary is the whole vocabulary', () => {
         expect(KEY_TYPE[planned.kind]).toBeTruthy();
       }
     }
+  });
+});
+
+/**
+ * Planning against a real catalog.
+ *
+ * The step that changes what a plan *is*: from a list of titles somebody has to bind later, to refs the
+ * gateway can answer. Asserted against `testCatalog()` — the platform's own fixture — so the entities,
+ * measures and entitlement rules are the ones the catalog library tests itself with.
+ */
+describe('planning with a catalog behind it', () => {
+  const catalog = (capabilities: string[] = ALL_CAPS): CatalogEntityView[] => {
+    const service = new CatalogService();
+    service.hydrate(testCatalog());
+    return catalogView(
+      service.projectionFor({
+        id: 'a@demo',
+        displayName: 'A',
+        tenantId: 'demo-tenant',
+        locale: 'en-GB',
+        timezone: 'Europe/London',
+        roles: ['experienceAuthor'],
+        capabilities,
+        entitlementScopeHash: capabilities.join(','),
+      }),
+    );
+  };
+
+  it('binds to the entity the request is about', async () => {
+    const view = catalog();
+    const { plan } = await ask('late file loads by source', [], 'p1', null, view);
+    const bound = plan!.widgets.filter((one) => one.entityRef);
+    expect(bound.length).toBeGreaterThan(0);
+    for (const widget of bound) {
+      const entity = view.find((one) => one.ref === widget.entityRef);
+      expect(entity).toBeTruthy();
+    }
+  });
+
+  it('names widgets from the catalog rather than paraphrasing the prompt', async () => {
+    const view = catalog();
+    const { plan } = await ask('file loads', [], 'p1', null, view);
+    const kpi = plan!.widgets.find((one) => one.kind === 'kpi' && one.measureRef);
+    expect(kpi).toBeTruthy();
+    const entity = view.find((one) => one.ref === kpi!.entityRef)!;
+    const measure = entity.measures.find((one) => one.ref === kpi!.measureRef)!;
+    expect(kpi!.title).toBe(measure.name);
+  });
+
+  it('only ever names a measure that is on the entity it named', async () => {
+    const view = catalog();
+    for (const prompt of ['file loads by source', 'securities coverage', 'data quality exceptions']) {
+      const { plan } = await ask(prompt, [], 'p1', null, view);
+      for (const widget of plan!.widgets) {
+        if (!widget.measureRef) continue;
+        const entity = view.find((one) => one.ref === widget.entityRef)!;
+        expect(entity.measures.some((one) => one.ref === widget.measureRef)).toBe(true);
+      }
+    }
+  });
+
+  it('only ever breaks down by something the catalog says is groupable', async () => {
+    const view = catalog();
+    const { plan } = await ask('file loads by source with a trend', [], 'p1', null, view);
+    for (const widget of plan!.widgets) {
+      if (!widget.dimensionRef) continue;
+      const entity = view.find((one) => one.ref === widget.entityRef)!;
+      const attribute = entity.attributes.find((one) => one.ref === widget.dimensionRef)!;
+      expect(attribute.groupable).toBe(true);
+    }
+  });
+
+  it('uses an aggregation the measure allows', async () => {
+    const view = catalog();
+    const { plan } = await ask('file loads by source', [], 'p1', null, view);
+    for (const widget of plan!.widgets) {
+      if (!widget.measureRef || !widget.aggregation) continue;
+      const entity = view.find((one) => one.ref === widget.entityRef)!;
+      const measure = entity.measures.find((one) => one.ref === widget.measureRef)!;
+      expect(measure.allowedAggregations).toContain(widget.aggregation);
+    }
+  });
+
+  it('cannot bind to an entity the author is not entitled to', async () => {
+    const narrow = catalog(['edm.processing.read']);
+    // A request squarely about data quality, from an author who cannot see it.
+    const { plan } = await ask('data quality exceptions by severity', [], 'p1', null, narrow);
+    for (const widget of plan!.widgets) {
+      if (!widget.entityRef) continue;
+      expect(narrow.some((one) => one.ref === widget.entityRef)).toBe(true);
+      expect(widget.entityRef.startsWith('dq.')).toBe(false);
+    }
+  });
+
+  it('binds nothing when there is no catalog, and says so', async () => {
+    const { plan } = await ask('late file loads by source', [], 'p1', null, []);
+    expect(plan!.widgets.every((one) => !one.entityRef)).toBe(true);
+    expect(plan!.pageSummary).toContain('catalog has not loaded');
+  });
+
+  it('names what the catalog does hold when nothing in it matches', async () => {
+    const view = catalog();
+    const { plan } = await ask('widget sprocket throughput by colour', [], 'p1', null, view);
+    expect(plan!.widgets.every((one) => !one.entityRef)).toBe(true);
+    expect(plan!.pageSummary).toContain('Your catalog covers');
+    expect(plan!.pageSummary).toContain('none of which matches');
+  });
+
+  it('says what it matched and how, so a wrong guess is correctable', async () => {
+    const { plan } = await ask('file loads by source', [], 'p1', null, catalog());
+    expect(plan!.pageSummary).toMatch(/read live data — matched to .+ by /);
+  });
+});
+
+describe('assembling a bound plan', () => {
+  const view = (): CatalogEntityView[] => {
+    const service = new CatalogService();
+    service.hydrate(testCatalog());
+    return catalogView(
+      service.projectionFor({
+        id: 'a@demo',
+        displayName: 'A',
+        tenantId: 'demo-tenant',
+        locale: 'en-GB',
+        timezone: 'Europe/London',
+        roles: ['experienceAuthor'],
+        capabilities: ALL_CAPS,
+        entitlementScopeHash: 'all',
+      }),
+    );
+  };
+
+  it('puts the binding on the widget and the catalog’s name in its label', () => {
+    const catalog = view();
+    const entity = catalog.find((one) => one.measures.length)!;
+    const measure = entity.measures[0]!;
+    const { widgets } = assemblePlan(
+      {
+        pageName: 'x',
+        pageSummary: 'x',
+        widgets: [
+          {
+            id: 'k',
+            kind: 'kpi',
+            title: 'Whatever the model called it',
+            purpose: 'p',
+            entityRef: entity.ref,
+            measureRef: measure.ref,
+            aggregation: measure.defaultAggregation,
+          },
+        ],
+      },
+      [],
+      1,
+      catalog,
+    );
+    const kpi = widgets.find((one) => one.type === 'kpi')!;
+    expect(kpi.binding).toMatchObject({ entity: entity.ref, measure: measure.ref });
+    expect(kpi.props['label']).toBe(measure.name);
+  });
+
+  it('leaves a widget unbound and reports why when the ref does not exist', () => {
+    const catalog = view();
+    const { widgets, notes } = assemblePlan(
+      {
+        pageName: 'x',
+        pageSummary: 'x',
+        widgets: [
+          { id: 'k', kind: 'kpi', title: 'Ghost', purpose: 'p', entityRef: 'not.real', measureRef: 'nope' },
+        ],
+      },
+      [],
+      1,
+      catalog,
+    );
+    expect(widgets.find((one) => one.type === 'kpi')!.binding).toBeUndefined();
+    expect(notes.join(' ')).toContain('does not exist or you are not entitled');
+  });
+
+  it('refuses to bind a chart that has a measure and nothing to break it down by', () => {
+    const catalog = view();
+    const entity = catalog.find((one) => one.measures.length)!;
+    const { widgets, notes } = assemblePlan(
+      {
+        pageName: 'x',
+        pageSummary: 'x',
+        widgets: [
+          {
+            id: 'c',
+            kind: 'column',
+            title: 'Half a chart',
+            purpose: 'p',
+            entityRef: entity.ref,
+            measureRef: entity.measures[0]!.ref,
+          },
+        ],
+      },
+      [],
+      1,
+      catalog,
+    );
+    expect(widgets.find((one) => one.type === 'chart')!.binding).toBeUndefined();
+    expect(notes.join(' ')).toContain('needs a measure and something to break it down by');
+  });
+
+  it('binds nothing at all when no catalog was supplied', () => {
+    const { widgets } = assemblePlan(
+      {
+        pageName: 'x',
+        pageSummary: 'x',
+        widgets: [{ id: 'k', kind: 'kpi', title: 'T', purpose: 'p', entityRef: 'processing.file-load' }],
+      },
+      [],
+      1,
+    );
+    expect(widgets.every((one) => !one.binding)).toBe(true);
+  });
+});
+
+describe('the review reads bindings too', () => {
+  const catalog = (): CatalogEntityView[] => {
+    const service = new CatalogService();
+    service.hydrate(testCatalog());
+    return catalogView(
+      service.projectionFor({
+        id: 'a@demo',
+        displayName: 'A',
+        tenantId: 'demo-tenant',
+        locale: 'en-GB',
+        timezone: 'Europe/London',
+        roles: ['experienceAuthor'],
+        capabilities: ALL_CAPS,
+        entitlementScopeHash: 'all',
+      }),
+    );
+  };
+
+  it('says nothing about bindings when there is no catalog to bind to', () => {
+    const pages = [
+      page('p1', 'One', [
+        widget('h', 'heading', 0, 0, 12, 1, { text: 'One' }),
+        widget('k', 'kpi', 0, 1, 4, 3, { label: 'Typed in' }),
+      ]),
+    ];
+    expect(review(pages).some((one) => one.id.endsWith(':unbound'))).toBe(false);
+  });
+
+  it('flags widgets showing typed-in numbers once a catalog exists', () => {
+    const pages = [
+      page('p1', 'One', [
+        widget('h', 'heading', 0, 0, 12, 1, { text: 'One' }),
+        widget('k', 'kpi', 0, 1, 4, 3, { label: 'Typed in' }),
+      ]),
+    ];
+    const finding = review(pages, catalog()).find((one) => one.id === 'p1:unbound')!;
+    expect(finding.detail).toContain('never change');
+  });
+
+  it('flags a binding that has gone stale, as a problem rather than polish', () => {
+    const stale = widget('k', 'kpi', 0, 1, 4, 3, { label: 'Was fine' });
+    stale.binding = { entity: 'gone.away', measure: 'also-gone' };
+    const pages = [page('p1', 'One', [widget('h', 'heading', 0, 0, 12, 1, { text: 'One' }), stale])];
+    const finding = review(pages, catalog()).find((one) => one.id.endsWith(':binding'))!;
+    expect(finding.severity).toBe('issue');
+    expect(finding.detail).toContain('no longer entitled');
   });
 });
