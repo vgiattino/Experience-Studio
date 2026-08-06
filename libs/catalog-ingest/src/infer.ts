@@ -351,11 +351,26 @@ function inferAttribute(column: PhysicalColumn): DraftAttribute | { reason: stri
     with extra steps, and a chart of 40,000 categories in a business user's face. So `groupable` is
     granted to the shapes that make sense to group: enums, dates, booleans, identifiers and short codes.
   */
-  const groupable =
-    ['enum', 'boolean', 'date', 'datetime', 'identifier'].includes(dataType) ||
-    isCodeSemantic(semanticType);
   const searchable = dataType === 'string' || dataType === 'identifier';
   const suspectedPersonal = looksPersonal(column.name);
+
+  /*
+    Two exceptions to "an identifier is groupable", both found by looking at what the rule produced.
+
+    An identifier is groupable as a rule because grouping by a foreign key — exceptions by vendor,
+    loads by feed — is the most ordinary breakdown there is. But:
+
+      · **the primary key is never groupable.** It is one bucket per row by definition, so offering it
+        turns a chart into a list of every row with a bar of height one beside each.
+      · **a personal identifier is never groupable.** A count of one in a bucket labelled with somebody's
+        tax number names that person. An aggregate is the shape people assume is anonymous, which is
+        exactly why it is the wrong place to leak an identity — and a steward reviewing an entitlement
+        on the *column* would not think to check whether it could still be a chart axis.
+  */
+  const groupable =
+    (['enum', 'boolean', 'date', 'datetime', 'identifier'].includes(dataType) ||
+      isCodeSemantic(semanticType)) &&
+    !(dataType === 'identifier' && (column.isKey || suspectedPersonal));
 
   decisions.push({
     what: groupable ? 'A page may group by it' : 'A page may not group by it',
@@ -363,7 +378,11 @@ function inferAttribute(column: PhysicalColumn): DraftAttribute | { reason: stri
       ? isCodeSemantic(semanticType) && dataType === 'string'
         ? `a ${semanticType} is a closed code list, whatever its storage type says`
         : `${dataType} values fall into a countable number of buckets`
-      : `grouping by ${dataType} would produce about one bucket per row`,
+      : dataType === 'identifier' && suspectedPersonal
+        ? 'grouping by a personal identifier names a person in a bucket of one'
+        : dataType === 'identifier' && column.isKey
+          ? 'it identifies the row, so grouping by it gives one bucket per row'
+          : `grouping by ${dataType} would produce about one bucket per row`,
     confidence: 'likely',
   });
 

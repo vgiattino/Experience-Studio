@@ -96,6 +96,7 @@ export function detectDrift(
 ): DriftReport {
   const changes: DriftChange[] = [];
   const index = catalog ? indexCatalog(catalog, previous.sourceId) : null;
+  const sampling = { was: previous.sampledEnumerations, is: current.sampledEnumerations };
 
   const before = new Map(previous.tables.map((table) => [table.ref, table]));
   const after = new Map(current.tables.map((table) => [table.ref, table]));
@@ -131,7 +132,7 @@ export function detectDrift(
       });
       continue;
     }
-    compareTable(table, now, index, changes);
+    compareTable(table, now, index, sampling, changes);
   }
 
   const counts: Record<DriftSeverity, number> = { breaking: 0, behavioural: 0, additive: 0 };
@@ -157,6 +158,7 @@ function compareTable(
   before: PhysicalTable,
   after: PhysicalTable,
   index: CatalogIndex | null,
+  sampling: { was: boolean; is: boolean },
   changes: DriftChange[],
 ): void {
   const entities = index?.entitiesByTable.get(after.ref) ?? [];
@@ -231,7 +233,7 @@ function compareTable(
       continue;
     }
 
-    compareColumn(after.ref, column, now, affected, changes);
+    compareColumn(after.ref, column, now, affected, sampling, changes);
   }
 }
 
@@ -240,6 +242,7 @@ function compareColumn(
   before: PhysicalColumn,
   after: PhysicalColumn,
   affected: string[],
+  sampling: { was: boolean; is: boolean },
   changes: DriftChange[],
 ): void {
   const subject = `${tableRef}.${after.name}`;
@@ -319,23 +322,92 @@ function compareColumn(
     });
   }
 
+  compareValues(subject, before, after, affected, sampling, changes);
+}
+
+/**
+ * A column's value list: gained, changed, or gone.
+ *
+ * All four transitions matter, and an earlier version only reported one of them — it required a list on
+ * both sides, so a column that *became* a code list was silent. Gaining one is news a steward acts on: a
+ * page can now break down by it, and the codes probably need labels before a business user sees `WAIVED`.
+ */
+function compareValues(
+  subject: string,
+  before: PhysicalColumn,
+  after: PhysicalColumn,
+  affected: string[],
+  sampling: { was: boolean; is: boolean },
+  changes: DriftChange[],
+): void {
   const wasValues = valueList(before);
   const nowValues = valueList(after);
-  if (wasValues && nowValues && wasValues.join('|') !== nowValues.join('|')) {
-    const lost = wasValues.filter((value) => !nowValues.includes(value));
+
+  if (!wasValues && !nowValues) return;
+
+  if (!wasValues && nowValues) {
     changes.push({
       kind: 'enum-values-changed',
       subject,
-      detail: lost.length
-        ? `The permitted values changed; ${lost.map((value) => `"${value}"`).join(', ')} ${lost.length === 1 ? 'is' : 'are'} no longer allowed.`
-        : `The permitted values changed: ${nowValues.map((value) => `"${value}"`).join(', ')}.`,
-      severity: lost.length && affected.length ? 'behavioural' : 'additive',
+      detail: `It is now a code list of ${nowValues.length}: ${quoted(nowValues)}.`,
+      severity: 'additive',
       affects: affected,
-      remedy: lost.length
-        ? 'A filter or a chart series pinned to a removed value will quietly return nothing. Search the pages using this attribute for the old values.'
-        : 'New values will appear in filters and breakdowns. Give them labels if the raw codes are not readable.',
+      remedy:
+        'Re-promote to make it groupable, and give the codes labels — a breakdown reading "WAIVED" is a database showing through.',
     });
+    return;
   }
+
+  if (wasValues && !nowValues) {
+    /*
+      The one case that is not about the database.
+
+      Sampled values come from reading data, so a metadata-only re-scan cannot see them. Reporting that
+      as "the constraint is gone" would be a false breaking alarm on a perfectly ordinary re-scan — and
+      false alarms are how a drift report becomes something a steward skims.
+    */
+    if (sampling.was && !sampling.is) {
+      changes.push({
+        kind: 'enum-values-changed',
+        subject,
+        detail: 'Its value list is absent because this scan did not sample values, where the published one did.',
+        severity: 'additive',
+        affects: affected,
+        remedy: 'Not a change in the database. Re-scan with sampling on to compare like with like.',
+      });
+      return;
+    }
+    changes.push({
+      kind: 'enum-values-changed',
+      subject,
+      detail: 'It is no longer restricted to a value list.',
+      severity: affected.length ? 'behavioural' : 'additive',
+      affects: affected,
+      remedy:
+        'A filter that offered a fixed set of options now has none to offer, and any value can appear. Find out whether the constraint was dropped deliberately.',
+    });
+    return;
+  }
+
+  if (wasValues!.join('|') === nowValues!.join('|')) return;
+
+  const lost = wasValues!.filter((value) => !nowValues!.includes(value));
+  changes.push({
+    kind: 'enum-values-changed',
+    subject,
+    detail: lost.length
+      ? `The permitted values changed; ${quoted(lost)} ${lost.length === 1 ? 'is' : 'are'} no longer allowed.`
+      : `The permitted values changed: ${quoted(nowValues!)}.`,
+    severity: lost.length && affected.length ? 'behavioural' : 'additive',
+    affects: affected,
+    remedy: lost.length
+      ? 'A filter or a chart series pinned to a removed value will quietly return nothing. Search the pages using this attribute for the old values.'
+      : 'New values will appear in filters and breakdowns. Give them labels if the raw codes are not readable.',
+  });
+}
+
+function quoted(values: readonly string[]): string {
+  return values.map((value) => `"${value}"`).join(', ');
 }
 
 function sqlLabel(column: PhysicalColumn): string {

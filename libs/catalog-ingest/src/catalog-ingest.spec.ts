@@ -488,6 +488,25 @@ describe('inference', () => {
     expect(currency.groupable).toBe(true);
   });
 
+  it('will not group by a key, or by a personal identifier', async () => {
+    const draft = infer(await scan());
+    const account = draft.entities.find((entity) => entity.ref === 'master.customer-account')!;
+    const by = (id: string) => account.attributes.find((attribute) => attribute.id === id)!;
+
+    // One bucket per row by definition.
+    expect(by('account-id').groupable).toBe(false);
+    // A count of one in a bucket labelled with somebody's tax number names that person.
+    expect(by('tax-id').dataType).toBe('identifier');
+    expect(by('tax-id').groupable).toBe(false);
+    expect(by('tax-id').decisions.some((d) => d.because.includes('names a person'))).toBe(true);
+    // A foreign key is still the ordinary breakdown it always was.
+    expect(
+      draft.entities
+        .find((entity) => entity.ref === 'dq.exception')!
+        .attributes.find((attribute) => attribute.id === 'rule-id')!.groupable,
+    ).toBe(true);
+  });
+
   it('does not offer to group by free text', async () => {
     const draft = infer(await scan());
     const exception = draft.entities.find((entity) => entity.ref === 'dq.exception')!;
@@ -681,9 +700,12 @@ describe('promotion', () => {
     for (const entity of Object.values(result.catalog.entities)) {
       expect(entity.rowEntitlementDomain).toBeTruthy();
     }
-    expect(
-      result.notes.some((note) => note.message.includes('No row entitlement was set')),
-    ).toBe(true);
+    // Coded as well as worded, so a screen can summarise ten identical notes into one line without
+    // matching prose.
+    const derived = result.notes.filter((note) => note.code === 'entitlement-derived');
+    expect(derived).toHaveLength(10);
+    expect(derived[0]!.message).toMatch(/No row entitlement was set/);
+    expect(result.notes.every((note) => note.code.length > 0)).toBe(true);
   });
 
   it('refuses an entity whose key was not included', async () => {
@@ -767,6 +789,24 @@ describe('promotion', () => {
     const result = promote(draft, defaultDecisions(draft, 'steward'), base, context);
     expect(result.catalog.entities['crm.account']).toEqual(base.entities['crm.account']);
     expect(result.catalog.catalogVersion).toBe(8);
+    // What this promotion contributed, not what the merged catalog now holds — the same basis as the
+    // entity count beside it.
+    expect(result.counts.relationships).toBe(draft.relationships.length);
+  });
+
+  it('reports an enumeration sample as drift against a scan taken without one', async () => {
+    // A real change a steward can cause, not a contrived one: sampling reads values a metadata-only
+    // scan cannot see, so the same database yields a different physical schema.
+    const plain = await scan();
+    const draft = infer(plain);
+    const catalog = promote(draft, defaultDecisions(draft, 'steward'), undefined, context).catalog;
+
+    const report = detectDrift(plain, await scan(OPUS_EDM_FIXTURE, { sample: true }), catalog);
+    const change = report.changes.find((entry) => entry.subject === 'master.PRODUCT.CATEGORY')!;
+
+    expect(change.kind).toBe('enum-values-changed');
+    expect(change.severity).toBe('additive');
+    expect(change.detail).toMatch(/"Ambient"/);
   });
 
   it('keeps an entity the source no longer exposes rather than breaking the pages on it', async () => {
@@ -978,6 +1018,50 @@ describe('drift detection', () => {
     const moved = report.changes.filter((entry) => entry.kind === 'row-count-moved');
     expect(moved).toHaveLength(1);
     expect(moved[0]!.subject).toBe('dq.DQ_RULE');
+  });
+
+  it('does not call a value list lost when the scan simply did not look for it', async () => {
+    // The false-alarm case: promote a sampled scan, re-scan on metadata only, and every discovered
+    // code list appears to have been dropped from the database.
+    const sampled = await scan(OPUS_EDM_FIXTURE, { sample: true });
+    const draft = infer(sampled);
+    const catalog = promote(draft, defaultDecisions(draft, 'steward'), undefined, context).catalog;
+
+    const report = detectDrift(sampled, await scan(), catalog);
+    const change = report.changes.find((entry) => entry.subject === 'master.PRODUCT.CATEGORY')!;
+
+    expect(change.severity).toBe('additive');
+    expect(change.detail).toMatch(/this scan did not sample values/);
+    expect(report.safe).toBe(true);
+  });
+
+  it('reports a column that has become a code list', async () => {
+    const { schema, catalog } = await promoted();
+    const changed = mutable();
+    tableIn(changed, 'master.PRODUCT').columns.find((column) => column.name === 'CATEGORY')!.check =
+      "[CATEGORY]=N'Chilled' OR [CATEGORY]=N'Frozen'";
+
+    const report = detectDrift(schema, await scan(changed), catalog);
+    const change = report.changes.find((entry) => entry.subject === 'master.PRODUCT.CATEGORY')!;
+
+    expect(change.detail).toMatch(/now a code list of 2/);
+    expect(change.remedy).toMatch(/give the codes labels/);
+  });
+
+  it('reports a value list that has genuinely been dropped', async () => {
+    const { schema, catalog } = await promoted();
+    const changed = mutable();
+    delete tableIn(changed, 'processing.FILE_LOAD').columns.find(
+      (column) => column.name === 'LOAD_STATUS',
+    )!.check;
+
+    const report = detectDrift(schema, await scan(changed), catalog);
+    const change = report.changes.find(
+      (entry) => entry.subject === 'processing.FILE_LOAD.LOAD_STATUS',
+    )!;
+
+    expect(change.detail).toMatch(/no longer restricted to a value list/);
+    expect(change.severity).toBe('behavioural');
   });
 
   it('does not blame this source for another source’s table of the same name', async () => {

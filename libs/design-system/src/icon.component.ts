@@ -59,6 +59,12 @@ const PATHS: Record<string, string> = {
   close: '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',
   check: '<polyline points="20 6 9 17 4 12"/>',
   revert: '<path d="M3 12a9 9 0 1 0 3-6.7"/><polyline points="3 4 3 9 8 9"/>',
+  /* Two arcs rather than one: a re-run, distinct from `revert`, which undoes. */
+  refresh:
+    '<path d="M21 12a9 9 0 0 1-15 6.7"/><polyline points="21 20 21 15 16 15"/><path d="M3 12a9 9 0 0 1 15-6.7"/><polyline points="3 4 3 9 8 9"/>',
+  /* A database host, as opposed to `database`, which is the schema inside one. */
+  server:
+    '<rect x="3" y="3" width="18" height="7" rx="2"/><rect x="3" y="14" width="18" height="7" rx="2"/><line x1="7" y1="6.5" x2="7.01" y2="6.5"/><line x1="7" y1="17.5" x2="7.01" y2="17.5"/>',
 
   // ── running and inspecting
   play: '<polygon points="5 3 19 12 5 21 5 3" fill="currentColor" stroke="none"/>',

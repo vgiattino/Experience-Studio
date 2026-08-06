@@ -89,6 +89,15 @@ export interface PhysicalSchema {
   scannedAt: string;
   /** The server's own version string, recorded because inference depends on the dialect's vintage. */
   serverVersion?: string;
+  /**
+   * Whether this scan sampled values to find enumerations.
+   *
+   * Recorded because it changes what the scan can see, and a diff that does not know it reports a false
+   * alarm: re-scanning without sampling, after a scan that sampled, makes every discovered code list
+   * look as though it vanished from the database. The flag lets drift detection say "this scan did not
+   * look" instead of "the constraint is gone".
+   */
+  sampledEnumerations: boolean;
   /** What the scan could not do, in the steward's language. Never empty silently. */
   warnings: string[];
 }

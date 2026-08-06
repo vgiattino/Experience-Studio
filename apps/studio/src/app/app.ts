@@ -75,7 +75,7 @@ import {
 } from '@opus/studio-ui';
 import type { ValidationReport } from '@opus/validator';
 
-import { CatalogBrowserComponent } from './catalog/catalog-browser.component';
+import { CatalogWorkspaceComponent } from './catalog/catalog-workspace.component';
 import { EdmPageBuilderComponent } from './edm/page-builder/page-builder.component';
 import { AUTHOR } from './session';
 
@@ -176,7 +176,7 @@ const PREVIEW_ICONS: Record<PreviewSize['id'], { name: string; size: number }> =
   imports: [
     AssistPanelComponent,
     CanvasComponent,
-    CatalogBrowserComponent,
+    CatalogWorkspaceComponent,
     EdmPageBuilderComponent,
     HistoryPanelComponent,
     IconComponent,
@@ -249,7 +249,7 @@ const PREVIEW_ICONS: Record<PreviewSize['id'], { name: string; size: number }> =
               builder's state is untouched while this shows — switching back finds the same page open,
               the same selection, the same undo history.
             -->
-            <opus-catalog-browser />
+            <opus-catalog-workspace />
           } @else {
 
           <div class="opus-workbench" [class.list-collapsed]="listCollapsed()">

@@ -224,6 +224,7 @@ export class MsSqlProbe implements SchemaProbe {
       database: this.database,
       schemas: [...this.schemas],
       tables,
+      sampledEnumerations: options.sampleEnumerations,
       scannedAt: scanTime(version[0], warnings),
       serverVersion: version[0]
         ? `${str(version[0]['version'])} ${str(version[0]['edition'])}`.trim()

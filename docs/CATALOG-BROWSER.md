@@ -108,7 +108,18 @@ Driven in Chromium at 1680px and 430px, both themes.
 
 Gate: metadata validation passed, 405 unit tests passed, all three apps build with no budget warnings.
 
-## 7. Next
+## 7. Where the vocabulary comes from
+
+This screen is now the **Vocabulary** tab of the Catalog workspace. Beside it is **Sources** — register
+a database, scan it, review what it proposes, publish it — documented in
+[CATALOG-INGESTION.md](CATALOG-INGESTION.md). One rail entry still, because "what can I build a page
+about" has one answer; Sources is the same subject from the other end.
+
+Entities published from a scan carry a derived row entitlement, so they do not appear here until the
+capability is granted. That is the design working, and the Sources screen says so where a steward will
+read it.
+
+## 8. Next
 
 1. **Make it a starting point, not only a reference.** "Build a page about this" on an entity would hand
    the AI panel a pre-matched entity, which is the one thing it currently has to guess.

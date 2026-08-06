@@ -95,11 +95,32 @@ export interface StewardDecisions {
   entities: Record<string, EntityDecision>;
 }
 
+/**
+ * Why a note exists, machine-readable.
+ *
+ * Beside the prose rather than instead of it, and both are needed. The message is what a steward reads;
+ * the code is what a screen groups by — a promotion of ten entities produces ten near-identical
+ * "no row entitlement was set" notes, and a list that prints all ten buries the two refusals that
+ * actually need a decision. Grouping on the message text would work until somebody improved a sentence.
+ */
+export type PromotionNoteCode =
+  | 'not-reviewed'
+  | 'excluded'
+  | 'personal-unentitled'
+  | 'no-attributes'
+  | 'key-missing'
+  | 'measure-column-missing'
+  | 'relationship-incomplete'
+  | 'entitlement-derived'
+  | 'label-dropped'
+  | 'kept-though-absent';
+
 export interface PromotionNote {
   subject: string;
   message: string;
   /** `refused` means it did not go in. `applied` means it did, with something worth knowing. */
   kind: 'refused' | 'applied';
+  code: PromotionNoteCode;
 }
 
 export interface PromotionResult {
@@ -166,6 +187,7 @@ export function promote(
   }
 
   const promotedRefs = new Set<string>();
+  const addedRelationships = new Set<string>();
   let attributeCount = 0;
   let measureCount = 0;
 
@@ -175,6 +197,7 @@ export function promote(
       notes.push({
         subject: entity.ref,
         kind: 'refused',
+        code: decision ? 'excluded' : 'not-reviewed',
         message: decision
           ? 'Left out: the reviewer excluded it.'
           : 'Left out: no reviewer decision was recorded for it.',
@@ -204,6 +227,7 @@ export function promote(
     notes.push({
       subject: ref,
       kind: 'applied',
+      code: 'kept-though-absent',
       message:
         'This scan no longer exposes it, so it was kept as it was rather than removed. Pages bound to it keep working; delete it deliberately when you are sure.',
     });
@@ -214,6 +238,7 @@ export function promote(
       notes.push({
         subject: relationship.id,
         kind: 'refused',
+        code: 'relationship-incomplete',
         message: `Left out: it joins ${relationship.from} to ${relationship.to}, and one of those was not promoted.`,
       });
       continue;
@@ -233,11 +258,13 @@ export function promote(
       notes.push({
         subject: relationship.id,
         kind: 'refused',
+        code: 'relationship-incomplete',
         message:
           'Left out: its key columns are not both exposed, so the join could not be built. Include them on both entities, or leave the relationship out.',
       });
       continue;
     }
+    addedRelationships.add(relationship.id);
     relationships[relationship.id] = {
       id: relationship.id,
       businessName: relationship.businessName,
@@ -282,11 +309,13 @@ export function promote(
   return {
     catalog,
     notes: notes.sort((a, b) => a.subject.localeCompare(b.subject)),
+    // What *this* promotion contributed, not what the merged catalog now holds. Counting the entities
+    // one way and the relationships the other made a report that appeared to double the joins.
     counts: {
       entities: promotedRefs.size,
       attributes: attributeCount,
       measures: measureCount,
-      relationships: Object.keys(relationships).length,
+      relationships: addedRelationships.size,
     },
   };
 }
@@ -309,6 +338,7 @@ function buildEntity(
       notes.push({
         subject: `${entity.ref}.${attribute.id}`,
         kind: 'refused',
+        code: 'personal-unentitled',
         message:
           'Left out: its name suggests personal data and no entitlement was set. Give it a column entitlement, or record that it is not personal data.',
       });
@@ -321,6 +351,7 @@ function buildEntity(
     notes.push({
       subject: entity.ref,
       kind: 'refused',
+      code: 'no-attributes',
       message: 'Left out: no attribute survived the review, so there would be nothing to read.',
     });
     return null;
@@ -331,6 +362,7 @@ function buildEntity(
     notes.push({
       subject: entity.ref,
       kind: 'refused',
+      code: 'key-missing',
       message: `Left out: its key (${entity.primaryKey.join(', ')}) is not fully exposed, so a row could not be identified. Include the key columns.`,
     });
     return null;
@@ -350,6 +382,7 @@ function buildEntity(
       notes.push({
         subject: `${entity.ref}.${measure.id}`,
         kind: 'refused',
+        code: 'measure-column-missing',
         message:
           'Left out: it aggregates a column that was not included. Include the column, or leave the measure out on purpose.',
       });
@@ -365,6 +398,7 @@ function buildEntity(
     notes.push({
       subject: entity.ref,
       kind: 'applied',
+      code: 'entitlement-derived',
       message: `No row entitlement was set, so "${rowEntitlementDomain}" was derived. Until that capability is granted, nobody sees this entity — which is the safe direction, and is why it was not left blank.`,
     });
   }
@@ -375,6 +409,7 @@ function buildEntity(
     notes.push({
       subject: entity.ref,
       kind: 'applied',
+      code: 'label-dropped',
       message: `Rows will be labelled by their key: the proposed label column "${entity.labelAttribute}" was not included.`,
     });
   }

@@ -99,6 +99,21 @@ export class CatalogService {
   }
 
   /**
+   * SERVER-SIDE ONLY. The stored catalog itself, physical blocks and all.
+   *
+   * Exists for one caller: a promotion, which merges a reviewed scan into what is already published and
+   * therefore has to read what is already published. The alternative — reassembling it from the
+   * projection — cannot work, because the projection is where `physical` and the entitled columns have
+   * been removed, so a merge built on it would silently drop both.
+   *
+   * Held to the same rule as `physicalMapFor`: this never crosses the network, and the one shape a
+   * client receives is `projectionFor`.
+   */
+  stored(): RawCatalog | undefined {
+    return this.raw ?? undefined;
+  }
+
+  /**
    * The catalog as this caller may see it: `physical` stripped, and every attribute or
    * measure whose column entitlement the caller lacks removed entirely — not blanked.
    * An attribute name is itself sometimes sensitive.
