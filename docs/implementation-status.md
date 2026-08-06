@@ -146,15 +146,10 @@ $env:PORT="4100"; npm run api
 
 Node 20.19+ or 22+ is required (Angular 21). Check with `node -v`.
 
-**The code lives on a feature branch.** `main` carries the architecture, schemas and docs only; the
-workspace — `apps/`, `libs/`, `server/`, `package.json` — is on
-`claude/opus-architecture-review-vxvhcg`. A clone of `main` has no `package.json`, so `npm install`
-fails with `ENOENT`. Check out the branch first:
-
-```powershell
-git fetch origin
-git checkout claude/opus-architecture-review-vxvhcg
-```
+A plain clone of `main` is runnable. It was not always: for a while `main` carried the architecture,
+schemas and docs only, and the workspace — `apps/`, `libs/`, `server/`, `package.json` — sat on a
+feature branch, so `npm install` in a fresh clone failed with `ENOENT` and the fix was to check the
+branch out first. That branch has been merged; `git clone` then `npm install` now works.
 
 To point generation at a real model:
 
