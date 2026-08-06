@@ -105,6 +105,16 @@ export interface PageDef {
   /** A name in the platform icon registry. The original stores its own `IcPages` keys. */
   icon: string;
   widgets: Widget[];
+  /**
+   * Where the author dragged this page's node on the flow map, in flow pixels.
+   *
+   * Absent means "wherever the auto-layout puts it", which is deliberate rather than lazy: a page
+   * added after the map was arranged should appear in the computed layout instead of at 0,0, and
+   * Auto-arrange works by *deleting* these two fields rather than by recomputing and storing
+   * coordinates. So absence is the live state, not a missing value.
+   */
+  fx?: number;
+  fy?: number;
 }
 
 export interface PaletteItem {
@@ -403,6 +413,164 @@ export function linksOf(pages: readonly PageDef[]): PageLink[] {
     }
   }
   return out;
+}
+
+/* ── the flow map ───────────────────────────────────────────────────────────────────────── */
+
+/** A page node on the flow map. The original's dimensions, so an arranged map transfers unchanged. */
+export const NODE_W = 190;
+export const NODE_H = 78;
+
+/**
+ * Gaps between auto-placed nodes.
+ *
+ * The column gap is wide because an edge carries a *label* — the name of the button that is the link —
+ * and that label sits at the midpoint of the gap. At the original's 96px the label was wider than the
+ * space it had and sat half-under the node on each side, which made a five-page map unreadable.
+ */
+export const COL_GAP = 150;
+const ROW_GAP = 56;
+/** Vertical room per edge that skips a column, above the first row and below the return bus. */
+export const SKIP_LANE = 34;
+const ORIGIN_X = 34;
+const ORIGIN_Y = 30;
+
+export interface NodePos {
+  x: number;
+  y: number;
+}
+
+/**
+ * Place every page in the column after the last page that navigates to it.
+ *
+ * Layer 0 is where a workflow starts, and each column after it is one navigation deeper, so reading
+ * left to right is reading the workflow in order. That is the map's whole purpose, and the reason this
+ * is a layering rather than a force layout: a deterministic picture an author can predict beats a
+ * prettier one that rearranges itself every time the screen opens.
+ *
+ * **Longest path, not shortest** — the part worth explaining, because the obvious BFS is wrong here.
+ * Take A → B, A → C and B → C. A shortest-distance BFS puts B and C both one step from A, in the same
+ * column, and then B → C is an edge that has to be drawn *sideways*: it comes out of B's right edge,
+ * turns back on itself and arrives at C from the left, which on screen is indistinguishable from a
+ * "Back to…" return. Layering by the longest path instead puts C behind B, and every real navigation
+ * then moves at least one column to the right. That property is what makes the picture legible.
+ *
+ * Cycles cannot be layered at all, so the edges that close them are found first and set aside: a DFS
+ * marks an edge as a *back edge* when it points at a page still on the stack, and the remaining graph
+ * is a DAG. Those back edges are the "Back to…" links, and the map draws them as returns underneath —
+ * which is what they are.
+ *
+ * Three cases the naive version gets wrong, all covered by tests:
+ *   · **a cycle with no entry at all** (A → B → A and nothing else) has no page with nothing pointing
+ *     at it, so the traversal starts from the first page rather than returning an empty map;
+ *   · **an island** — a group with no path from any entry — becomes its own flow starting at the left,
+ *     rather than a stack of nodes on the origin;
+ *   · **a self-link** is not a layering constraint and never counts towards indegree, or a page that
+ *     links to itself could not be an entry.
+ */
+export function autoLayout(
+  pages: readonly PageDef[],
+  links: readonly PageLink[],
+): Map<string, NodePos> {
+  const positions = new Map<string, NodePos>();
+  if (!pages.length) return positions;
+
+  const order = pages.map((page) => page.id);
+  const out = new Map<string, string[]>(order.map((id) => [id, []]));
+  const indegree = new Map<string, number>(order.map((id) => [id, 0]));
+  for (const link of links) {
+    if (link.from === link.to || !out.has(link.from) || !out.has(link.to)) continue;
+    out.get(link.from)!.push(link.to);
+    indegree.set(link.to, indegree.get(link.to)! + 1);
+  }
+
+  // Entries first, so a workflow's real starting points end up on the left. Then everything else, so
+  // an island or a pure cycle is still visited.
+  const roots = [
+    ...order.filter((id) => indegree.get(id) === 0),
+    ...order.filter((id) => indegree.get(id) !== 0),
+  ];
+
+  /*
+    Iterative DFS. Recursion would be clearer and would also blow the stack on a long enough chain of
+    pages, which is a silly way for a design tool to fail.
+
+    `state` is white (absent) → grey (on the stack) → black (done). An edge into a grey page is a back
+    edge; every other edge is a layering constraint. `postorder` reversed is a topological order of
+    what is left.
+  */
+  const state = new Map<string, 'grey' | 'black'>();
+  const postorder: string[] = [];
+  const back = new Set<string>();
+
+  for (const root of roots) {
+    if (state.has(root)) continue;
+    const stack: { id: string; next: number }[] = [{ id: root, next: 0 }];
+    state.set(root, 'grey');
+    while (stack.length) {
+      const frame = stack[stack.length - 1]!;
+      const neighbours = out.get(frame.id)!;
+      if (frame.next >= neighbours.length) {
+        state.set(frame.id, 'black');
+        postorder.push(frame.id);
+        stack.pop();
+        continue;
+      }
+      const next = neighbours[frame.next++]!;
+      const mark = state.get(next);
+      if (mark === 'grey') {
+        back.add(`${frame.id}>${next}`);
+      } else if (mark === undefined) {
+        state.set(next, 'grey');
+        stack.push({ id: next, next: 0 });
+      }
+    }
+  }
+
+  const layer = new Map<string, number>(order.map((id) => [id, 0]));
+  for (const id of [...postorder].reverse()) {
+    for (const next of out.get(id)!) {
+      if (back.has(`${id}>${next}`)) continue;
+      layer.set(next, Math.max(layer.get(next)!, layer.get(id)! + 1));
+    }
+  }
+
+  // Within a column, page order — so reordering the tab strip reorders the map, which is what an
+  // author who has just dragged a tab expects.
+  const columns = new Map<number, string[]>();
+  for (const id of order) {
+    const depth = layer.get(id) ?? 0;
+    const column = columns.get(depth) ?? [];
+    column.push(id);
+    columns.set(depth, column);
+  }
+
+  /*
+    Headroom for the edges that skip a column.
+
+    A → C where B sits between them cannot be drawn straight: the line would pass through B, and its
+    label — which is the only way to tell one edge out of A from another — would land on B's title. The
+    map arcs those edges over the row instead, so the layout has to leave room above the first row for
+    them to arc into. One lane each, and enough space for three; a design with four edges skipping a
+    column at once shares lanes, and shared lanes are still better than a wall of nodes pushed down.
+  */
+  const skipping = links.filter((link) => {
+    if (link.from === link.to || back.has(`${link.from}>${link.to}`)) return false;
+    const from = layer.get(link.from);
+    const to = layer.get(link.to);
+    return from !== undefined && to !== undefined && to - from >= 2;
+  }).length;
+  const top = ORIGIN_Y + Math.min(skipping, 3) * SKIP_LANE;
+
+  for (const [depth, ids] of columns) {
+    ids.forEach((id, row) => {
+      positions.set(id, {
+        x: ORIGIN_X + depth * (NODE_W + COL_GAP),
+        y: top + row * (NODE_H + ROW_GAP),
+      });
+    });
+  }
+  return positions;
 }
 
 /**

@@ -14,12 +14,12 @@
  *   · multiple pages with icons, reorder, duplicate, delete, and an Add page control
  *   · page links **derived** from nav-button targets, with the outgoing count on each tab
  *   · an inspector: page settings, and properties for the selected widget
- *   · Edit and Preview modes
+ *   · the **Flow map** — pages as draggable nodes, SVG edges, drag a port to link two pages, and an
+ *     Auto-arrange that layers the workflow left to right from its entry pages
+ *   · Edit, Flow and Preview modes
  *   · the whole design persisted to localStorage, as the original does
  *
  * ── WHAT IS NOT, AND IS NOT PRETENDED TO BE ───────────────────────────────────────────
- *   · the **Flow map** — pages as draggable nodes with SVG edges, port-drag to link and a BFS
- *     auto-arrange. It is the largest single piece of the original and the next thing to port.
  *   · **Kendo fidelity**: the Data grid renders rows but does not page, sort, filter or group; the
  *     gauge and progress are SVG rather than Kendo widgets. The platform has no Kendo dependency.
  *   · the **spline, funnel, radar, waterfall and scatter** chart kinds.
@@ -57,9 +57,12 @@ import {
   minH,
   seedPages,
   type PageDef,
+  type PageLink,
   type PaletteItem,
   type Widget,
 } from './model';
+import { FlowMapComponent } from './flow-map.component';
+import { PaletteComponent } from './palette.component';
 import { WidgetViewComponent } from './widget-view.component';
 
 const STORE = 'opus.edm.pagebuilder.v1';
@@ -67,12 +70,12 @@ const STORE = 'opus.edm.pagebuilder.v1';
 /** Icons a page may carry, matching the row of choices the original offers in page settings. */
 const PAGE_ICONS = ['page', 'grid', 'layers', 'database', 'model', 'shield', 'settings', 'flow'];
 
-type Mode = 'edit' | 'preview';
+type Mode = 'edit' | 'flow' | 'preview';
 
 @Component({
   selector: 'opus-edm-page-builder',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [IconComponent, WidgetViewComponent],
+  imports: [FlowMapComponent, IconComponent, PaletteComponent, WidgetViewComponent],
   template: `
     <div class="pb">
       <header class="pb-head">
@@ -89,9 +92,13 @@ type Mode = 'edit' | 'preview';
           {{ savedLabel() }}
         </span>
         <div class="pb-modes" role="group" aria-label="Mode">
-          <button type="button" [class.on]="mode() === 'edit'" (click)="mode.set('edit')">
+          <button type="button" [class.on]="mode() === 'edit'" (click)="setEdit()">
             <opus-icon name="edit" [size]="13" [weight]="2" />
             Edit
+          </button>
+          <button type="button" [class.on]="mode() === 'flow'" (click)="setFlow()">
+            <opus-icon name="flow" [size]="13" [weight]="2" />
+            Flow
           </button>
           <button type="button" [class.on]="mode() === 'preview'" (click)="setPreview()">
             <opus-icon name="eye" [size]="13" [weight]="2" />
@@ -154,68 +161,76 @@ type Mode = 'edit' | 'preview';
 
       <div class="pb-work" [attr.data-mode]="mode()">
         @if (mode() === 'edit') {
-          <aside class="pb-palette">
-            <div class="pb-pal-h">Widgets</div>
-            <p class="pb-pal-help">Click to add to the page, then drag to arrange.</p>
-            @for (group of palette; track group.group) {
-              <div class="pb-pal-group">{{ group.group }}</div>
-              <div class="pb-pal-grid">
-                @for (item of group.items; track item.key) {
-                  <button
-                    type="button"
-                    class="pb-pal-item"
-                    [title]="'Add ' + item.label"
-                    (click)="addWidget(item)"
-                  >
-                    <span class="pb-pal-ic"><opus-icon [name]="item.icon" [size]="16" /></span>
-                    <span class="pb-pal-lbl">{{ item.label }}</span>
-                  </button>
-                }
-              </div>
-            }
-          </aside>
+          <opus-pb-palette (add)="addWidget($event)" />
         }
 
-        <main class="pb-canvas-wrap">
-          <div
-            #canvas
-            class="pb-canvas"
-            [attr.data-mode]="mode()"
-            [style.min-height.px]="canvasHeight()"
-            (mousedown)="onCanvasDown($event)"
-          >
-            @if (!page().widgets.length) {
-              <div class="pb-empty">
-                <opus-icon name="grid" [size]="30" />
-                <div class="t">This page is empty</div>
-                <div class="s">Add a widget from the palette on the left to get started.</div>
-              </div>
-            }
+        @if (mode() !== 'flow') {
+          <main class="pb-canvas-wrap">
+            <div
+              #canvas
+              class="pb-canvas"
+              [attr.data-mode]="mode()"
+              [style.min-height.px]="canvasHeight()"
+              (mousedown)="onCanvasDown($event)"
+            >
+              @if (!page().widgets.length) {
+                <div class="pb-empty">
+                  <opus-icon name="grid" [size]="30" />
+                  <div class="t">This page is empty</div>
+                  <div class="s">Add a widget from the palette on the left to get started.</div>
+                </div>
+              }
 
-            @for (widget of page().widgets; track widget.id) {
-              <div
-                class="pb-w"
-                [class.sel]="selId() === widget.id && mode() === 'edit'"
-                [style.left.px]="widget.x * unitW()"
-                [style.top.px]="widget.y * ROW_H"
-                [style.width.px]="widget.w * unitW()"
-                [style.height.px]="widget.h * ROW_H"
-                (mousedown)="onWidgetDown($event, widget)"
-              >
-                <div class="pb-w-inner"><opus-pb-widget [widget]="widget" /></div>
-                @if (mode() === 'edit') {
-                  <span class="pb-w-type">{{ typeLabel(widget) }}</span>
-                  <!--
-                    A corner handle rather than edge handles: the grid snaps to 12 columns and 40px
-                    rows, so a single diagonal drag reaches every reachable size, and four handles on a
-                    3-column widget would overlap each other.
-                  -->
-                  <span class="pb-resize" (mousedown)="onResizeDown($event, widget)"></span>
-                }
-              </div>
-            }
-          </div>
-        </main>
+              @for (widget of page().widgets; track widget.id) {
+                <div
+                  class="pb-w"
+                  [class.sel]="selId() === widget.id && mode() === 'edit'"
+                  [style.left.px]="widget.x * unitW()"
+                  [style.top.px]="widget.y * ROW_H"
+                  [style.width.px]="widget.w * unitW()"
+                  [style.height.px]="widget.h * ROW_H"
+                  (mousedown)="onWidgetDown($event, widget)"
+                >
+                  <div class="pb-w-inner"><opus-pb-widget [widget]="widget" /></div>
+                  @if (mode() === 'edit') {
+                    <span class="pb-w-type">{{ typeLabel(widget) }}</span>
+                    <!--
+                      A corner handle rather than edge handles: the grid snaps to 12 columns and 40px
+                      rows, so a single diagonal drag reaches every reachable size, and four handles on
+                      a 3-column widget would overlap each other.
+                    -->
+                    <span class="pb-resize" (mousedown)="onResizeDown($event, widget)"></span>
+                  }
+                </div>
+              }
+            </div>
+          </main>
+        }
+
+        <!--
+          ── the flow map ──────────────────────────────────────────────────────────────────
+          The other half of "multi-page workflow". The canvas shows one page; this shows how an end
+          user gets from one to the next, which is the thing an author cannot check by looking at
+          pages one at a time.
+
+          Every edge is a nav button on the source page — the map reads the same widgets the canvas
+          edits and stores no edge of its own. So the map asks and this component writes: drawing a
+          link adds a button, cutting one clears that button's target, and the page list keeps a
+          single owner either way.
+        -->
+        @if (mode() === 'flow') {
+          <opus-pb-flow-map
+            [pages]="pages()"
+            [links]="links()"
+            [currentId]="currentId()"
+            (open)="openFromFlow($event)"
+            (editWidget)="editLinkWidget($event)"
+            (place)="placeNode($event)"
+            (link)="linkPages($event.from, $event.to)"
+            (cut)="cutLink($event)"
+            (arrange)="autoArrange()"
+          />
+        }
 
         @if (mode() === 'edit') {
           <aside class="pb-insp">
@@ -239,13 +254,21 @@ type Mode = 'edit' | 'preview';
                         (change)="setProp(field.key, $any($event.target).value)"
                       ></textarea>
                     } @else if (field.kind === 'select') {
+                      <!--
+                        A selected binding on each option, not a value binding on the select: the
+                        element's value is assigned before its option loop has created anything, so it
+                        finds nothing to match and is dropped. The select then displays its *first*
+                        option — which is not blank, it is wrong. Every Direction, Kind and Align in
+                        this inspector was reading as the first choice regardless of the stored prop.
+                      -->
                       <select
                         class="opus-select"
-                        [value]="text(widget, field.key)"
                         (change)="setProp(field.key, $any($event.target).value)"
                       >
                         @for (option of field.options ?? []; track option) {
-                          <option [value]="option">{{ option || '(none)' }}</option>
+                          <option [value]="option" [selected]="option === text(widget, field.key)">
+                            {{ option || '(none)' }}
+                          </option>
                         }
                       </select>
                     } @else if (field.kind === 'boolean') {
@@ -289,15 +312,13 @@ type Mode = 'edit' | 'preview';
                 @if (isNavButton(widget)) {
                   <label class="pb-f">
                     Links to
-                    <select
-                      class="opus-select"
-                      [value]="text(widget, 'target')"
-                      (change)="setProp('target', $any($event.target).value)"
-                    >
-                      <option value="">(nowhere)</option>
+                    <select class="opus-select" (change)="setProp('target', $any($event.target).value)">
+                      <option value="" [selected]="!text(widget, 'target')">(nowhere)</option>
                       @for (other of pages(); track other.id) {
                         @if (other.id !== currentId()) {
-                          <option [value]="other.id">{{ other.name }}</option>
+                          <option [value]="other.id" [selected]="other.id === text(widget, 'target')">
+                            {{ other.name }}
+                          </option>
                         }
                       }
                     </select>
@@ -380,9 +401,9 @@ type Mode = 'edit' | 'preview';
                 </div>
 
                 <p class="pb-note">
-                  Not yet ported from the console: the <b>Flow</b> map, Kendo grid paging and sorting,
-                  the spline/funnel/radar/waterfall/scatter chart kinds, AI generation from a prompt,
-                  and data-source binding.
+                  Not yet ported from the console: Kendo grid paging and sorting, the
+                  spline/funnel/radar/waterfall/scatter chart kinds, AI generation from a prompt, and
+                  data-source binding.
                 </p>
               </div>
             }
@@ -601,78 +622,9 @@ type Mode = 'edit' | 'preview';
       overflow: hidden;
     }
 
-    .pb-work[data-mode='preview'] {
+    .pb-work[data-mode='preview'],
+    .pb-work[data-mode='flow'] {
       grid-template-columns: minmax(0, 1fr);
-    }
-
-    .pb-palette {
-      border-inline-end: 1px solid var(--opus-border);
-      overflow-y: auto;
-      padding: 12px 10px 24px;
-      background: var(--opus-surface);
-    }
-
-    .pb-pal-h {
-      font-size: var(--opus-text-md);
-      font-weight: var(--opus-weight-semibold);
-      color: var(--opus-text);
-    }
-
-    .pb-pal-help {
-      margin: 2px 0 12px;
-      font-size: var(--opus-text-xs);
-      color: var(--opus-text-muted);
-      line-height: var(--opus-leading-normal);
-    }
-
-    .pb-pal-group {
-      font-size: 10px;
-      font-weight: var(--opus-weight-semibold);
-      text-transform: uppercase;
-      letter-spacing: 0.07em;
-      color: var(--opus-text-muted);
-      margin: 12px 0 6px;
-    }
-
-    .pb-pal-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 6px;
-    }
-
-    .pb-pal-item {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 5px;
-      padding: 9px 4px;
-      border: 1px solid var(--opus-border);
-      border-radius: var(--opus-radius-md);
-      background: var(--opus-surface);
-      font: inherit;
-      cursor: pointer;
-      color: var(--opus-text-secondary);
-    }
-
-    .pb-pal-item:hover {
-      border-color: var(--opus-accent);
-      color: var(--opus-accent);
-    }
-
-    .pb-pal-ic {
-      display: inline-grid;
-      place-items: center;
-      inline-size: 26px;
-      block-size: 26px;
-      border-radius: var(--opus-radius-sm);
-      background: var(--opus-accent-soft);
-      color: var(--opus-accent);
-    }
-
-    .pb-pal-lbl {
-      font-size: 10.5px;
-      text-align: center;
-      line-height: 1.25;
     }
 
     /* ── canvas */
@@ -962,7 +914,7 @@ type Mode = 'edit' | 'preview';
         grid-template-columns: minmax(0, 1fr);
       }
 
-      .pb-palette {
+      opus-pb-palette {
         display: none;
       }
     }
@@ -973,7 +925,6 @@ export class EdmPageBuilderComponent {
 
   protected readonly COLS = COLS;
   protected readonly ROW_H = ROW_H;
-  protected readonly palette = PALETTE;
   protected readonly accents = ACCENTS;
   protected readonly pageIcons = PAGE_ICONS;
 
@@ -1000,7 +951,7 @@ export class EdmPageBuilderComponent {
     return Math.max(lowest + 3, 14) * ROW_H;
   });
 
-  private readonly links = computed(() => linksOf(this.pages()));
+  protected readonly links = computed(() => linksOf(this.pages()));
 
   protected readonly savedLabel = computed(() =>
     this.pages().length ? 'Saved' : 'Nothing to save',
@@ -1277,7 +1228,107 @@ export class EdmPageBuilderComponent {
     this.drag = null;
   }
 
+  // ── what the flow map asks for ─────────────────────────────────────────────────────
+
+  /** A node was dragged. Store where, so the layout stops deciding for this page. */
+  protected placeNode(at: { id: string; x: number; y: number }): void {
+    this.pages.update((pages) =>
+      pages.map((page) => (page.id === at.id ? { ...page, fx: at.x, fy: at.y } : page)),
+    );
+  }
+
+  /** Hand every node back to the layout by forgetting where it was dragged. */
+  protected autoArrange(): void {
+    this.pages.update((pages) => pages.map(({ fx, fy, ...rest }) => rest));
+  }
+
+  protected openFromFlow(id: string): void {
+    this.currentId.set(id);
+    this.selId.set(null);
+    this.setEdit();
+  }
+
+  /** Open the page an edge starts from with its nav button selected — the edge *is* that button. */
+  protected editLinkWidget(link: PageLink): void {
+    this.currentId.set(link.from);
+    this.selId.set(link.widgetId);
+    this.setEdit();
+  }
+
+  /**
+   * Draw a link by adding the nav button that *is* the link.
+   *
+   * There is no edge to store — `linksOf` derives every edge from a button's target — so this is the
+   * only honest way to create one, and it has a consequence worth stating rather than hiding: a link
+   * drawn on the map puts a button on the source page. It goes below the existing content and is
+   * named after its destination, so the page it lands on reads as designed rather than merely valid.
+   */
+  protected linkPages(from: string, to: string): void {
+    const source = this.pages().find((page) => page.id === from);
+    // A second edge between the same two pages would be indistinguishable on the map, and would
+    // leave a duplicate button behind on the page.
+    const already = this.links().some((link) => link.from === from && link.to === to);
+    if (!source || already) return;
+
+    const bottom = source.widgets.reduce((max, widget) => Math.max(max, widget.y + widget.h), 0);
+    const widget: Widget = {
+      id: `w${++this.seq}`,
+      type: 'button',
+      x: 0,
+      y: bottom,
+      w: 3,
+      h: 2,
+      props: { label: this.nameOf(to), style: 'primary', action: 'navigate', target: to },
+    };
+    this.pages.update((pages) =>
+      pages.map((page) =>
+        page.id === from ? { ...page, widgets: [...page.widgets, widget] } : page,
+      ),
+    );
+  }
+
+  /**
+   * Cut a link by clearing the button's target rather than deleting the button.
+   *
+   * Deleting is the tidier-looking option and the wrong one: the button may have been placed and
+   * styled on the canvas, and this builder has no undo, so losing it to one click on a map is not
+   * recoverable. Clearing the target removes the edge, keeps the button, and the inspector then shows
+   * it linking to "(nowhere)" — a state the author can see and finish.
+   */
+  protected cutLink(link: PageLink): void {
+    this.pages.update((pages) =>
+      pages.map((page) =>
+        page.id !== link.from
+          ? page
+          : {
+              ...page,
+              widgets: page.widgets.map((widget) =>
+                widget.id === link.widgetId
+                  ? { ...widget, props: { ...widget.props, target: '' } }
+                  : widget,
+              ),
+            },
+      ),
+    );
+  }
+
+  private nameOf(id: string): string {
+    return this.pages().find((page) => page.id === id)?.name ?? id;
+  }
+
+
   // ── inspector helpers ──────────────────────────────────────────────────────────────
+
+  protected setEdit(): void {
+    this.mode.set('edit');
+    // The canvas is re-created on the way back in, so its column width has to be re-measured.
+    setTimeout(() => this.measure(), 0);
+  }
+
+  protected setFlow(): void {
+    this.mode.set('flow');
+    this.selId.set(null);
+  }
 
   protected setPreview(): void {
     this.mode.set('preview');
