@@ -228,11 +228,11 @@ apps/experience-studio/…         tokens → coda-theme, and Material seeded fr
 
 ## 7. What a follow-on should pick up
 
-1. **The AI panel is styled but unwired.** `chrome.scss` ships `.opus-ai-panel`, `.opus-ai-suggestion`
-   and `.opus-ai-badge`, and the title row has room for the console's sparkle affordance. The
-   generation pipeline already exists (`libs/generation`, `docs/AI-GENERATION-WORKFLOW.md`). Wiring
-   "suggest a widget for this page" into the builder's title row is a small, high-value step, and the
-   suggestions should arrive as JSON Patches so accepting one is an undoable edit like any other.
+1. ~~**The AI panel is styled but unwired.**~~ **Done** — see [`AI-ASSIST.md`](./AI-ASSIST.md). The
+   ★ in the title row asks what the page is missing; `.opus-ai-panel`, `.opus-ai-suggestion` and
+   `.opus-ai-badge` now carry a real feature, and accepting a suggestion is a single patch tagged
+   `origin: 'ai'` that one undo reverses — which needed a new command (`addBoundWidget`) so that a
+   widget and its data source arrive together rather than as two history entries.
 2. **The console's wordmark and avatar are placeholders.** The avatar renders `AUTHOR.displayName`
    initials over a fixed gradient; a real identity service replaces both.
 3. **Contrast audit under CODA.** Validation level 8 (accessibility) still does not run. The CODA

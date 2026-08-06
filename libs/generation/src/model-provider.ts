@@ -28,8 +28,15 @@ export interface ModelRequest {
   /** Low by default: generation should be reproducible, not creative. */
   temperature?: number;
   maxOutputTokens?: number;
-  /** Names the call site, for cost attribution and evaluation slicing. */
-  purpose: 'classify' | 'plan' | 'fill' | 'repair';
+  /**
+   * Names the call site, for cost attribution and evaluation slicing.
+   *
+   * `assist` is a different *question* from the others, not a different stage of the same one:
+   * plan/fill/repair build a page, assist critiques one that exists. It shares the port because the
+   * guardrails are identical — one prompt, one schema, one budget, one audit record — and a second
+   * port would have meant a second place to forget the egress policy.
+   */
+  purpose: 'classify' | 'plan' | 'fill' | 'repair' | 'assist';
 }
 
 export interface ModelResponse {

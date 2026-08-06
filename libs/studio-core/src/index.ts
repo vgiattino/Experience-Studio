@@ -40,6 +40,7 @@ export {
 } from './layout-tree';
 
 export {
+  addBoundWidget,
   addContainer,
   addSpacer,
   addWidget,
@@ -60,6 +61,7 @@ export {
   setValue,
   uniqueId,
   wrapInContainer,
+  type AddBoundWidgetInput,
   type AddWidgetInput,
   type Command,
   type CommandRefusal,

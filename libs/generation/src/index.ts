@@ -92,3 +92,18 @@ export {
 } from './plan';
 
 export { assemblePage, type AssembleInput } from './assemble';
+
+export {
+  ASSIST_RESPONSE_SCHEMA,
+  analysePage,
+  assistPrompt,
+  componentTypeFor,
+  keepGroundedProposals,
+  mandatoryFilterFor,
+  viewOfPage,
+  type AssistInput,
+  type AssistPageView,
+  type AssistProposal,
+  type AssistProposalKind,
+  type AssistResponse,
+} from './assist';

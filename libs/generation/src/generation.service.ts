@@ -34,6 +34,7 @@ import type { ComponentManifest, PageDefinition, UserContext } from '@opus/contr
 import type { ValidationFinding, ValidationReport } from '@opus/validator';
 
 import { assemblePage } from './assemble';
+import { mandatoryFilterFor } from './assist';
 import { assembleContext, projectDefinition, type AssembledContext } from './context';
 import { intake, type IntakeResult } from './intake';
 import {
@@ -731,29 +732,6 @@ export class GenerationService {
 
 function ms(from: number): number {
   return Math.round(performance.now() - from);
-}
-
-/**
- * A filter that always constrains, for an entity the catalog marks `requiresFilter`.
- *
- * Prefer a date — a business date narrowed to the reporting day is what an operational page
- * means anyway — then an enum over its full value set, which constrains the scan without
- * excluding anything a reader expected to see. An entity offering neither gets nothing, and
- * the caller drops the widget rather than emitting one the validator will reject.
- */
-function mandatoryFilterFor(entity: GroundedEntity): FillFilter[] {
-  if (!entity.requiresFilter) return [];
-
-  const date = entity.attributes.find((a) => a.isTemporal && a.filterable);
-  if (date) return [{ attributeRef: date.ref, operator: 'onOrAfterToday' }];
-
-  const enumAttribute = entity.attributes.find((a) => a.enumValues?.length && a.filterable);
-  if (enumAttribute?.enumValues) {
-    return [
-      { attributeRef: enumAttribute.ref, operator: 'in', value: [...enumAttribute.enumValues] },
-    ];
-  }
-  return [];
 }
 
 /**

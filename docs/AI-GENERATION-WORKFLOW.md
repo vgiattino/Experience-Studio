@@ -1,5 +1,12 @@
 # AI Page Generation — Implementation Record
 
+> **Design-time AI has a second half.** This document covers generating a page from a sentence.
+> Critiquing a page that already exists — the builder's ★ — is
+> [`AI-ASSIST.md`](./AI-ASSIST.md). The two share the model port, the grounding pack and the
+> entitlement scoping; they differ in what the model is asked and what the platform does with the
+> answer.
+
+
 Status: **Delivered as a working pipeline against mocked metadata and a simulated provider**
 Scope: natural-language request → intent → grounded retrieval → component selection → template
 selection → page JSON → rendered page, with validation, bounded repair, deterministic fallback

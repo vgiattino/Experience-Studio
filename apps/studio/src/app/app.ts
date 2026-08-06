@@ -62,6 +62,8 @@ import {
   type PreviewSize,
 } from '@opus/studio-core';
 import {
+  AssistPanelComponent,
+  AssistService,
   CanvasComponent,
   DragStateService,
   EditorService,
@@ -131,8 +133,9 @@ const PREVIEW_ICONS: Record<PreviewSize['id'], { name: string; size: number }> =
   changeDetection: ChangeDetectionStrategy.OnPush,
   // Provided here rather than at the root: an editing session belongs to an open document, and
   // state tier 2 is per-experience by design (§4.2). A second window opens a second session.
-  providers: [DefinitionStore, SelectionService, DragStateService, EditorService],
+  providers: [DefinitionStore, SelectionService, DragStateService, EditorService, AssistService],
   imports: [
+    AssistPanelComponent,
     CanvasComponent,
     HistoryPanelComponent,
     IconComponent,
@@ -279,6 +282,28 @@ const PREVIEW_ICONS: Record<PreviewSize['id'], { name: string; size: number }> =
 
                   <div class="right">
                     <span class="opus-muted">{{ sourceCount() }} data source(s)</span>
+                    <!--
+                      The console's AI affordance, in the console's position. Bordered rather than
+                      filled because it offers rather than acts: clicking it opens a panel of
+                      proposals, and nothing changes until the author accepts one.
+                    -->
+                    <button
+                      type="button"
+                      class="opus-ai-star"
+                      [attr.aria-pressed]="assistOpen()"
+                      [disabled]="!store.definition()"
+                      [title]="
+                        assistOpen()
+                          ? 'Hide the AI suggestions'
+                          : 'Ask what this page is missing, grounded in the catalog'
+                      "
+                      (click)="toggleAssist()"
+                    >
+                      <opus-icon name="sparkle" [size]="15" />
+                    </button>
+                    @if (assist.open().length) {
+                      <span class="opus-ai-badge">{{ assist.open().length }}</span>
+                    }
                   </div>
                 </div>
                 <p class="opus-desc">{{ pageDescription() }}</p>
@@ -429,6 +454,12 @@ const PREVIEW_ICONS: Record<PreviewSize['id'], { name: string; size: number }> =
                 </ul>
               }
 
+              @if (assistOpen()) {
+                <div class="assist-dock">
+                  <opus-assist-panel (close)="assistOpen.set(false)" />
+                </div>
+              }
+
               <div class="stage opus-wb-tab-body">
                 <div class="canvas-dock">
                   @if (store.definition()) {
@@ -548,6 +579,21 @@ const PREVIEW_ICONS: Record<PreviewSize['id'], { name: string; size: number }> =
       display: inline-flex;
       align-items: center;
       gap: 1px;
+    }
+
+    /*
+      The panel sits between the toolbar and the canvas, not in the right dock.
+
+      Two reasons. The right dock is 21rem wide and a rationale is a sentence, so it would wrap to
+      four lines per row. And accepting a suggestion changes the canvas: the author should see the
+      widget appear without the panel that proposed it having to move or close.
+    */
+    .assist-dock {
+      padding: var(--opus-space-3) 20px;
+      border-block-end: 1px solid var(--opus-border);
+      flex-shrink: 0;
+      max-block-size: 40vh;
+      overflow-y: auto;
     }
 
     /* Two-pane stage: canvas and the property dock. */
@@ -748,6 +794,7 @@ export class StudioApp {
   protected readonly store = inject(DefinitionStore);
   protected readonly selection = inject(SelectionService);
   protected readonly theme = inject(ThemeService);
+  protected readonly assist = inject(AssistService);
 
   protected readonly author: UserContext = AUTHOR;
   protected readonly previewSizes = PREVIEW_SIZES;
@@ -767,6 +814,7 @@ export class StudioApp {
   protected readonly validation = signal<ValidationReport | null>(null);
   protected readonly showFindings = signal(false);
   protected readonly zoom = signal<number>(100);
+  protected readonly assistOpen = signal(false);
 
   /** Findings as a plain list, so the template never has to narrow an optional report. */
   protected readonly findings = computed(() => this.validation()?.findings ?? []);
@@ -862,6 +910,20 @@ export class StudioApp {
 
   protected previewIcon(id: PreviewSize['id']): { name: string; size: number } {
     return PREVIEW_ICONS[id];
+  }
+
+  /**
+   * Open the panel and, the first time, ask.
+   *
+   * Asking on first open rather than on every open: the author who clicked the star wants an answer,
+   * not a second button to press — but re-asking each time they glance at the panel would spend a
+   * model call on a page that has not changed. Once there is a list, the panel reports staleness and
+   * offers "Suggest again", which is the author's call to make.
+   */
+  protected toggleAssist(): void {
+    const open = !this.assistOpen();
+    this.assistOpen.set(open);
+    if (open && this.assist.status() === 'idle') void this.assist.suggest();
   }
 
   protected levelsTitle(report: ValidationReport): string {
@@ -970,6 +1032,10 @@ export class StudioApp {
     this.selection.select(null);
     this.openPageId.set(listing.id);
     this.message.set(null);
+    // Suggestions belong to a page, not to the session. Carrying them across a page switch would
+    // offer the author a measure that is missing from the page they just closed.
+    this.assist.reset();
+    this.assistOpen.set(false);
 
     const url = new URL(window.location.href);
     url.searchParams.set('page', listing.id);

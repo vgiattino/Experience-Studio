@@ -20,6 +20,12 @@ export { PaletteComponent } from './palette.component';
 
 export { EditorService } from './editor.service';
 export {
+  AssistService,
+  type AssistStatus,
+  type AssistSuggestion,
+} from './assist.service';
+export { AssistPanelComponent } from './assist-panel.component';
+export {
   DragStateService,
   DRAG_MIME,
   positionWithin,

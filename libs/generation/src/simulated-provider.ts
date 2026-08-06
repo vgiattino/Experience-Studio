@@ -22,6 +22,7 @@
 
 import type { GroundedEntity, GroundingPack } from '@opus/catalog';
 
+import { analysePage, type AssistInput, type AssistResponse } from './assist';
 import type { ExtractedConcepts, PageIntent } from './intake';
 import type { GenerationPlan, PlanWidget, WidgetFill } from './plan';
 import {
@@ -52,6 +53,13 @@ export interface SimulationInput {
   /** Component types the registry offers, so the provider cannot invent one by accident. */
   availableComponents: readonly string[];
   faults?: readonly SimulatedFault[];
+  /**
+   * Present only for an `assist` call, because assist has no prompt, no intent and no template — it
+   * has a page. Optional rather than a second input type so that one stand-in answers every purpose
+   * on the port; a `plan` call with this set ignores it, and an `assist` call without it fails
+   * loudly rather than inventing a page to critique.
+   */
+  assist?: AssistInput;
 }
 
 const MAX_KPIS = 4;
@@ -106,6 +114,9 @@ export class SimulatedModelProvider implements ModelProvider {
         // when told precisely what was wrong.
         output = this.fill(request, attempt, true);
         break;
+      case 'assist':
+        output = this.assist();
+        break;
       default:
         throw new ModelProviderError(`Unsupported purpose ${request.purpose}`, false, request.purpose);
     }
@@ -118,6 +129,37 @@ export class SimulatedModelProvider implements ModelProvider {
       tokensOut: Math.ceil(JSON.stringify(output).length / 4),
       durationMs: Math.round(performance.now() - startedAt),
       note: faults.length ? `faults injected: ${faults.join(', ')}` : undefined,
+    };
+  }
+
+  /**
+   * Assist: what is this page missing?
+   *
+   * Delegates to `analysePage`, which is where the rules live. That is not laziness about the
+   * simulation — it is the same claim the header makes, applied to a second question: the stand-in
+   * reasons over exactly the grounding pack and the page projection a real model receives, so a
+   * catalog change changes its answer. Duplicating the rules here would mean the deterministic
+   * baseline and the simulated model could disagree, and an author would see different suggestions
+   * depending on whether a provider happened to be installed.
+   *
+   * What a real model does instead: rank nine candidates down to the two that matter for this page,
+   * write a rationale worth reading, and return an empty list with a note when the page is complete.
+   */
+  private assist(): AssistResponse {
+    const input = this.input.assist;
+    if (!input) {
+      throw new ModelProviderError(
+        'An assist call needs the page and its grounding; none were supplied',
+        false,
+        'assist',
+      );
+    }
+    const proposals = analysePage(input);
+    return {
+      proposals,
+      note: proposals.length
+        ? undefined
+        : 'Nothing to add: every measure and groupable dimension in scope is already on the page.',
     };
   }
 

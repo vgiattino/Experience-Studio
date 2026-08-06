@@ -32,7 +32,7 @@ import type {
   PageDefinition,
 } from '@opus/contracts';
 
-import { pointer, type PatchOp } from './json-patch';
+import { parsePointer, pointer, type PatchOp } from './json-patch';
 import {
   childListsOf,
   locateNode,
@@ -878,6 +878,98 @@ export function setBindingField(
     value: { ...(existing ?? {}), field },
   });
   return { label: `Bind ${role}`, ops };
+}
+
+// ── composite ────────────────────────────────────────────────────────────────────────
+
+export interface AddBoundWidgetInput extends AddWidgetInput {
+  /** Everything the data source needs, minus the component it attaches to. */
+  source: Omit<CreateDataSourceInput, 'componentId' | 'manifest'>;
+  /** Overrides the manifest's name as the widget title. */
+  title?: string;
+  /** What history should call this. Defaults to the widget's title. */
+  label?: string;
+}
+
+/**
+ * Add a widget, its data source and its bindings — as ONE patch.
+ *
+ * WHY THIS EXISTS SEPARATELY FROM `addWidget`. The palette drops an *unbound* widget, because a
+ * person drags a shape first and says what it shows second. Everything that decides both at once —
+ * an AI suggestion, a "chart this measure" affordance, an import — needs the opposite, and needs it
+ * atomically. Composing it from `addWidget` then `createDataSource` at the call site gives two
+ * history entries for one action the author thinks of as one action: they press undo, the source
+ * disappears and an orphan widget stays behind showing "no data", and they press it again to be rid
+ * of that. Worse, the state between the two patches is a widget bound to nothing, which the
+ * validator correctly rejects — so a continuously-validating editor reports a page as broken halfway
+ * through an operation that was always going to end valid.
+ *
+ * Composed from the two commands rather than reimplementing them: `addWidget` is run first, its ops
+ * are applied to a projected definition, and `createDataSource` runs against *that* — so the id
+ * uniqueness check sees the component that is about to exist and cannot collide with it.
+ */
+export function addBoundWidget(definition: PageDefinition, input: AddBoundWidgetInput): Command {
+  const added = addWidget(definition, input);
+  if (isRefusal(added)) return added;
+
+  // The component id `addWidget` chose. Read back from its own ops rather than recomputed, so the
+  // two halves cannot disagree about it.
+  const componentOp = added.ops.find(
+    (op) => op.op === 'add' && op.path.startsWith('/components/'),
+  );
+  const componentId = componentOp?.path.split('/')[2];
+  if (!componentId) {
+    return { label: 'Add component', refused: 'The component could not be created' };
+  }
+
+  const ops: PatchOp[] = [...added.ops];
+
+  if (input.title) {
+    ops.push({ op: 'replace', path: pointer('components', componentId, 'title'), value: input.title });
+  }
+
+  // `createDataSource` needs to see the definition as it will be, for two reasons: id uniqueness,
+  // and the binding seeding inside `attachDataSource`, which reads the component's manifest roles
+  // against a component that does not exist yet in the original.
+  const projected = applyAddedWidget(definition, added.ops);
+  const source = createDataSource(projected, {
+    ...input.source,
+    componentId,
+    manifest: input.manifest,
+  });
+  if (isRefusal(source)) return source;
+  ops.push(...source.ops);
+
+  return {
+    label: input.label ?? `Add ${input.title ?? textOf(nameOf(input.manifest))}`,
+    select: added.select ?? null,
+    ops,
+  };
+}
+
+/**
+ * The definition with a widget's ops folded in, for commands that must run against the next state.
+ *
+ * A narrow, local projection rather than `applyPatch`: this file is the command layer and does not
+ * depend on the patch *applier*, only on the patch *vocabulary*. Handling exactly the two shapes
+ * `addWidget` emits keeps that boundary intact — anything else is a programming error here, not a
+ * runtime case to degrade for.
+ */
+function applyAddedWidget(definition: PageDefinition, ops: readonly PatchOp[]): PageDefinition {
+  let next = definition;
+  for (const op of ops) {
+    if (op.op !== 'add') continue;
+    const segments = parsePointer(op.path);
+    if (segments.length === 2 && segments[0] === 'components') {
+      next = {
+        ...next,
+        components: { ...next.components, [segments[1]!]: op.value as ComponentInstance },
+      };
+    }
+    // The layout op is deliberately ignored: `createDataSource` reads components and dataSources,
+    // never the tree, so folding the node in would be work with no reader.
+  }
+  return next;
 }
 
 // ── page-level ───────────────────────────────────────────────────────────────────────
