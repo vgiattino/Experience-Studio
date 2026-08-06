@@ -379,14 +379,28 @@
     font-weight: var(--opus-weight-medium);
   }
 
+  /*
+    The label never collapses; the hint gives way.
+
+    With `flex: 1` and a basis of 0, the label was the only shrinkable item, so a long hint crushed it to
+    a single character — "F.. 4 measure(s) · 8 attributes" instead of "File Loads". The label is what the
+    row *is*; the hint is a detail about it, and a detail that wins over the name is a detail in the wrong
+    place.
+  */
   .label {
-    flex: 1;
+    flex: 1 1 auto;
+    min-inline-size: 5rem;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   .hint {
+    flex: 0 1 auto;
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     font-size: var(--opus-text-xs);
     color: var(--opus-text-muted);
   }

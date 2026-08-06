@@ -1,10 +1,16 @@
-# EDM Administration — the console's home screen, recreated natively
+# EDM Administration — removed from the rail
 
-**What this is.** The Opus EDM console's Administration screen rebuilt as an Angular component in
-Experience Studio's own design system, reachable from the navigation rail under **Reference → EDM
-administration**. No iframe, no vendored React.
+> **Status: removed.** The screen was taken out of the navigation rail and its component deleted; the
+> rail's Reference section now holds only the EDM Page Builder. Nothing referenced it, so leaving an
+> unreachable 600-line component in the bundle would have been dead weight — it is in the history at
+> `d32d4e7` if it is ever wanted back.
+>
+> The rest of this document is kept deliberately. Two things in it are still true and still useful: what
+> the MDE repository actually contains (§1), and the design-system idioms the recreation added to
+> `chrome.scss`, which the Page Builder and the Catalog browser both still use.
 
-`npm run studio` → port 4300 → hover the rail → **EDM administration**.
+**What it was.** The Opus EDM console's Administration screen rebuilt as an Angular component in
+Experience Studio's own design system — no iframe, no vendored React.
 
 ---
 

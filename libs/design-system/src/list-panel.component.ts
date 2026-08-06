@@ -92,7 +92,8 @@ export interface ListPanelItem {
                 @if (item.icon) {
                   <opus-icon [name]="item.icon" [size]="15" />
                 }
-                <span class="label">{{ item.label }}</span>
+                <!-- Titled, because a 260px column truncates real names and hover is the only way back. -->
+                <span class="label" [title]="item.label">{{ item.label }}</span>
                 @if (item.hint) {
                   <span class="hint">{{ item.hint }}</span>
                 }

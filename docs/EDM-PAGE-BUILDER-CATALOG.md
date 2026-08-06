@@ -151,6 +151,9 @@ warnings.
 
 ## 8. Next
 
+0. ~~**Somewhere to browse the catalog.**~~ **Done** — the rail's **Data → Catalog**, see
+   [CATALOG-BROWSER.md](CATALOG-BROWSER.md). An author binding a widget to `late-file-count` now has
+   somewhere to go to ask what it means and what it may be aggregated by.
 1. **Filters on a binding.** The query shape already carries them and `checkBinding` already validates
    them; there is no UI. Until there is, an entity the gateway refuses unfiltered cannot be bound — and
    the widget says exactly that rather than failing.

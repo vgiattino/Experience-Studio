@@ -75,7 +75,7 @@ import {
 } from '@opus/studio-ui';
 import type { ValidationReport } from '@opus/validator';
 
-import { EdmAdministrationComponent } from './edm/administration.component';
+import { CatalogBrowserComponent } from './catalog/catalog-browser.component';
 import { EdmPageBuilderComponent } from './edm/page-builder/page-builder.component';
 import { AUTHOR } from './session';
 
@@ -90,13 +90,13 @@ type LeftPanel = 'pages' | 'add' | 'structure';
 /**
  * Which workspace fills the main panel.
  *
- * A workspace is a coarser thing than a left panel: `builder` is this application, and `edm-console`
- * is *another* application shown in a frame for comparison. Separate state rather than a fourth
- * `LeftPanel` value, because the console has no left panel, no page, and nothing to do with the
- * artifact being edited — collapsing the two would put "which panel" and "which product" in one
- * signal and every consumer would have to know the difference anyway.
+ * A workspace is a coarser thing than a left panel: `builder` is this application's authoring surface,
+ * `catalog` is the governed vocabulary it binds to, and `edm-page-builder` is a recreation of another
+ * product's studio. Separate state rather than more `LeftPanel` values, because none of these has the
+ * builder's left panel, page or selection — collapsing the two would put "which panel" and "which
+ * surface" in one signal and every consumer would have to know the difference anyway.
  */
-type Workspace = 'builder' | 'edm-admin' | 'edm-page-builder';
+type Workspace = 'builder' | 'catalog' | 'edm-page-builder';
 
 /** What the right dock holds. */
 type RightTab = 'inspector' | 'history' | 'json';
@@ -125,19 +125,29 @@ const NAV_SECTIONS: readonly NavSection[] = [
   },
   {
     /**
+     * The vocabulary, not a feature of the builder.
+     *
+     * Its own section because it is not something you *do* to the open page — it is the governed
+     * catalog every page binds to, and "what can I build a page about" is the first question a business
+     * analyst asks. Under Authoring it would read as a fourth panel of the workbench; it is a surface of
+     * its own, over state the builder does not own.
+     */
+    label: 'Data',
+    mini: 'DATA',
+    items: [{ id: 'catalog', label: 'Catalog', icon: 'database' }],
+  },
+  {
+    /**
      * Reference, not navigation to a feature.
      *
-     * The Opus EDM console's Administration screen, recreated natively in this application's own
-     * design system so the two products can be compared without switching applications. Its own rail
-     * section rather than an authoring destination, because it edits nothing in this product — it is
-     * a recreation of another one's surface, and its seed data is mock.
+     * The Opus EDM console's Page Builder, recreated natively in this application's own design system
+     * so the two products can be compared without switching applications. Its own rail section rather
+     * than an authoring destination, because it edits its own model rather than the page definition
+     * this application's builder edits.
      */
     label: 'Reference',
     mini: 'REF',
-    items: [
-      { id: 'edm-page-builder', label: 'EDM Page Builder', icon: 'page' },
-      { id: 'edm-admin', label: 'EDM administration', icon: 'settings' },
-    ],
+    items: [{ id: 'edm-page-builder', label: 'EDM Page Builder', icon: 'page' }],
   },
 ];
 
@@ -166,7 +176,7 @@ const PREVIEW_ICONS: Record<PreviewSize['id'], { name: string; size: number }> =
   imports: [
     AssistPanelComponent,
     CanvasComponent,
-    EdmAdministrationComponent,
+    CatalogBrowserComponent,
     EdmPageBuilderComponent,
     HistoryPanelComponent,
     IconComponent,
@@ -232,14 +242,14 @@ const PREVIEW_ICONS: Record<PreviewSize['id'], { name: string; size: number }> =
               than the page definition this application's builder edits.
             -->
             <opus-edm-page-builder />
-          } @else if (workspace() === 'edm-admin') {
+          } @else if (workspace() === 'catalog') {
             <!--
-              The console's Administration screen, native. Rendered instead of the workbench rather
-              than beside it: two full surfaces in one viewport is a screenshot, not something either
-              can be used in. The builder's state is untouched while this shows — switching back finds
-              the same page open, the same selection, the same undo history.
+              The catalog, browsable. Rendered instead of the workbench rather than beside it: two full
+              surfaces in one viewport is a screenshot, not something either can be used in. The
+              builder's state is untouched while this shows — switching back finds the same page open,
+              the same selection, the same undo history.
             -->
-            <opus-edm-administration />
+            <opus-catalog-browser />
           } @else {
 
           <div class="opus-workbench" [class.list-collapsed]="listCollapsed()">
@@ -998,7 +1008,7 @@ export class StudioApp {
    * an invisible panel would read as a dead control.
    */
   protected onRailSelect(id: string): void {
-    if (id === 'edm-admin' || id === 'edm-page-builder') {
+    if (id === 'catalog' || id === 'edm-page-builder') {
       this.workspace.set(id);
       return;
     }
