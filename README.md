@@ -57,6 +57,7 @@ Delivered:
 | Visual page builder | Drag, drop, inspect, re-layout, preview responsively, save — editing the *same* JSON the runtime interprets — [`docs/VISUAL-BUILDER.md`](./docs/VISUAL-BUILDER.md) |
 | Experience Builder prototype | Prompt → Experience JSON → rendered page, with a Node/REST backend, local JSON storage and a swappable model provider — [`docs/implementation-status.md`](./docs/implementation-status.md) |
 | EDM business templates | Four templates over governed EDM metadata — master dashboard, security overview, party overview, exception workspace — with drill-down between them and tabs generated from data — [`docs/EDM-TEMPLATES.md`](./docs/EDM-TEMPLATES.md) |
+| EDM Page Builder | The console's low-code studio recreated natively — palette, 12-column drag-and-resize canvas, multi-page with derived links — [`docs/EDM-PAGE-BUILDER.md`](./docs/EDM-PAGE-BUILDER.md) |
 | EDM Administration | The Opus EDM console's home screen recreated natively in the builder's rail — so it themes, where a framed copy could not — [`docs/EDM-ADMINISTRATION.md`](./docs/EDM-ADMINISTRATION.md) |
 | AI assist in the builder | Ask what a page is missing; suggestions grounded in the entitled catalog, each accepted one as a single undoable patch — [`docs/AI-ASSIST.md`](./docs/AI-ASSIST.md) |
 | CODA design language | The Opus EDM console's look and feel as a token layer plus shared chrome — one palette swap re-themes every app, every widget and every generated page — [`docs/CODA-DESIGN-SYSTEM.md`](./docs/CODA-DESIGN-SYSTEM.md) |
