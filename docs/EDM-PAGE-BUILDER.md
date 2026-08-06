@@ -26,8 +26,9 @@ flow."*
 | | |
 |---|---|
 | Ported from | `vgiattino/MDE@8d678a9` (branch `opus-angular-port`) |
-| Landed at | `apps/studio/src/app/edm/page-builder/` — `model.ts`, `page-builder.component.ts`, `flow-map.component.ts`, `palette.component.ts`, `widget-view.component.ts` |
+| Landed at | `apps/studio/src/app/edm/page-builder/` — `model.ts` and five components: the builder shell, `palette`, `structure`, `inspector`, `flow-map`, plus `widget-view` |
 | Modes | Edit · **Flow** · Preview |
+| Left dock | **Widgets** (palette) · **Structure** (the page as a tree) |
 | Grid | 12 columns × 40px rows, drag to move, corner-drag to resize |
 | Palette | 6 groups, 25 entries, 20 widget types |
 | Pages | 5 seeded, with icons, reorder, duplicate, delete, add |
@@ -95,7 +96,49 @@ that clears it by 22 and a label that does not clear it at all. That arithmetic 
 before it was inverted, which is why the verification below measures overlaps instead of looking at
 them.
 
-## 4. What is not ported, and is said so in the UI
+## 4. Page structure
+
+The same feature as the platform builder's structure panel, in the left dock beside **Widgets**. Not a
+second view of the canvas — three jobs the canvas cannot do:
+
+- **Reach a widget you cannot click.** One row high, behind a section, scrolled out of sight, or a
+  Divider that is two pixels of hairline. On the canvas those are unselectable in practice.
+- **See what is inside what.** A widget dropped on a section looks contained and, in this model, is not
+  recorded as contained by anything.
+- **Change stacking.** The widget array is paint order, so which of two overlapping widgets is on top is
+  a property of list position and of nothing visible.
+
+Selection and hover run both ways: a row highlights what the canvas has selected, hovering a row
+outlines the widget on the canvas, and selecting on the canvas scrolls the row into view. Arrows move
+the selection, `Alt`+arrows restack, `Delete` removes — all of it without a pointer, which matters
+precisely because the widgets this panel exists for are the ones a pointer cannot hit.
+
+**Nesting is derived from the rectangles.** The platform's panel walks a nested `PageDefinition.layout`
+where parentage is recorded. This model has none: a page is a flat array on a 12-column grid, and a
+Section is a titled box that other widgets are dropped *on top of*. So the containment an author can
+plainly see is written down nowhere — and deriving it is the same choice this file already makes for
+page links. Drag a KPI onto a section and it is inside it, in the panel and on the screen, with nothing
+to keep in sync.
+
+The rule is **full enclosure**, not overlap: a widget hanging over a section's edge stays at the top
+level. That is honest about an ambiguous case rather than guessing, and it makes the relation a strict
+ordering — a section only parents something smaller, or something identical that was added earlier — so
+the tree cannot contain a cycle. Nine tests cover the rule, including the identical-bounds case.
+
+### Two orders from one tree
+
+| Order | Used for | Sibling order |
+|---|---|---|
+| `structureOf` | the panel | **reading order** — row then column, which is what an author scans for |
+| `paintOrder` | the canvas | **array order** — because among siblings the array *is* the z-order, and reordering it is what restacking does |
+
+Both walk parents before children, and that fixed a defect the panel exposed on its first run: a Section
+added *after* the widgets it ends up around is later in the array, so it painted over them. A KPI dragged
+into a section vanished behind an opaque box — unclickable, and findable only in the tree. Painting the
+derived tree fixes it by construction: an ancestor is always emitted first, so a section can never cover
+its own contents however the page was built.
+
+## 5. What is not ported, and is said so in the UI
 
 Each of these is named in the page-settings panel, because an absence that looks like a bug is worse
 than an absence that is labelled.
@@ -108,7 +151,7 @@ than an absence that is labelled.
 | **Data-source binding** | The original binds widgets to mock sources. This port keeps literal arrays. |
 | The full property inspector (column configs, segment editors, legend and axis options) | Present for the common props per type; the rest is listed rather than half-built. |
 
-## 5. The thing worth saying out loud
+## 6. The thing worth saying out loud
 
 **This is a second page model in a repository whose architecture rests on one.**
 
@@ -123,7 +166,7 @@ recreation faithful enough to compare. The obvious follow-on is to back *this* U
 artifact the runtime can render. That would make it a feature of this product rather than a recreation
 of another one's.
 
-## 6. Verification
+## 7. Verification
 
 Driven in Chromium at 1680px, 700px and 430px, both themes. Every claim below was read back out of the
 DOM, not looked at.
@@ -164,6 +207,35 @@ DOM, not looked at.
 | 430px | 0px page overflow; the map scrolls inside its own pane |
 | Console | no errors |
 
+**Page structure**
+
+| Check | Result |
+|---|---|
+| Dock | two tabs, `Widgets` and `Structure 8` — the badge tracks the widget count |
+| Tree | 8 rows in reading order: `Security Master by asset type` (Heading 12×1 @ 1,1), three KPIs, two charts, two buttons |
+| Row | label and `kind · w×h @ col,row` on two lines — **no label or detail clipped**, measured `scrollWidth` against `clientWidth` on every row |
+| Panel → canvas | clicking row 5 selects the column chart; exactly one widget selected on the canvas |
+| Canvas → panel | clicking a KPI highlights `Instruments · Metric / KPI · 4×3 @ 1,2` |
+| Hover | hovering a row outlines exactly one widget on the canvas |
+| **Nesting** | add a Section, grow it, drag a KPI onto it → the KPI indents beneath `Section` in the tree |
+| **The defect that found** | before `paintOrder`, `elementFromPoint` at that KPI's centre returned the *section* — it was hidden and unclickable. After: returns the KPI, and clicking it selects it |
+| **Stacking** | dragging one KPI onto another gives both a chip (`2`, `3`); the chip brings it to the front (`2` → `8`); `Alt`+`↑` sends it back (`8` → `7`) |
+| Keyboard | `↓` `Exceptions` → `Records by asset type`, `↑` back, `Delete` 9 → 8 rows |
+| Empty page | *"Nothing on this page yet. Add a widget from Widgets and it will appear here."* |
+| 430px | dock hidden, 0px page overflow |
+| Console | no errors |
+
+**The inspector, after being extracted into its own component**
+
+| Check | Result |
+|---|---|
+| Page settings | header, 8 icon choices, rename → the tab strip reads `Renamed` |
+| Widget properties | header `Metric / KPI`, label edit reaches the canvas immediately, 7 accent swatches |
+| Size | `4 / 12` → `5 / 12` |
+| Duplicate / Delete | 8 → 9 → 8 widgets |
+| Selects | read stored values, not first options |
+| Clear selection | returns to Page settings; `Clear page` empties the canvas |
+
 **A defect this surfaced in the shipped inspector.** Every `<select>` was bound with `[value]` on the
 element, which Angular applies before the option loop has created anything — so the assignment matched
 nothing and was dropped, and the select displayed its *first* option. Not blank: wrong. Direction read
@@ -172,12 +244,12 @@ did link somewhere — which is exactly the claim the Flow map would then contra
 `[selected]` per option, and verified against stored values that are *not* first: `down`, `donut`,
 `p-public-private`.
 
-Gate: metadata validation passed, 300 unit tests passed (11 new, over the layout), all three apps build
-with no budget warnings.
+Gate: metadata validation passed, 317 unit tests passed (28 new — 11 over the flow layout, 17 over the
+structure and paint orders), all three apps build with no budget warnings.
 
-## 7. Next
+## 8. Next
 
-1. **Back it with `PageDefinition`.** See §5. This is the decision that determines whether the section
+1. **Back it with `PageDefinition`.** See §6. This is the decision that determines whether the section
    is a comparison or a product.
 2. **Wire the platform's generation pipeline** into the empty-page prompt, rather than porting the
    original's keyword heuristic — the pipeline is already grounded in the catalog and validated.

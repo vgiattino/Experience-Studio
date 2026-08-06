@@ -46,16 +46,16 @@ import {
 import { IconComponent } from '@opus/design-system';
 
 import {
-  ACCENTS,
   COLS,
   DEF_SIZE,
   KEY_TYPE,
-  PALETTE,
   ROW_H,
   defProps,
   linksOf,
   minH,
+  paintOrder,
   seedPages,
+  typeLabelOf,
   type PageDef,
   type PageLink,
   type PaletteItem,
@@ -63,19 +63,28 @@ import {
 } from './model';
 import { FlowMapComponent } from './flow-map.component';
 import { PaletteComponent } from './palette.component';
+import { InspectorComponent } from './inspector.component';
+import { StructureComponent } from './structure.component';
 import { WidgetViewComponent } from './widget-view.component';
 
 const STORE = 'opus.edm.pagebuilder.v1';
 
-/** Icons a page may carry, matching the row of choices the original offers in page settings. */
-const PAGE_ICONS = ['page', 'grid', 'layers', 'database', 'model', 'shield', 'settings', 'flow'];
-
 type Mode = 'edit' | 'flow' | 'preview';
+
+/** Which panel the left dock shows. */
+type Dock = 'widgets' | 'structure';
 
 @Component({
   selector: 'opus-edm-page-builder',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FlowMapComponent, IconComponent, PaletteComponent, WidgetViewComponent],
+  imports: [
+    FlowMapComponent,
+    IconComponent,
+    InspectorComponent,
+    PaletteComponent,
+    StructureComponent,
+    WidgetViewComponent,
+  ],
   template: `
     <div class="pb">
       <header class="pb-head">
@@ -160,8 +169,50 @@ type Mode = 'edit' | 'flow' | 'preview';
       </nav>
 
       <div class="pb-work" [attr.data-mode]="mode()">
+        <!--
+          One left dock, two tabs — the same shape the platform builder's rail gives its list panel.
+          A fourth column would take the space from the canvas, and the canvas is where the 12-column
+          grid has to stay legible.
+        -->
         @if (mode() === 'edit') {
-          <opus-pb-palette (add)="addWidget($event)" />
+          <aside class="pb-dock">
+            <div class="opus-tabs pb-dock-tabs" role="tablist">
+              <button
+                type="button"
+                class="opus-tab"
+                role="tab"
+                [class.active]="dock() === 'widgets'"
+                [attr.aria-selected]="dock() === 'widgets'"
+                (click)="dock.set('widgets')"
+              >
+                Widgets
+              </button>
+              <button
+                type="button"
+                class="opus-tab"
+                role="tab"
+                [class.active]="dock() === 'structure'"
+                [attr.aria-selected]="dock() === 'structure'"
+                (click)="dock.set('structure')"
+              >
+                Structure
+                <span class="opus-tab-badge">{{ page().widgets.length }}</span>
+              </button>
+            </div>
+
+            @if (dock() === 'widgets') {
+              <opus-pb-palette (add)="addWidget($event)" />
+            } @else {
+              <opus-pb-structure
+                [widgets]="page().widgets"
+                [selectedId]="selId()"
+                (select)="selId.set($event)"
+                (hover)="hovId.set($event)"
+                (restack)="restack($event)"
+                (remove)="removeWidget($event)"
+              />
+            }
+          </aside>
         }
 
         @if (mode() !== 'flow') {
@@ -181,10 +232,15 @@ type Mode = 'edit' | 'flow' | 'preview';
                 </div>
               }
 
-              @for (widget of page().widgets; track widget.id) {
+              <!--
+                Painted in structure order, not array order: a Section added after the widgets it
+                surrounds is later in the array and would cover them. See paintOrder.
+              -->
+              @for (widget of painted(); track widget.id) {
                 <div
                   class="pb-w"
                   [class.sel]="selId() === widget.id && mode() === 'edit'"
+                  [class.hov]="hovId() === widget.id && mode() === 'edit'"
                   [style.left.px]="widget.x * unitW()"
                   [style.top.px]="widget.y * ROW_H"
                   [style.width.px]="widget.w * unitW()"
@@ -233,181 +289,20 @@ type Mode = 'edit' | 'flow' | 'preview';
         }
 
         @if (mode() === 'edit') {
-          <aside class="pb-insp">
-            @if (sel(); as widget) {
-              <div class="pb-insp-h">
-                <opus-icon name="sliders" [size]="15" />
-                {{ typeLabel(widget) }}
-                <button type="button" class="opus-icon-btn" title="Clear selection" (click)="selId.set(null)">
-                  <opus-icon name="close" [size]="15" [weight]="2" />
-                </button>
-              </div>
-              <div class="pb-insp-body">
-                @for (field of fieldsFor(widget); track field.key) {
-                  <label class="pb-f">
-                    {{ field.label }}
-                    @if (field.kind === 'textarea') {
-                      <textarea
-                        class="opus-textarea"
-                        rows="3"
-                        [value]="text(widget, field.key)"
-                        (change)="setProp(field.key, $any($event.target).value)"
-                      ></textarea>
-                    } @else if (field.kind === 'select') {
-                      <!--
-                        A selected binding on each option, not a value binding on the select: the
-                        element's value is assigned before its option loop has created anything, so it
-                        finds nothing to match and is dropped. The select then displays its *first*
-                        option — which is not blank, it is wrong. Every Direction, Kind and Align in
-                        this inspector was reading as the first choice regardless of the stored prop.
-                      -->
-                      <select
-                        class="opus-select"
-                        (change)="setProp(field.key, $any($event.target).value)"
-                      >
-                        @for (option of field.options ?? []; track option) {
-                          <option [value]="option" [selected]="option === text(widget, field.key)">
-                            {{ option || '(none)' }}
-                          </option>
-                        }
-                      </select>
-                    } @else if (field.kind === 'boolean') {
-                      <input
-                        type="checkbox"
-                        [checked]="flag(widget, field.key)"
-                        (change)="setProp(field.key, $any($event.target).checked)"
-                      />
-                    } @else {
-                      <input
-                        class="opus-input"
-                        [type]="field.kind === 'number' ? 'number' : 'text'"
-                        [value]="text(widget, field.key)"
-                        (change)="setProp(field.key, $any($event.target).value, field.kind === 'number')"
-                      />
-                    }
-                    @if (field.hint) {
-                      <span class="pb-hint">{{ field.hint }}</span>
-                    }
-                  </label>
-                }
-
-                @if (isAccented(widget)) {
-                  <div class="pb-f">
-                    Accent
-                    <div class="pb-swatches">
-                      @for (accent of accents; track accent) {
-                        <button
-                          type="button"
-                          class="pb-swatch"
-                          [class.on]="text(widget, 'accent') === accent"
-                          [style.background]="accent"
-                          [title]="accent"
-                          (click)="setProp('accent', accent)"
-                        ></button>
-                      }
-                    </div>
-                  </div>
-                }
-
-                @if (isNavButton(widget)) {
-                  <label class="pb-f">
-                    Links to
-                    <select class="opus-select" (change)="setProp('target', $any($event.target).value)">
-                      <option value="" [selected]="!text(widget, 'target')">(nowhere)</option>
-                      @for (other of pages(); track other.id) {
-                        @if (other.id !== currentId()) {
-                          <option [value]="other.id" [selected]="other.id === text(widget, 'target')">
-                            {{ other.name }}
-                          </option>
-                        }
-                      }
-                    </select>
-                    <span class="pb-hint">
-                      A target here is what draws a link between pages — the strip counts them.
-                    </span>
-                  </label>
-                }
-
-                <div class="pb-size">
-                  <span class="pb-f-label">Size</span>
-                  <div class="pb-size-row">
-                    <span>Width</span>
-                    <button type="button" class="opus-icon-btn" (click)="nudge('w', -1)">−</button>
-                    <b>{{ widget.w }} / {{ COLS }}</b>
-                    <button type="button" class="opus-icon-btn" (click)="nudge('w', 1)">+</button>
-                  </div>
-                  <div class="pb-size-row">
-                    <span>Height</span>
-                    <button type="button" class="opus-icon-btn" (click)="nudge('h', -1)">−</button>
-                    <b>{{ widget.h }} row(s)</b>
-                    <button type="button" class="opus-icon-btn" (click)="nudge('h', 1)">+</button>
-                  </div>
-                </div>
-
-                <div class="pb-insp-actions">
-                  <button type="button" class="opus-btn sm" (click)="duplicateWidget(widget)">
-                    <opus-icon name="copy" [size]="13" [weight]="2" />
-                    Duplicate
-                  </button>
-                  <button type="button" class="opus-btn sm danger" (click)="removeWidget(widget.id)">
-                    <opus-icon name="trash" [size]="13" [weight]="2" />
-                    Delete
-                  </button>
-                </div>
-              </div>
-            } @else {
-              <div class="pb-insp-h"><opus-icon name="settings" [size]="15" /> Page settings</div>
-              <div class="pb-insp-body">
-                <label class="pb-f">
-                  Page name
-                  <input
-                    class="opus-input"
-                    [value]="page().name"
-                    (change)="renamePage($any($event.target).value)"
-                  />
-                </label>
-
-                <div class="pb-f">
-                  Icon
-                  <div class="pb-icons">
-                    @for (icon of pageIcons; track icon) {
-                      <button
-                        type="button"
-                        class="pb-icon-pick"
-                        [class.on]="page().icon === icon"
-                        [title]="icon"
-                        (click)="setPageIcon(icon)"
-                      >
-                        <opus-icon [name]="icon" [size]="15" />
-                      </button>
-                    }
-                  </div>
-                </div>
-
-                <p class="pb-hint">
-                  This page has {{ page().widgets.length }} widget(s). Select a widget on the canvas to
-                  edit it, or add one from the palette.
-                </p>
-
-                <div class="pb-insp-actions column">
-                  <button type="button" class="opus-btn sm" (click)="duplicatePage()">
-                    <opus-icon name="copy" [size]="13" [weight]="2" />
-                    Duplicate page
-                  </button>
-                  <button type="button" class="opus-btn sm" (click)="clearPage()">
-                    <opus-icon name="revert" [size]="13" [weight]="2" />
-                    Clear page
-                  </button>
-                </div>
-
-                <p class="pb-note">
-                  Not yet ported from the console: Kendo grid paging and sorting, the
-                  spline/funnel/radar/waterfall/scatter chart kinds, AI generation from a prompt, and
-                  data-source binding.
-                </p>
-              </div>
-            }
-          </aside>
+          <opus-pb-inspector
+            [widget]="sel()"
+            [page]="page()"
+            [pages]="pages()"
+            (clear)="selId.set(null)"
+            (prop)="setProp($event.key, $event.value, $event.numeric)"
+            (resize)="nudge($event.dim, $event.delta)"
+            (duplicateWidget)="duplicateSelected()"
+            (deleteWidget)="removeSelected()"
+            (renamePage)="renamePage($event)"
+            (pageIcon)="setPageIcon($event)"
+            (duplicatePage)="duplicatePage()"
+            (clearPage)="clearPage()"
+          />
         }
       </div>
     </div>
@@ -617,7 +512,7 @@ type Mode = 'edit' | 'flow' | 'preview';
       flex: 1;
       min-block-size: 0;
       display: grid;
-      grid-template-columns: 190px minmax(0, 1fr) 260px;
+      grid-template-columns: 210px minmax(0, 1fr) 260px;
       border-block-start: 1px solid var(--opus-border);
       overflow: hidden;
     }
@@ -625,6 +520,31 @@ type Mode = 'edit' | 'flow' | 'preview';
     .pb-work[data-mode='preview'],
     .pb-work[data-mode='flow'] {
       grid-template-columns: minmax(0, 1fr);
+    }
+
+    /* ── left dock */
+    .pb-dock {
+      display: flex;
+      flex-direction: column;
+      min-block-size: 0;
+      background: var(--opus-surface);
+      border-inline-end: 1px solid var(--opus-border);
+    }
+
+    .pb-dock-tabs {
+      padding-inline: 8px;
+    }
+
+    .pb-dock-tabs .opus-tab {
+      padding: 8px 9px;
+      font-size: var(--opus-text-sm);
+    }
+
+    .pb-dock opus-pb-palette,
+    .pb-dock opus-pb-structure {
+      flex: 1;
+      min-block-size: 0;
+      border-inline-end: 0;
     }
 
     /* ── canvas */
@@ -693,9 +613,15 @@ type Mode = 'edit' | 'flow' | 'preview';
       border-radius: var(--opus-radius-md);
     }
 
-    .pb-canvas[data-mode='edit'] .pb-w:hover .pb-w-inner {
+    .pb-canvas[data-mode='edit'] .pb-w:hover .pb-w-inner,
+    .pb-w.hov .pb-w-inner {
       outline: 1px dashed var(--opus-border-strong);
       outline-offset: 1px;
+    }
+
+    /* Hovering a structure row has to point at something, or the tree is a list of guesses. */
+    .pb-w.hov .pb-w-inner {
+      outline: 2px dashed var(--opus-accent);
     }
 
     .pb-w.sel .pb-w-inner {
@@ -745,157 +671,14 @@ type Mode = 'edit' | 'flow' | 'preview';
       opacity: 1;
     }
 
-    /* ── inspector */
-    .pb-insp {
-      border-inline-start: 1px solid var(--opus-border);
-      background: var(--opus-surface);
-      display: flex;
-      flex-direction: column;
-      min-block-size: 0;
-    }
-
-    .pb-insp-h {
-      display: flex;
-      align-items: center;
-      gap: var(--opus-space-2);
-      padding: 11px 12px;
-      border-block-end: 1px solid var(--opus-border);
-      font-size: var(--opus-text-md);
-      font-weight: var(--opus-weight-semibold);
-      color: var(--opus-text);
-      flex-shrink: 0;
-    }
-
-    .pb-insp-h .opus-icon-btn {
-      margin-inline-start: auto;
-    }
-
-    .pb-insp-body {
-      flex: 1;
-      overflow-y: auto;
-      padding: 12px;
-      min-block-size: 0;
-    }
-
-    .pb-f,
-    .pb-f-label {
-      display: block;
-      font-size: var(--opus-text-sm);
-      font-weight: var(--opus-weight-medium);
-      color: var(--opus-text);
-      margin-block-end: 12px;
-    }
-
-    .pb-f .opus-input,
-    .pb-f .opus-select,
-    .pb-f .opus-textarea {
-      margin-block-start: 4px;
-    }
-
-    .pb-hint {
-      display: block;
-      margin-block-start: 3px;
-      font-size: var(--opus-text-xs);
-      font-weight: var(--opus-weight-regular);
-      color: var(--opus-text-muted);
-      line-height: var(--opus-leading-normal);
-    }
-
-    .pb-swatches,
-    .pb-icons {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 4px;
-      margin-block-start: 5px;
-    }
-
-    .pb-swatch {
-      inline-size: 22px;
-      block-size: 22px;
-      border-radius: 50%;
-      border: 2px solid transparent;
-      cursor: pointer;
-      padding: 0;
-    }
-
-    .pb-swatch.on {
-      border-color: var(--opus-text);
-    }
-
-    .pb-icon-pick {
-      display: inline-grid;
-      place-items: center;
-      inline-size: 28px;
-      block-size: 28px;
-      border: 1px solid var(--opus-border);
-      border-radius: var(--opus-radius-sm);
-      background: var(--opus-surface);
-      color: var(--opus-text-secondary);
-      cursor: pointer;
-    }
-
-    .pb-icon-pick.on {
-      border-color: var(--opus-accent);
-      background: var(--opus-accent-soft);
-      color: var(--opus-accent);
-    }
-
-    .pb-size {
-      padding-block: 4px 10px;
-    }
-
-    .pb-size-row {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font-size: var(--opus-text-sm);
-      font-weight: var(--opus-weight-regular);
-      color: var(--opus-text-secondary);
-      margin-block-start: 5px;
-    }
-
-    .pb-size-row span {
-      inline-size: 3.5rem;
-    }
-
-    .pb-size-row b {
-      min-inline-size: 5rem;
-      text-align: center;
-      color: var(--opus-text);
-    }
-
-    .pb-insp-actions {
-      display: flex;
-      gap: 6px;
-      margin-block-start: var(--opus-space-2);
-    }
-
-    .pb-insp-actions.column {
-      flex-direction: column;
-    }
-
-    .pb-insp-actions .danger {
-      color: var(--opus-emphasis-negative);
-      border-color: var(--opus-emphasis-negative);
-    }
-
-    .pb-note {
-      margin: var(--opus-space-5) 0 0;
-      padding-block-start: var(--opus-space-3);
-      border-block-start: 1px solid var(--opus-border);
-      font-size: var(--opus-text-xs);
-      color: var(--opus-text-muted);
-      line-height: var(--opus-leading-normal);
-    }
-
     @media (max-width: 1200px) {
       .pb-work {
-        grid-template-columns: 160px minmax(0, 1fr);
+        grid-template-columns: 190px minmax(0, 1fr);
       }
 
       /* The inspector becomes an overlay rather than a third column — below this width three columns
          leave the canvas narrower than the 12-column grid it is meant to show. */
-      .pb-insp {
+      opus-pb-inspector {
         position: absolute;
         inset-block: 0;
         inset-inline-end: 0;
@@ -914,7 +697,7 @@ type Mode = 'edit' | 'flow' | 'preview';
         grid-template-columns: minmax(0, 1fr);
       }
 
-      opus-pb-palette {
+      .pb-dock {
         display: none;
       }
     }
@@ -923,15 +706,15 @@ type Mode = 'edit' | 'flow' | 'preview';
 export class EdmPageBuilderComponent {
   @ViewChild('canvas') private canvasRef?: ElementRef<HTMLElement>;
 
-  protected readonly COLS = COLS;
   protected readonly ROW_H = ROW_H;
-  protected readonly accents = ACCENTS;
-  protected readonly pageIcons = PAGE_ICONS;
 
   protected readonly pages = signal<PageDef[]>(this.load());
   protected readonly currentId = signal(this.pages()[0]!.id);
   protected readonly selId = signal<string | null>(null);
   protected readonly mode = signal<Mode>('edit');
+  protected readonly dock = signal<Dock>('widgets');
+  /** Hovered from the structure panel, so the canvas can point at what a row means. */
+  protected readonly hovId = signal<string | null>(null);
   /** Column width in px, measured from the canvas — the grid is proportional, not fixed. */
   protected readonly unitW = signal(80);
 
@@ -946,6 +729,9 @@ export class EdmPageBuilderComponent {
   );
 
   /** Three rows of headroom below the lowest widget, so there is always somewhere to drop. */
+  /** The page's widgets in paint order — a container behind what it holds. */
+  protected readonly painted = computed(() => paintOrder(this.page().widgets));
+
   protected readonly canvasHeight = computed(() => {
     const lowest = this.page().widgets.reduce((max, w) => Math.max(max, w.y + w.h), 0);
     return Math.max(lowest + 3, 14) * ROW_H;
@@ -1100,6 +886,16 @@ export class EdmPageBuilderComponent {
     this.selId.set(widget.id);
   }
 
+  protected duplicateSelected(): void {
+    const widget = this.sel();
+    if (widget) this.duplicateWidget(widget);
+  }
+
+  protected removeSelected(): void {
+    const id = this.selId();
+    if (id) this.removeWidget(id);
+  }
+
   protected duplicateWidget(widget: Widget): void {
     const copy: Widget = {
       ...widget,
@@ -1132,6 +928,24 @@ export class EdmPageBuilderComponent {
     // A caption toggle changes the minimum height, so the widget grows rather than clipping its label.
     const patched: Widget = { ...widget, props: next };
     this.patchWidget(widget.id, { props: next, h: Math.max(widget.h, minH(patched)) });
+  }
+
+  /**
+   * Move a widget through paint order.
+   *
+   * The array *is* the z-order — later is painted on top — so this is the only control over which of
+   * two overlapping widgets wins, and there was none before. A delta past either end clamps, which is
+   * what makes the structure panel's chip a "bring to front" button rather than a no-op at the top.
+   */
+  protected restack(move: { id: string; delta: number }): void {
+    const widgets = [...this.page().widgets];
+    const from = widgets.findIndex((widget) => widget.id === move.id);
+    if (from < 0) return;
+    const to = Math.min(widgets.length - 1, Math.max(0, from + move.delta));
+    if (to === from) return;
+    const [moved] = widgets.splice(from, 1);
+    widgets.splice(to, 0, moved!);
+    this.patchPage({ widgets });
   }
 
   protected nudge(dim: 'w' | 'h', delta: number): void {
@@ -1335,122 +1149,6 @@ export class EdmPageBuilderComponent {
     this.selId.set(null);
   }
 
-  protected typeLabel(widget: Widget): string {
-    if (widget.type === 'chart') return `${String(widget.props['kind'] ?? 'chart')} chart`;
-    const found = PALETTE.flatMap((group) => group.items).find(
-      (item) => KEY_TYPE[item.key] === widget.type,
-    );
-    return found?.label ?? widget.type;
-  }
+  protected readonly typeLabel = typeLabelOf;
 
-  protected text(widget: Widget, key: string): string {
-    const value = widget.props[key];
-    return value === undefined || value === null ? '' : String(value);
-  }
-
-  protected flag(widget: Widget, key: string): boolean {
-    return widget.props[key] === true;
-  }
-
-  protected isAccented(widget: Widget): boolean {
-    return widget.type === 'kpi' || (widget.type === 'chart' && !this.isPie(widget));
-  }
-
-  private isPie(widget: Widget): boolean {
-    return widget.props['kind'] === 'pie' || widget.props['kind'] === 'donut';
-  }
-
-  protected isNavButton(widget: Widget): boolean {
-    return widget.type === 'button';
-  }
-
-  /**
-   * Which properties the inspector offers for a type.
-   *
-   * A table rather than a template branch per type, so adding a widget kind is a row here. Deliberately
-   * short of the original's inspector, which also edits column configs, segment lists, chart legends
-   * and axis options — those are named in the outstanding list rather than half-built.
-   */
-  protected fieldsFor(widget: Widget): readonly {
-    key: string;
-    label: string;
-    kind: 'text' | 'textarea' | 'number' | 'select' | 'boolean';
-    options?: readonly string[];
-    hint?: string;
-  }[] {
-    switch (widget.type) {
-      case 'heading':
-        return [
-          { key: 'text', label: 'Text', kind: 'text' },
-          { key: 'level', label: 'Level', kind: 'select', options: ['1', '2', '3'] },
-        ];
-      case 'text':
-        return [
-          { key: 'text', label: 'Text', kind: 'textarea' },
-          { key: 'align', label: 'Align', kind: 'select', options: ['left', 'center', 'right'] },
-          { key: 'muted', label: 'Muted', kind: 'boolean' },
-        ];
-      case 'divider':
-        return [{ key: 'spacer', label: 'Invisible spacer', kind: 'boolean' }];
-      case 'image':
-        return [
-          { key: 'url', label: 'Image URL', kind: 'text', hint: 'Empty shows a placeholder.' },
-          { key: 'caption', label: 'Caption', kind: 'text' },
-        ];
-      case 'kpi':
-        return [
-          { key: 'label', label: 'Label', kind: 'text' },
-          { key: 'value', label: 'Value', kind: 'text' },
-          { key: 'delta', label: 'Delta', kind: 'text' },
-          { key: 'dir', label: 'Direction', kind: 'select', options: ['up', 'down', 'flat'] },
-        ];
-      case 'table':
-      case 'grid':
-        return [{ key: 'title', label: 'Title', kind: 'text' }];
-      case 'chart':
-        return [
-          { key: 'title', label: 'Title', kind: 'text' },
-          {
-            key: 'kind',
-            label: 'Kind',
-            kind: 'select',
-            options: ['column', 'bar', 'line', 'area', 'pie', 'donut'],
-          },
-        ];
-      case 'gauge':
-        return [
-          { key: 'title', label: 'Title', kind: 'text' },
-          { key: 'value', label: 'Value', kind: 'number' },
-          { key: 'max', label: 'Maximum', kind: 'number' },
-          { key: 'suffix', label: 'Suffix', kind: 'text' },
-        ];
-      case 'progress':
-        return [
-          { key: 'title', label: 'Label', kind: 'text' },
-          { key: 'value', label: 'Value', kind: 'number' },
-          { key: 'max', label: 'Maximum', kind: 'number' },
-        ];
-      case 'button':
-        return [
-          { key: 'label', label: 'Label', kind: 'text' },
-          { key: 'style', label: 'Style', kind: 'select', options: ['primary', 'secondary', 'ghost'] },
-        ];
-      case 'section':
-        return [
-          { key: 'title', label: 'Title', kind: 'text' },
-          { key: 'desc', label: 'Description', kind: 'text' },
-        ];
-      case 'checkbox':
-        return [
-          { key: 'label', label: 'Label', kind: 'text' },
-          { key: 'value', label: 'Checked', kind: 'boolean' },
-        ];
-      default:
-        return [
-          { key: 'caption', label: 'Show caption', kind: 'boolean' },
-          { key: 'label', label: 'Label', kind: 'text' },
-          { key: 'value', label: 'Value', kind: 'text' },
-        ];
-    }
-  }
 }

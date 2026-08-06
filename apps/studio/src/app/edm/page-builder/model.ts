@@ -415,6 +415,172 @@ export function linksOf(pages: readonly PageDef[]): PageLink[] {
   return out;
 }
 
+/* ── page structure ─────────────────────────────────────────────────────────────────────── */
+
+/** A widget's title, if it has one worth reading, otherwise its kind. */
+export function labelOf(widget: Widget): string {
+  for (const key of ['label', 'title', 'text', 'caption'] as const) {
+    const value = widget.props[key];
+    if (typeof value === 'string' && value.trim()) return value.trim();
+  }
+  return typeLabelOf(widget);
+}
+
+/** What kind of thing a widget is, in the palette's words. */
+export function typeLabelOf(widget: Widget): string {
+  if (widget.type === 'chart') return `${String(widget.props['kind'] ?? 'chart')} chart`;
+  const found = PALETTE.flatMap((group) => group.items).find(
+    (item) => KEY_TYPE[item.key] === widget.type,
+  );
+  return found?.label ?? widget.type;
+}
+
+export interface StructureRow {
+  widget: Widget;
+  /** Nesting depth: 0 at the top level, one more inside each enclosing section. */
+  depth: number;
+  parentId: string | null;
+  /** Index in the page's widget array — which is paint order, and so the thing restacking moves. */
+  index: number;
+  /** True when another widget at the same level overlaps this one, so stacking order matters. */
+  stacked: boolean;
+}
+
+const area = (widget: Widget): number => widget.w * widget.h;
+
+/** Does `outer` fully enclose `inner`? Partial overlap is deliberately not containment. */
+function encloses(outer: Widget, inner: Widget): boolean {
+  return (
+    inner.x >= outer.x &&
+    inner.y >= outer.y &&
+    inner.x + inner.w <= outer.x + outer.w &&
+    inner.y + inner.h <= outer.y + outer.h
+  );
+}
+
+function intersects(a: Widget, b: Widget): boolean {
+  return (
+    a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
+  );
+}
+
+/**
+ * The page as a tree: sections as parents, everything else as leaves, in reading order.
+ *
+ * ── WHY THIS IS DERIVED FROM GEOMETRY ─────────────────────────────────────────────────
+ * The platform's own structure panel walks a nested `PageDefinition.layout`, where parentage is
+ * recorded. This model has no nesting: a page is a flat array of widgets on a 12-column grid, and a
+ * Section widget is a titled box that other widgets are dropped *on top of*. So the containment that
+ * an author can plainly see is not written down anywhere.
+ *
+ * Deriving it from the rectangles is the same choice this file already makes for page links — read the
+ * structure out of what the author did rather than keep a second record that can disagree with it. Drag
+ * a KPI onto a section and it is inside it, in the panel and on the screen, with nothing to sync.
+ *
+ * The rule is **full enclosure**, not overlap: a widget hanging over a section's edge stays at the top
+ * level. That is honest about an ambiguous case instead of guessing, and it makes the relation a strict
+ * ordering — a section only ever parents something smaller than itself, or something the same size that
+ * was added earlier — so the tree cannot contain a cycle.
+ *
+ * Siblings are ordered by row then column, because reading order is the order an author scans for. It
+ * is *not* the array order: that is paint order, which only matters where widgets overlap, and is
+ * surfaced per row as `stacked` rather than imposed on the whole list.
+ */
+function parentMap(widgets: readonly Widget[]): Map<string, string | null> {
+  const indexOf = new Map<string, number>(widgets.map((widget, index) => [widget.id, index]));
+  const parentOf = new Map<string, string | null>();
+  for (const widget of widgets) {
+    let best: Widget | null = null;
+    for (const candidate of widgets) {
+      if (candidate.type !== 'section' || candidate.id === widget.id) continue;
+      if (!encloses(candidate, widget)) continue;
+      // A strict order, so nothing can end up its own ancestor: strictly bigger wins, and an exact
+      // tie is broken by which was added first.
+      const bigger =
+        area(candidate) > area(widget) ||
+        (area(candidate) === area(widget) &&
+          indexOf.get(candidate.id)! < indexOf.get(widget.id)!);
+      if (!bigger) continue;
+      if (
+        !best ||
+        area(candidate) < area(best) ||
+        (area(candidate) === area(best) && indexOf.get(candidate.id)! < indexOf.get(best.id)!)
+      ) {
+        best = candidate;
+      }
+    }
+    parentOf.set(widget.id, best?.id ?? null);
+  }
+  return parentOf;
+}
+
+/** Widgets grouped by parent, each group in array order. */
+function childMap(
+  widgets: readonly Widget[],
+  parentOf: Map<string, string | null>,
+): Map<string | null, Widget[]> {
+  const children = new Map<string | null, Widget[]>();
+  for (const widget of widgets) {
+    const key = parentOf.get(widget.id) ?? null;
+    const list = children.get(key) ?? [];
+    list.push(widget);
+    children.set(key, list);
+  }
+  return children;
+}
+
+/**
+ * The order the canvas paints in: a container before everything it holds.
+ *
+ * This is *not* the array order, and the difference is a defect the structure panel exposed. A Section
+ * added after the widgets it ends up around is later in the array, so it painted over them — drag a KPI
+ * into a section and the KPI vanished behind an opaque box, unclickable and only findable in the
+ * structure tree. Walking the derived tree fixes it by construction: an ancestor is always emitted
+ * first, so a section can never cover its own contents however it was built.
+ *
+ * Siblings keep **array order**, unlike the structure panel's reading order, because among siblings the
+ * array *is* the z-order and reordering it is what restacking does. Two orders for two jobs, from one
+ * tree.
+ */
+export function paintOrder(widgets: readonly Widget[]): Widget[] {
+  const children = childMap(widgets, parentMap(widgets));
+  const out: Widget[] = [];
+  const emit = (parentId: string | null): void => {
+    for (const widget of children.get(parentId) ?? []) {
+      out.push(widget);
+      emit(widget.id);
+    }
+  };
+  emit(null);
+  return out;
+}
+
+export function structureOf(widgets: readonly Widget[]): StructureRow[] {
+  const indexOf = new Map<string, number>(widgets.map((widget, index) => [widget.id, index]));
+  const parentOf = parentMap(widgets);
+  const children = childMap(widgets, parentOf);
+  for (const list of children.values()) {
+    list.sort((a, b) => a.y - b.y || a.x - b.x || indexOf.get(a.id)! - indexOf.get(b.id)!);
+  }
+
+  const rows: StructureRow[] = [];
+  const emit = (parentId: string | null, depth: number): void => {
+    for (const widget of children.get(parentId) ?? []) {
+      const siblings = children.get(parentId) ?? [];
+      rows.push({
+        widget,
+        depth,
+        parentId,
+        index: indexOf.get(widget.id)!,
+        stacked: siblings.some((other) => other.id !== widget.id && intersects(other, widget)),
+      });
+      emit(widget.id, depth + 1);
+    }
+  };
+  emit(null, 0);
+  return rows;
+}
+
 /* ── the flow map ───────────────────────────────────────────────────────────────────────── */
 
 /** A page node on the flow map. The original's dimensions, so an arranged map transfers unchanged. */
