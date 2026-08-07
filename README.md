@@ -102,6 +102,11 @@ render — see [`architecture/architecture-review.md`](./architecture/architectu
 > **On Windows**, run each command on its own line: PowerShell 5.1 does not accept `&&`. Stop any running
 > dev server before `npm ci`, because a file held open by `ng serve` makes the reinstall fail partway —
 > which is how a half-updated tree happens in the first place.
+>
+> **Do not delete `package-lock.json`.** It is committed because it pins the exact tree, and deleting it
+> is what turns a recoverable stale `node_modules` into a genuinely different set of versions: the next
+> `npm install` re-resolves everything from scratch. `npm ci` also cannot run without it. If it has
+> already gone: `git restore package-lock.json`, then `npm ci`.
 
 ```bash
 npm ci           # not `npm install` — see below

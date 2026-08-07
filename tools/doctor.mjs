@@ -84,6 +84,57 @@ function installed(name) {
   }
 }
 
+// ── checkout ────────────────────────────────────────────────────────────────
+/*
+  Which repository, which branch, which commit — asked first, because it is the question that makes
+  every other answer meaningful.
+
+  Twice now a version error has turned out to be a checkout that was not the one the reader thought it
+  was: a differently-named directory, a branch without the work in it. No amount of reinstalling fixes
+  either, so being told to reinstall sends somebody round a loop.
+*/
+process.stdout.write('\nCheckout\n');
+{
+  async function git(args) {
+    const { stdout } = await run('git', args, { cwd: ROOT });
+    return stdout.trim();
+  }
+
+  try {
+    const [remote, branch, commit] = await Promise.all([
+      git(['remote', 'get-url', 'origin']).catch(() => '(no origin)'),
+      git(['rev-parse', '--abbrev-ref', 'HEAD']),
+      git(['log', '--oneline', '-1']),
+    ]);
+    ok('repository', remote);
+    ok('branch', branch);
+    ok('commit', commit);
+
+    /*
+      A deleted or edited lockfile, called out specifically.
+
+      It is the most damaging thing somebody reaches for when an install misbehaves, and it is the one
+      that guarantees the next `npm install` resolves a different tree — turning a recoverable stale
+      `node_modules` into a genuinely different set of versions. `npm ci` cannot run at all without it.
+    */
+    const dirty = await git(['status', '--porcelain', '--', 'package.json', 'package-lock.json']);
+    if (dirty) {
+      const missing = dirty.split('\n').some((line) => line.includes('package-lock.json'));
+      fail(
+        `package.json or package-lock.json differs from the commit:\n      ${dirty.replace(/\n/g, '\n      ')}`,
+        missing
+          ? 'Restore the lockfile — it pins the exact tree, and npm ci needs it: ' +
+            'git restore package-lock.json package.json   then run: npm ci'
+          : 'Restore them with: git restore package.json package-lock.json   then run: npm ci',
+      );
+    } else {
+      ok('package.json and package-lock.json', 'match the commit');
+    }
+  } catch {
+    warn('this directory is not a git checkout', 'Version checks below cannot tell you whether it is the right code.');
+  }
+}
+
 // ── Node ────────────────────────────────────────────────────────────────────
 process.stdout.write('\nRuntime\n');
 {
