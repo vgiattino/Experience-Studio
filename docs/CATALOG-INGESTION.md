@@ -535,6 +535,67 @@ this fails the first time somebody tries it.
 **Without Docker**, run `npm run studio` alone. The Sources screen falls back to running the same
 pipeline in the browser over the built-in schema, and the banner says so.
 
+### Deploying it — the API base URL
+
+The Angular dev server proxies `/api` to `localhost:4000`. **`proxyConfig` is a dev-server option**, so a
+built Studio served from a static host has no proxy: `/api/sources` returns that host's 404 or its
+index.html, and there is no API behind it.
+
+Two ways to deploy, and the app supports both without a rebuild:
+
+**A reverse proxy in front of both** — nginx, an ingress, a CDN — routing `/api` to the API and
+everything else to the static app. Nothing to configure; same-origin `/api` is the default.
+
+**The API on its own origin** — set a runtime config in the served `index.html`:
+
+```html
+<script>
+  window.OPUS_CONFIG = {
+    apiBaseUrl: 'https://edm-studio-api.internal/api',
+    // Only if the deployment is still using the demo persona switch. Omit once identity comes from a
+    // verified token, which is where it belongs.
+    personaHeader: 'steward'
+  };
+</script>
+```
+
+Runtime rather than a build-time environment file, deliberately: one artifact promoted through
+dev → staging → production is a different thing from three artifacts that are supposed to be identical.
+The API must then allow the app's origin — a browser reports a blocked cross-origin response as a
+network failure, so a correctly-running API that has not allowed the app looks exactly like an API that
+is not there. The screen says both possibilities rather than picking one.
+
+### What a production build will not do
+
+**Substitute a fixture.** `fixtureFallbackAllowed()` defaults to `isDevMode()`, and when the API is
+unreachable in a production build the screen reports the cause and offers no scan, no register form and
+no roster.
+
+That gate was missing, and it was the serious defect in the first version. A production build served
+without an API proxy fell back to the browser-only pipeline over the built-in schema and told the reader
+"the backend is not running" — so a steward could review and publish a governed vocabulary describing a
+database nobody had connected to, while their backend ran perfectly on another origin.
+
+A deployment that genuinely wants the offline walkthrough — a conference stand, an air-gapped demo —
+sets `allowFixtureFallback: true` explicitly, and the screen still leads with which schema it is reading
+and that nothing has touched a database.
+
+### What the screen says when it cannot connect
+
+The probe reports a cause rather than a conclusion. It used to collapse every failure into "offline",
+which is wrong for most of the ways this actually fails and pointed the reader at the wrong fix:
+
+| What happened | What the screen says |
+| --- | --- |
+| No HTTP response | Names both possibilities — nothing listening, or another origin that has not allowed this one — and quotes the browser |
+| 404 | "Most often this means the app is served without a reverse proxy for /api", with the config to set |
+| 5xx | Points at the API's own logs |
+| 200, but HTML or the wrong JSON | "Something else is serving that path — usually a static host returning index.html" |
+| 403 | The server's own sentence about the missing capability |
+
+Each carries the URL it tried and a **Try again** that re-probes without a page reload — the base URL is
+read at call time, so a corrected config takes effect on the next click.
+
 ### The password, said plainly
 
 There is a development default (`Opus!Edm2026Scan`) in `tools/edm-sandbox.mjs`, in plain sight. It
@@ -590,7 +651,10 @@ numbers CTE — so 3.7 million rows take about a minute rather than an afternoon
 | Checked | Result |
 | --- | --- |
 | Live banner | names the driver and says nothing is simulated |
-| Fixture banner | says the backend is not running and how to start it; the Test button is absent, not answering about a connection nobody made |
+| Fixture banner (dev) | says it is reading a built-in schema, quotes the cause, and points at `npm run demo`; the Test button is absent rather than answering about a connection nobody made |
+| Unavailable (production build, no proxy) | 404 diagnosed as a missing `/api` proxy, with the config to set; **no scan, no register form, no roster** |
+| Unavailable → recovered | repointing `apiBaseUrl` and clicking **Try again** reaches the API with no page reload |
+| Production build on another origin | reaches the API through `window.OPUS_CONFIG.apiBaseUrl` and reports Live |
 | Register form | a connection string in the host field blocks; an unverified certificate warns and records; `../../etc/shadow` as a secret name blocks |
 | Accepted risk | shown on the source detail afterwards, beside who accepted it |
 | Publish | 10 of 10 published, 0 visible to this author, with the four derived capabilities named on one line |

@@ -1,21 +1,28 @@
 /**
  * The ingestion session: registered sources, their scans, and the drafts under review.
  *
- * ── TWO TRANSPORTS, AND THE SCREEN ALWAYS SAYS WHICH ────────────────────────────────────
- * When `/api/sources` answers, every scan is a real connection to a real database: the backend resolves
- * the source's secret, opens a pooled TDS connection with the `mssql` driver, runs the introspection
- * SQL, and returns what the server said about itself. Nothing about the schema is simulated.
+ * ── THE API IS THE PRODUCT; THE FIXTURE IS A DEVELOPMENT AFFORDANCE ─────────────────────
+ * When the API answers, every scan is a real connection to a real database: the backend resolves the
+ * source's secret, opens a pooled TDS connection with the `mssql` driver, runs the introspection SQL,
+ * and returns what the server said about itself. Nothing about the schema is simulated.
  *
- * When it does not answer — the API is not running — the same pipeline runs in the browser over
- * `FixtureExecutor`, which answers the same statements from a built-in Opus EDM schema. That is not a
- * fallback for its own sake; it is what keeps this workspace demonstrable and testable without a
- * database. But it is a materially different claim, so `mode` is a signal the screen renders rather
- * than a detail: a scan that appears to have read production and did not is the worst thing this
- * surface could imply.
+ * When it does not answer, what happens depends on the build, and that distinction is the point:
  *
- * A third state exists and is not a failure: `forbidden`. The API is running and refused this caller,
+ *   · **a development build** falls back to running the same pipeline in the browser over
+ *     `FixtureExecutor`, which answers the same statements from a built-in Opus EDM schema. This is
+ *     what keeps the workspace demonstrable and testable without a database.
+ *   · **a production build does not.** It reports that the catalog service is unreachable, with the
+ *     cause, and offers no scan at all.
+ *
+ * The second half was missing and it was the serious defect. A production build that quietly substitutes
+ * a fixture is a production build in which a steward can review and publish a catalog derived from a
+ * fabricated schema — and the screen would have told them the backend was not running while their
+ * backend was running perfectly on another origin. `fixtureFallbackAllowed()` is the gate, and it keys
+ * off the build mode rather than a preference.
+ *
+ * A fourth state is not a failure at all: `forbidden`. The API is running and refused this caller,
  * because a draft carries physical table and column names and the routes require catalog stewardship.
- * Reporting that as "offline" would send a steward to look at a server that is working.
+ * Reporting that as "not running" would send a steward to look at a server that is working.
  *
  * ── WHAT THIS HOLDS AND WHAT THE LIBRARY HOLDS ──────────────────────────────────────────
  * `@opus/catalog-ingest` holds the pipeline and knows nothing about Angular or HTTP. This service holds
@@ -48,6 +55,7 @@ import {
   redactForClient,
 } from '@opus/catalog-ingest';
 
+import { apiBaseUrl, fixtureFallbackAllowed, personaHeader } from './api-config';
 import * as api from './ingest-api';
 import { PublishedCatalogService } from './published-catalog.service';
 
@@ -56,11 +64,15 @@ export type SourceStage = 'registered' | 'scanned' | 'promoted';
 
 /** Where scans come from. Rendered, not hidden — see the note at the top of the file. */
 export type Transport =
+  /** Still deciding. The screen shows nothing scannable until this resolves. */
+  | 'connecting'
   /** A real connection through the backend. */
   | 'api'
-  /** The backend is not running; the pipeline runs in the browser over the built-in schema. */
+  /** No API, and this build permits the browser-only pipeline over the built-in schema. */
   | 'fixture'
-  /** The backend is running and refused this caller. */
+  /** No API, and this build does not permit a substitute. Nothing is scannable. */
+  | 'unavailable'
+  /** The API is running and refused this caller. */
   | 'forbidden';
 
 export interface SourceState {
@@ -115,9 +127,11 @@ export class IngestService {
   readonly selectedId = signal<string>('');
   readonly busy = signal<string | null>(null);
   readonly problem = signal<string | null>(null);
-  readonly mode = signal<Transport>('fixture');
+  readonly mode = signal<Transport>('connecting');
   /** Why the API was refused, when it was. The server's own sentence. */
   readonly refusal = signal<string | null>(null);
+  /** Why the API could not be reached, when it could not. The cause, not a guess. */
+  readonly unreachable = signal<api.ApiUnreachable | null>(null);
   readonly ready = signal(false);
 
   readonly sources = computed(() => this.states());
@@ -142,7 +156,12 @@ export class IngestService {
    * label itself honestly, and re-probing on every scan would double the round trips to answer a
    * question whose answer does not change while a page is open.
    */
-  private async connect(): Promise<void> {
+  async connect(): Promise<void> {
+    this.mode.set('connecting');
+    this.refusal.set(null);
+    this.unreachable.set(null);
+    this.ready.set(false);
+
     const result = await api.probe();
 
     if (result.status === 'available') {
@@ -157,10 +176,21 @@ export class IngestService {
       this.mode.set('forbidden');
       this.refusal.set(result.detail);
       this.setSources([]);
-    } else {
+    } else if (fixtureFallbackAllowed()) {
       this.mode.set('fixture');
+      this.unreachable.set(result);
       this.local.set(FIXTURE_SOURCE.id, FIXTURE_SOURCE);
       this.setSources([{ summary: redactForClient(FIXTURE_SOURCE), stage: 'registered' }]);
+    } else {
+      /*
+        No API and no substitute. The screen shows the diagnostic and a retry, and nothing scannable.
+
+        Deliberately not a fixture: publishing a catalog inferred from a built-in schema would be a
+        governed vocabulary describing a database nobody connected to.
+      */
+      this.mode.set('unavailable');
+      this.unreachable.set(result);
+      this.setSources([]);
     }
     this.ready.set(true);
   }
@@ -380,7 +410,11 @@ export class IngestService {
    */
   private async reloadProjection(): Promise<void> {
     try {
-      const response = await fetch('/api/catalog', { headers: { 'x-persona': 'steward' } });
+      // The configured base, not a hardcoded path — the same reason `ingest-api` resolves it at call time.
+      const persona = personaHeader();
+      const response = await fetch(`${apiBaseUrl()}/catalog`, {
+        headers: persona ? { 'x-persona': persona } : {},
+      });
       if (!response.ok) return;
       const body = (await response.json()) as { snapshot?: CatalogSnapshot };
       if (body?.snapshot) this.published.install(body.snapshot);

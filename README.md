@@ -115,8 +115,17 @@ npm run demo     # API on :4000 + Studio on :4300, with the secret in the enviro
 Then **Catalog → Sources → Register a source**, using the values `npm run demo` prints, and
 **Test the connection → Scan → Publish**. `npm run edm:down` removes the container.
 
-Without Docker, `npm run studio` alone still works: Sources falls back to the same pipeline over a
-built-in schema, and says so. See [docs/CATALOG-INGESTION.md](docs/CATALOG-INGESTION.md).
+`npm run studio` on its own has no API behind it, so Sources says so and — in a development build only —
+reads a built-in schema instead. A production build never substitutes one: it reports why the catalog
+service is unreachable and offers no scan.
+
+Deploying the built Studio needs `/api` reverse-proxied to the API, or a runtime base URL:
+
+```html
+<script>window.OPUS_CONFIG = { apiBaseUrl: 'https://edm-studio-api.internal/api' };</script>
+```
+
+See [docs/CATALOG-INGESTION.md](docs/CATALOG-INGESTION.md).
 
 Useful URL switches, which make the architecture's claims checkable in the running app:
 

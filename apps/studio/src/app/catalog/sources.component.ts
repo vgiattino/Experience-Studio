@@ -69,6 +69,12 @@ interface RegisterForm {
         this surface could imply. So the transport is rendered, not logged.
       -->
       @switch (ingest.mode()) {
+        @case ('connecting') {
+          <p class="src-note">
+            <opus-icon name="server" [size]="14" />
+            <span>Checking whether the catalog service is available…</span>
+          </p>
+        }
         @case ('api') {
           <p class="src-note live">
             <opus-icon name="server" [size]="14" />
@@ -86,19 +92,66 @@ interface RegisterForm {
             <span>{{ ingest.refusal() }}</span>
           </p>
         }
-        @default {
-          <p class="src-note">
-            <opus-icon name="info" [size]="14" />
+        @case ('fixture') {
+          <!--
+            A development build with no API. The fixture is named, the diagnostic is the server's, and the
+            fix is a command — because the previous version asserted "the backend is not running", which
+            is a guess and is wrong for most of the ways this fails.
+          -->
+          <p class="src-note warn">
+            <opus-icon name="warning" [size]="14" />
             <span>
-              <b>The backend is not running,</b> so the scan below reads a built-in Opus EDM schema with
-              the same T-SQL a server would, in this browser. A browser cannot open a SQL Server
-              connection — TDS is not HTTP. Start the API with <code>npm run api</code> to scan a real
-              database; everything above the driver is the same code either way.
+              <b>No catalog service, so this is reading a built-in schema.</b>
+              {{ ingest.unreachable()?.detail }}
+              Nothing below has touched a database. Run <code>npm run demo</code> for a live scan — this
+              substitution happens only in a development build.
+              <button type="button" class="opus-btn sm src-retry" (click)="ingest.connect()">
+                <opus-icon name="refresh" [size]="13" />
+                Try again
+              </button>
+            </span>
+          </p>
+        }
+        @default {
+          <!--
+            A production build with no API. No fixture, no scan, and the cause rather than a conclusion.
+          -->
+          <p class="src-note error">
+            <opus-icon name="warning" [size]="14" />
+            <span>
+              <b>The catalog service is unavailable.</b>
+              {{ ingest.unreachable()?.detail }}
+              @if (ingest.unreachable(); as failure) {
+                <span class="src-diag">
+                  <code>{{ failure.url }}</code>
+                  @if (failure.httpStatus) {
+                    <span class="src-chip warn">HTTP {{ failure.httpStatus }}</span>
+                  }
+                  <span class="src-chip">{{ failure.reason }}</span>
+                </span>
+              }
+              <button type="button" class="opus-btn sm src-retry" (click)="ingest.connect()">
+                <opus-icon name="refresh" [size]="13" />
+                Try again
+              </button>
             </span>
           </p>
         }
       }
 
+      @if (ingest.mode() === 'unavailable' || ingest.mode() === 'forbidden') {
+        <!--
+          No roster, no form, no scan button. A screen that offered "Register a source" while unable to
+          reach the service that stores registrations would be a screen whose buttons lie.
+        -->
+        <p class="src-lead src-blocked">
+          Registering a source, scanning it and publishing a catalog all happen in the catalog service.
+          Until it is reachable there is nothing this screen can do.
+          <a href="https://github.com/vgiattino/Experience-Studio/blob/main/docs/CATALOG-INGESTION.md">
+            Deployment notes
+          </a>
+        </p>
+      } @else {
       <div class="src-body">
         <div class="src-list">
           <opus-list-panel
@@ -825,6 +878,7 @@ interface RegisterForm {
           }
         </section>
       </div>
+      }
     </div>
   `,
   styles: `
@@ -864,6 +918,31 @@ interface RegisterForm {
     .src-note.warn {
       border-inline-start-color: var(--opus-emphasis-warning);
       background: var(--opus-emphasis-warning-bg);
+    }
+
+    /* A stop, not a caution: nothing on this screen works until it is resolved. */
+    .src-note.error {
+      border-inline-start-color: var(--opus-emphasis-negative, var(--opus-emphasis-warning));
+      background: var(--opus-emphasis-negative-bg, var(--opus-emphasis-warning-bg));
+    }
+
+    .src-retry {
+      margin-inline-start: var(--opus-space-2);
+      vertical-align: middle;
+    }
+
+    /* The URL and the failure kind, on their own line so the sentence above stays readable. */
+    .src-diag {
+      display: flex;
+      align-items: center;
+      gap: var(--opus-space-2);
+      flex-wrap: wrap;
+      margin-block-start: 6px;
+    }
+
+    .src-blocked {
+      margin: 0 20px;
+      padding-block: var(--opus-space-4);
     }
 
     .src-note code {

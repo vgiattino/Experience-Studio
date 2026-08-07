@@ -7,12 +7,23 @@
  * carry the persona header, turn an RFC 9457 problem document into an `Error` with the server's own
  * sentence in it, and refuse to guess when the response is not JSON.
  *
- * That last one matters more than it sounds. When the API is not running, a dev server answers `/api`
- * with its index.html, and `response.json()` on that throws "Unexpected token <" — which is the error a
- * steward would otherwise be shown for "the backend is not running". `reachable()` exists so the screen
- * can ask the question directly instead.
+ * That last one matters more than it sounds. A host with no API behind it answers `/api/sources` with
+ * its own index.html or a 404, and `response.json()` on that throws "Unexpected token <" — which is the
+ * error a steward would otherwise be shown for a perfectly healthy backend on another origin.
+ *
+ * ── AND WHY THE PROBE REPORTS A CAUSE, NOT A CONCLUSION ─────────────────────────────────
+ * `probe()` used to collapse everything into "offline", and the screen said "The backend is not
+ * running". That is a guess presented as a fact, and it is wrong for most of the ways this actually
+ * fails: a 502 from a misconfigured reverse proxy, a 500 from the API itself, a CORS rejection, a DNS
+ * failure, a static host answering with HTML. Each has a different fix and the sentence sent the reader
+ * to the wrong one.
+ *
+ * So the probe returns *what happened* — the URL it tried, the HTTP status if there was one, and which
+ * of four distinguishable things went wrong — and the screen renders that. A diagnostic a steward can
+ * act on is worth more than a tidy one.
  */
 
+import { apiBaseUrl, personaHeader } from './api-config';
 import type {
   CatalogDraft,
   DriftReport,
@@ -45,19 +56,23 @@ export interface PromotionSummary {
   visible: number;
 }
 
+/** The sources root, resolved at call time so a deployment's runtime config is honoured. */
+function base(): string {
+  return `${apiBaseUrl()}/sources`;
+}
+
 /**
- * The persona this application authenticates as.
+ * Request headers, with the demo persona only where it means something.
  *
- * The server resolves identity from this header and treats it as the demo switch it is — the
- * capability check behind it is real. `steward` is the persona holding `catalog.edit`, which is what
- * this workspace needs; the Studio has one author and that author is a steward.
+ * In production the server resolves identity from a verified token; a production build sending
+ * `x-persona` is at best noise and at worst an invitation. `personaHeader()` returns nothing there.
  */
-const PERSONA = 'steward';
-
-const BASE = '/api/sources';
-
 function headers(): HeadersInit {
-  return { 'content-type': 'application/json', 'x-persona': PERSONA };
+  const persona = personaHeader();
+  return {
+    'content-type': 'application/json',
+    ...(persona ? { 'x-persona': persona } : {}),
+  };
 }
 
 /**
@@ -83,55 +98,120 @@ async function json<T>(response: Response): Promise<T> {
   return (await response.json()) as T;
 }
 
+/** Why the API could not be used, in enough detail to act on. */
+export interface ApiUnreachable {
+  status: 'unreachable';
+  /** What was tried, so a reader can see whether the base URL is what they expected. */
+  url: string;
+  reason:
+    /** No HTTP response at all: wrong host, nothing listening, DNS, or a CORS rejection. */
+    | 'no-response'
+    /** An HTTP response, but an error status. `httpStatus` says which. */
+    | 'http-error'
+    /** A 2xx that is not this API — a static host or SPA fallback answering with HTML. */
+    | 'not-the-api';
+  httpStatus?: number;
+  /** One sentence naming the likely cause and the fix. */
+  detail: string;
+}
+
+export type ProbeResult =
+  | { status: 'available'; sources: ApiSource[] }
+  | { status: 'forbidden'; detail: string }
+  | ApiUnreachable;
+
 /**
- * Is the API there, and does this caller hold catalog stewardship?
+ * Is the API there, does it answer as itself, and does this caller hold catalog stewardship?
  *
- * Three answers rather than two, because they lead to three different things to say: the backend is
- * not running, the backend is running and refused this caller, or it is available.
+ * Four outcomes rather than two, because they lead to four different things to do.
  */
-export async function probe(): Promise<
-  { status: 'available'; sources: ApiSource[] } | { status: 'forbidden'; detail: string } | { status: 'offline' }
-> {
+export async function probe(): Promise<ProbeResult> {
+  const url = base();
+
+  let response: Response;
   try {
-    const response = await fetch(BASE, { headers: headers() });
-    if (response.status === 403) {
-      const body = (await response.json().catch(() => ({}))) as { detail?: string };
-      return { status: 'forbidden', detail: body.detail ?? 'This caller may not steward the catalog.' };
-    }
-    if (!response.ok) return { status: 'offline' };
-
+    response = await fetch(url, { headers: headers() });
+  } catch (error) {
     /*
-      Checked, not assumed.
-
-      A dev server with no backend behind it answers `/api/sources` with index.html and a 200, so an
-      `ok` response is not evidence the API replied. The shape is.
+      `fetch` rejects for a small set of reasons that all look identical from here, and CORS is the one
+      worth naming: a browser reports a blocked cross-origin response as a network failure, so a
+      correctly-running API on another origin that has not allowed this one is indistinguishable from an
+      API that is not there. The message says both possibilities rather than picking one.
     */
-    const body = (await response.json().catch(() => null)) as { sources?: ApiSource[] } | null;
-    if (!body || !Array.isArray(body.sources)) return { status: 'offline' };
-    return { status: 'available', sources: body.sources };
-  } catch {
-    return { status: 'offline' };
+    return {
+      status: 'unreachable',
+      url,
+      reason: 'no-response',
+      detail:
+        `Nothing answered at ${url}. Either no API is listening there, or it is on another origin and has ` +
+        `not allowed this one (a browser reports a blocked cross-origin response as a network failure). ` +
+        `${error instanceof Error && error.message ? `The browser said: ${error.message}.` : ''}`,
+    };
   }
+
+  if (response.status === 403) {
+    const body = (await response.json().catch(() => ({}))) as { detail?: string };
+    return { status: 'forbidden', detail: body.detail ?? 'This caller may not steward the catalog.' };
+  }
+
+  if (!response.ok) {
+    return {
+      status: 'unreachable',
+      url,
+      reason: 'http-error',
+      httpStatus: response.status,
+      detail:
+        response.status === 404
+          ? `${url} returned 404. Most often this means the app is served without a reverse proxy for /api — ` +
+            `set window.OPUS_CONFIG.apiBaseUrl to the API's own URL, or route /api through to it.`
+          : response.status >= 500
+            ? `${url} returned ${response.status}. The API or something in front of it is failing; its logs will say why.`
+            : `${url} returned ${response.status} ${response.statusText}.`,
+    };
+  }
+
+  /*
+    A 2xx is not evidence the API replied.
+
+    A static host with SPA fallback answers every unknown path with index.html and a 200, which is
+    exactly what a built Studio deployed without an API proxy does. Checking the *shape* is the only way
+    to tell that apart from a real response.
+  */
+  const body = (await response.json().catch(() => null)) as { sources?: ApiSource[] } | null;
+  if (!body || !Array.isArray(body.sources)) {
+    return {
+      status: 'unreachable',
+      url,
+      reason: 'not-the-api',
+      httpStatus: response.status,
+      detail:
+        `${url} answered ${response.status} but not with this API's response. Something else is serving that ` +
+        `path — usually a static host returning index.html for unknown paths. Point ` +
+        `window.OPUS_CONFIG.apiBaseUrl at the API, or proxy /api to it.`,
+    };
+  }
+
+  return { status: 'available', sources: body.sources };
 }
 
 export async function register(input: Record<string, unknown>): Promise<ApiSource> {
-  return json(await fetch(BASE, { method: 'POST', headers: headers(), body: JSON.stringify(input) }));
+  return json(await fetch(base(), { method: 'POST', headers: headers(), body: JSON.stringify(input) }));
 }
 
 export async function remove(id: string): Promise<void> {
-  const response = await fetch(`${BASE}/${encodeURIComponent(id)}`, { method: 'DELETE', headers: headers() });
+  const response = await fetch(`${base()}/${encodeURIComponent(id)}`, { method: 'DELETE', headers: headers() });
   if (!response.ok) await fail(response);
 }
 
 export async function test(id: string): Promise<{ target: string; serverVersion: string }> {
   return json(
-    await fetch(`${BASE}/${encodeURIComponent(id)}/test`, { method: 'POST', headers: headers() }),
+    await fetch(`${base()}/${encodeURIComponent(id)}/test`, { method: 'POST', headers: headers() }),
   );
 }
 
 export async function scan(id: string, sampleEnumerations: boolean): Promise<ScanResult> {
   return json(
-    await fetch(`${BASE}/${encodeURIComponent(id)}/scan`, {
+    await fetch(`${base()}/${encodeURIComponent(id)}/scan`, {
       method: 'POST',
       headers: headers(),
       body: JSON.stringify({ sampleEnumerations }),
@@ -145,7 +225,7 @@ export async function promote(
   sampleEnumerations: boolean,
 ): Promise<PromotionSummary> {
   return json(
-    await fetch(`${BASE}/${encodeURIComponent(id)}/promote`, {
+    await fetch(`${base()}/${encodeURIComponent(id)}/promote`, {
       method: 'POST',
       headers: headers(),
       /*
