@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "description": "AI-native experience platform for Opus EDM \u2014 Milestone 1 runtime proof of concept",
   "private": true,
+  "engines": {
+    "node": "^20.19.0 || ^22.12.0 || >=24.0.0"
+  },
   "scripts": {
     "start": "ng serve viewer",
     "build": "ng build viewer && ng build studio && ng build experience-studio",

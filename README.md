@@ -86,7 +86,8 @@ render — see [`architecture/architecture-review.md`](./architecture/architectu
 
 ## Run it
 
-> Node 20.19+ or 22+ (Angular 21). A plain `git clone` of `main` is runnable — architecture, schemas,
+> Node `^20.19.0 || ^22.12.0 || >=24.0.0` — declared in `engines`, so npm warns rather than letting
+> Angular's tooling fail later with a message about something else. A plain `git clone` of `main` is runnable — architecture, schemas,
 > docs and code are all there. On PowerShell, set environment variables as
 > `$env:PORT="4100"; npm run api`.
 >
@@ -153,6 +154,16 @@ Useful URL switches, which make the architecture's claims checkable in the runni
 
 The **Runtime** panel in the sidebar reports compile time and cache hits, first-batch latency,
 per-widget states, the query log, and which validation levels ran — and which did not.
+
+### Angular version
+
+On **21.2.19** — the newest 21.x, carrying npm's `v21-lts` tag. Angular **22.1.1** is current.
+
+Staying on 21 deliberately, for now. Angular 22 raises the Node floor to
+`^22.22.3 || ^24.15.0 || >=26.0.0`, so moving is not a dependency bump — it is a Node upgrade on every
+developer machine and build agent first, and the CLI refuses to run before it will even attempt the
+migration. That is a piece of work with its own risk, and worth doing on its own rather than folded into
+a feature branch. Being one major behind is the cheap time to move; two is not, so it should not drift.
 
 ## Repository map
 

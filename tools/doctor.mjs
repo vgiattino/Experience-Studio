@@ -87,12 +87,60 @@ function installed(name) {
 // ── Node ────────────────────────────────────────────────────────────────────
 process.stdout.write('\nRuntime\n');
 {
-  const major = Number(process.versions.node.split('.')[0]);
-  const minor = Number(process.versions.node.split('.')[1]);
-  // Angular 21 needs 20.19+ or 22+. 21.x is odd-numbered and unsupported.
-  const supported = (major === 20 && minor >= 19) || major === 22 || major >= 24;
-  if (supported) ok('Node', process.versions.node);
-  else fail(`Node ${process.versions.node} is not supported by Angular 21`, 'Use Node 20.19+ or 22+.');
+  /*
+    The requirement is read from the installed Angular, not restated here.
+
+    A hardcoded range is a second copy that drifts, and it drifts silently: Angular 21.2 wants
+    `^20.19.0 || ^22.12.0 || >=24.0.0` and Angular 22 wants `^22.22.3 || ^24.15.0 || >=26.0.0`, so a
+    check written against one of those quietly passes an unsupported Node after an upgrade. Falling back
+    to `package.json`'s own `engines` covers the case where node_modules is not installed yet — which is
+    exactly when somebody most wants to be told their Node is wrong.
+  */
+  let required;
+  try {
+    required = require('@angular/core/package.json').engines?.node;
+  } catch {
+    required = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).engines?.node;
+  }
+
+  if (!required) {
+    warn('cannot tell which Node versions are supported', 'Neither @angular/core nor package.json declares one.');
+  } else if (satisfiesAny(process.versions.node, required)) {
+    ok('Node', `${process.versions.node} — supported (${required})`);
+  } else {
+    fail(
+      `Node ${process.versions.node} is not supported by this Angular`,
+      `It needs ${required}. Install one of those and run: npm ci`,
+    );
+  }
+}
+
+/**
+ * Does a version satisfy an `||`-separated list of `^x.y.z` / `>=x.y.z` ranges?
+ *
+ * Hand-rolled rather than pulling in semver, because this script must run before `npm ci` has put
+ * anything in `node_modules` — a diagnostic that needs its own dependencies installed cannot diagnose a
+ * failed install. Only the two forms Angular actually publishes are handled, and anything else is
+ * reported as unknown rather than guessed at.
+ */
+function satisfiesAny(version, ranges) {
+  const [major, minor, patch] = version.split('.').map(Number);
+  return ranges.split('||').some((raw) => {
+    const range = raw.trim();
+    const parts = range.replace(/^[\^>=]+/, '').split('.').map(Number);
+    const [wantMajor, wantMinor = 0, wantPatch = 0] = parts;
+    if (range.startsWith('^')) {
+      if (major !== wantMajor) return false;
+      if (minor !== wantMinor) return minor > wantMinor;
+      return patch >= wantPatch;
+    }
+    if (range.startsWith('>=')) {
+      if (major !== wantMajor) return major > wantMajor;
+      if (minor !== wantMinor) return minor > wantMinor;
+      return patch >= wantPatch;
+    }
+    return false;
+  });
 }
 
 // ── dependencies ────────────────────────────────────────────────────────────
