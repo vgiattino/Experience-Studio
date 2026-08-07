@@ -16,7 +16,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { apiBaseUrl, fixtureFallbackAllowed, personaHeader } from './api-config';
-import { probe } from './ingest-api';
+import { ApiProblem, editable, probe, update } from './ingest-api';
 
 /** Install a `fetch` that answers once with whatever this test is about. */
 function respondWith(response: Response | Error): void {
@@ -154,6 +154,77 @@ describe('probing the catalog service', () => {
     );
     if (result.status === 'unreachable') {
       expect(result.url).toBe('https://elsewhere.example/api/sources');
+    }
+  });
+});
+
+/**
+ * Failures an edit has to be able to *branch* on, not merely display.
+ *
+ * Both of these were found the same way: the Edit button was reported as doing nothing, and the cause
+ * was that a refusal arrived as a bare `Error` the screen had nowhere to put. A message is enough to
+ * render; it is not enough to decide with, and these two decisions matter — one asks the steward a
+ * question, the other tells them their server is out of date.
+ */
+describe('problem documents an edit branches on', () => {
+  it('carries the code and body through, so a baseline refusal is a question and not an error', async () => {
+    respondWith(
+      json(
+        {
+          code: 'baseline-reset-required',
+          detail: 'This changes what the next scan reads.',
+          changes: [{ field: 'database', from: 'OpusEDM', to: 'OpusEDM_UAT', material: true }],
+        },
+        409,
+      ),
+    );
+
+    // Called once, deliberately: `respondWith` hands back the same `Response`, and a body can only be
+    // read once — a second call would see an already-consumed stream and prove nothing.
+    try {
+      await update('src-1', {} as never);
+      throw new Error('expected a refusal');
+    } catch (error) {
+      const problem = error as ApiProblem;
+      expect(problem).toBeInstanceOf(ApiProblem);
+      expect(problem.status).toBe(409);
+      expect(problem.code).toBe('baseline-reset-required');
+      // Without the body the screen cannot say *which* fields cost the baseline, which is the part
+      // that tells a steward whether they meant it.
+      expect(problem.body['changes']).toHaveLength(1);
+      expect(problem.message).toContain('the next scan reads');
+    }
+  });
+
+  it('leaves the code empty when the response is not a problem document at all', async () => {
+    /*
+      An API older than this screen has no `/editable` route, so Express answers with its own HTML 404
+      and no code. That absence is exactly how the service tells "this source does not exist" apart from
+      "this server predates the feature" — two 404s, two completely different fixes.
+    */
+    respondWith(new Response('<!doctype html><h1>Cannot GET</h1>', { status: 404 }));
+
+    try {
+      await editable('src-1');
+      throw new Error('expected a refusal');
+    } catch (error) {
+      const problem = error as ApiProblem;
+      expect(problem).toBeInstanceOf(ApiProblem);
+      expect(problem.status).toBe(404);
+      expect(problem.code).toBe('');
+    }
+  });
+
+  it('keeps the server’s own sentence when there is one', async () => {
+    respondWith(json({ code: 'semantic', detail: 'No source "src-9" is registered.' }, 404));
+
+    try {
+      await editable('src-9');
+      throw new Error('expected a refusal');
+    } catch (error) {
+      const problem = error as ApiProblem;
+      expect(problem.code).toBe('semantic');
+      expect(problem.message).toBe('No source "src-9" is registered.');
     }
   });
 });

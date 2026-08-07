@@ -83,6 +83,11 @@ export type EditOutcome =
   | { status: 'needs-confirmation'; detail: string; changed: FieldChange[] }
   | { status: 'failed'; detail: string };
 
+/** The current values, or why they could not be read. Never a bare null — see `loadEditable`. */
+export type LoadedEdit =
+  | { status: 'loaded'; value: api.EditableSource }
+  | { status: 'failed'; detail: string };
+
 /** What a source's ingestion has reached. Drives which pane the screen shows. */
 export type SourceStage = 'registered' | 'scanned' | 'promoted';
 
@@ -313,23 +318,38 @@ export class IngestService {
    * Fetched rather than derived from the roster, because the roster is redacted: it has
    * `host:port/database` as one string and no username at all, so a form built from it would open with
    * three empty fields and overwrite them with blanks on save.
+   *
+   * ── WHY THIS RETURNS A REASON RATHER THAN NULL ──────────────────────────────────────────
+   * Because the first version returned null, the screen had nowhere to put a null, and the result was
+   * an Edit button that did nothing at all — reported as exactly that. The failure is not hypothetical
+   * either: `npm run demo` runs the API as a separate process that does not reload on a pull, so a
+   * developer who updates the Studio is left with a server that has no `/editable` route, and the
+   * button silently stops working. A screen cannot report a cause it was never handed.
    */
-  async loadEditable(id: string): Promise<api.EditableSource | null> {
+  async loadEditable(id: string): Promise<LoadedEdit> {
     if (this.mode() === 'api') {
       try {
-        return await api.editable(id);
+        return { status: 'loaded', value: await api.editable(id) };
       } catch (error) {
-        this.problem.set(asText(error));
-        return null;
+        return { status: 'failed', detail: describeEditableFailure(error) };
       }
     }
 
     const registration = this.local.get(id);
-    if (!registration) return null;
+    if (!registration) {
+      return {
+        status: 'failed',
+        detail:
+          'This source is not held in this browser, and there is no catalog service to ask. Reload the page to rebuild the roster.',
+      };
+    }
     return {
-      editable: editableView(registration),
-      hasBaseline: !!this.states().find((state) => state.summary.id === id)?.promotedSchema,
-      revisions: [],
+      status: 'loaded',
+      value: {
+        editable: editableView(registration),
+        hasBaseline: !!this.states().find((state) => state.summary.id === id)?.promotedSchema,
+        revisions: [],
+      },
     };
   }
 
@@ -629,4 +649,26 @@ export class IngestService {
 
 function asText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+/**
+ * Why the current values could not be read — naming the one cause that is not about this source.
+ *
+ * A 404 from this route has two completely different meanings and only one of them is about the id.
+ * The route answers an unknown source with a problem document, so it carries a `code`; a *missing
+ * route* is answered by Express itself with HTML and no code at all. That absence is the signal, and
+ * it is worth spending a branch on: it means the catalog service is older than this screen, which is
+ * the ordinary outcome of pulling while `npm run api` keeps running, and no amount of retrying or
+ * re-registering fixes it.
+ */
+function describeEditableFailure(error: unknown): string {
+  if (error instanceof api.ApiProblem && error.status === 404 && !error.code) {
+    // Plain text: this goes into a paragraph, and backticks would render as backticks.
+    return (
+      'The catalog service answered, but it has no route for reading a source back — which means it is ' +
+      'older than this screen. The API does not reload when you pull, so stop it and run npm run demo ' +
+      'again, then try once more.'
+    );
+  }
+  return asText(error);
 }

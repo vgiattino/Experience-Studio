@@ -650,6 +650,23 @@ Editing is offered in browser-only mode too, unlike Test and the credential form
 changing where a registration points does not, and hiding it would make the screen untestable without a
 database for no reason other than symmetry with the buttons beside it.
 
+**The click opens the pane before the request, and this is not cosmetic.** The first version created
+the edit session only after the fetch succeeded, so every way that fetch can fail presented as a button
+that did nothing — which is exactly how it was reported. The failure is not hypothetical: `npm run demo`
+runs the API as a separate process that does not reload when you pull, so updating the Studio leaves a
+server with no `/editable` route and an Edit button that silently stops working.
+
+So the pane now says which of three states it is in — waiting, holding the values, or unable to read
+them — and the third carries the reason and a **Try again**. `loadEditable` returns a reason rather than
+null for the same purpose: a screen cannot report a cause it was never handed.
+
+The 404 case is split, because the two meanings have two different fixes. This route answers an unknown
+source with a problem document carrying a `code`; a *missing route* is answered by Express with HTML and
+no code at all. That absence is the discriminator, and it buys a sentence naming the real cause — the
+API is older than the screen — instead of "404 Not Found". `ApiProblem` exists to carry that: every
+refusal keeps the server's own sentence as its message *and* the code and body, because a message is
+enough to render and not enough to decide with.
+
 A material change is confirmed in place, with the fields listed above the button that agrees to it —
 styled as a decision rather than as an error, because the edit is valid and what the steward has not
 yet done is agree to what it costs. Any keystroke retracts the confirmation, so consent given about one
@@ -893,8 +910,11 @@ numbers CTE — so 3.7 million rows take about a minute rather than an afternoon
 | Entitlement | analyst 403; unknown id 404; a connection string in the host field 422 |
 | History | three edits recorded with before/after and which discarded the baseline |
 | In the browser | form pre-fills from the live values; confirmation renders in place with the fields listed; save banner names what changed; "Last edited by" appears on the detail; timestamps read `7 Aug 2026, 22:59` |
+| Edit against an API with no `/editable` route | the pane opens and names the cause — "older than this screen … stop it and run `npm run demo` again" — with **Try again**. Before this fix the click produced nothing but a stray "404 Not Found" |
+| Edit with the API down entirely | opens on the built-in source's own values, in browser-only mode |
+| Try again after a 502 | recovers into the filled form with no reload |
 
-Gate: `npm run typecheck` (new — see below), metadata validation, 544 unit tests, all three apps build
+Gate: `npm run typecheck` (new — see below), metadata validation, 547 unit tests, all three apps build
 with no budget warnings.
 
 ### The typecheck that was checking nothing

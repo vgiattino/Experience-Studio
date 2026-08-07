@@ -91,16 +91,39 @@ interface EditForm {
 /**
  * An edit in progress.
  *
- * Holds the record's context beside the form because the check needs both: whether a SQL login still
- * has a credential depends on what the source holds *today*, not only on what has been typed.
+ * ── WHY THE FORM IS NULLABLE, AND THE SESSION IS NOT ────────────────────────────────────
+ * Because entering edit mode and having the values to edit are two different events, and the first
+ * must not wait for the second. The first version created this whole object only *after* the fetch
+ * succeeded, so a failed fetch left the screen exactly as it was — an Edit button that visibly did
+ * nothing, which is precisely how it was reported.
+ *
+ * Now the click opens the pane immediately and the pane says which of three states it is in: waiting
+ * for the values, holding them, or unable to read them and saying why. A button whose only failure
+ * mode is silence is indistinguishable from a button that is not wired up.
+ *
+ * `context` is held beside the form because the check needs both: whether a SQL login still has a
+ * credential depends on what the source holds *today*, not only on what has been typed.
  */
 interface EditSession {
   id: string;
-  context: EditContext;
+  /** From the roster, so the heading names the source before anything has loaded. */
+  name: string;
+  /**
+   * Carried on the session rather than read back from the selection.
+   *
+   * The retry needs it, and by then the selection is whatever the user has since clicked — a retry
+   * that reached across to the currently-selected source would attribute one record's provenance to
+   * another's edit.
+   */
+  registeredBy: string;
+  /** Null while loading, and if the load failed. */
+  form: EditForm | null;
+  context: EditContext | null;
   /** True when a promoted scan exists, so a material change has a baseline to cost. */
   hasBaseline: boolean;
   revisions: EditableSource['revisions'];
-  form: EditForm;
+  /** Why the current values could not be read. Rendered in place of the form, with a retry. */
+  loadError: string | null;
 }
 
 @Component({
@@ -222,7 +245,7 @@ interface EditSession {
 
         <section class="src-detail">
           @if (editing(); as session) {
-            <h2 class="src-h2">Edit this source</h2>
+            <h2 class="src-h2">Edit {{ session.name }}</h2>
             <!--
               What an edit is for, and what it deliberately is not.
 
@@ -237,269 +260,296 @@ interface EditSession {
               own screen, and this form never carries one.
             </p>
 
-            <dl class="src-facts">
-              <div>
-                <dt>Kind</dt>
-                <dd>{{ session.context.kind }} — fixed at registration</dd>
-              </div>
-              <div>
-                <dt>Credential</dt>
-                <dd>
-                  {{
-                    session.context.credential === 'managed'
-                      ? 'a password this platform stores'
-                      : session.context.credential === 'reference'
-                        ? 'a secret your deployment holds'
-                        : 'none'
-                  }}
-                </dd>
-              </div>
-              <div>
-                <dt>Baseline</dt>
-                <dd>
-                  {{
-                    session.hasBaseline
-                      ? 'a promoted scan drift is measured against'
-                      : 'none — nothing published yet to compare against'
-                  }}
-                </dd>
-              </div>
-            </dl>
-
-            <div class="src-form">
-              <label class="opus-field">
-                <span class="opus-field-label">Name</span>
-                <input
-                  class="opus-input"
-                  [ngModel]="session.form.name"
-                  (ngModelChange)="editField('name', $event)"
-                />
-                <span class="opus-field-help">A label. Changing it costs nothing.</span>
-              </label>
-
-              <label class="opus-field">
-                <span class="opus-field-label">Host</span>
-                <input
-                  class="opus-input"
-                  [ngModel]="session.form.host"
-                  (ngModelChange)="editField('host', $event)"
-                />
-                <span class="opus-field-help">A name, an address, or HOST\\INSTANCE.</span>
-              </label>
-
-              <label class="opus-field">
-                <span class="opus-field-label">Port</span>
-                <input
-                  class="opus-input"
-                  type="number"
-                  [ngModel]="session.form.port"
-                  (ngModelChange)="editField('port', $event)"
-                />
-              </label>
-
-              <label class="opus-field">
-                <span class="opus-field-label">Database</span>
-                <input
-                  class="opus-input"
-                  [ngModel]="session.form.database"
-                  (ngModelChange)="editField('database', $event)"
-                />
-              </label>
-
-              <label class="opus-field">
-                <span class="opus-field-label">Authentication</span>
-                <select
-                  class="opus-select"
-                  [ngModel]="session.form.auth"
-                  (ngModelChange)="editField('auth', $event)"
-                >
-                  <option value="integrated">Integrated — the host's own identity, no secret</option>
-                  <option value="managedIdentity">Managed identity — resolved by the host</option>
-                  <option value="sqlLogin">SQL login — a username and a password</option>
-                </select>
-                <span class="opus-field-help">
-                  Moving away from a SQL login deletes the password this platform stored for it.
-                </span>
-              </label>
-
-              @if (session.form.auth === 'sqlLogin') {
-                <label class="opus-field">
-                  <span class="opus-field-label">Username</span>
-                  <input
-                    class="opus-input"
-                    [ngModel]="session.form.username"
-                    (ngModelChange)="editField('username', $event)"
-                    autocomplete="off"
-                  />
-                </label>
-
-                <!--
-                  Only the *reference* route is editable here, and the field says which case it is in.
-
-                  A secret this platform wrote has a name this platform generated; showing it would
-                  invite somebody to retype it into something else, and the useful action on it is to
-                  store a new password rather than to rename it.
-                -->
-                <label class="opus-field">
-                  <span class="opus-field-label">Secret name</span>
-                  <input
-                    class="opus-input"
-                    [ngModel]="session.form.secretRef"
-                    (ngModelChange)="editField('secretRef', $event)"
-                    placeholder="kv/edm/reader"
-                    autocomplete="off"
-                  />
-                  <span class="opus-field-help">
-                    @if (session.context.credential === 'managed') {
-                      This source uses a password this platform stores, so this is blank. Naming a secret
-                      here switches it to your deployment's store and deletes the stored password.
-                    } @else {
-                      The name of a secret your deployment already holds — never the secret. Leave it
-                      blank to leave this source without a credential until you set a password.
-                    }
-                  </span>
-                </label>
-              }
-
-              <label class="opus-field src-wide">
-                <span class="opus-field-label">Schemas to scan</span>
-                <input
-                  class="opus-input"
-                  [ngModel]="session.form.schemas"
-                  (ngModelChange)="editField('schemas', $event)"
-                  placeholder="dq, master, processing, vendor"
-                />
-                <span class="opus-field-help">Comma separated.</span>
-              </label>
-
-              <label class="src-check">
-                <input
-                  type="checkbox"
-                  [ngModel]="session.form.encrypt"
-                  (ngModelChange)="editField('encrypt', $event)"
-                />
-                <span>Encrypt the transport</span>
-              </label>
-              <label class="src-check">
-                <input
-                  type="checkbox"
-                  [ngModel]="session.form.trustServerCertificate"
-                  (ngModelChange)="editField('trustServerCertificate', $event)"
-                />
-                <span>Trust an unverified certificate</span>
-              </label>
-            </div>
-
-            @if (editBlockedBy().length) {
-              <ul class="src-problems">
-                @for (problem of editBlockedBy(); track problem.field + problem.message) {
-                  <li>
-                    <code>{{ problem.field }}</code>
-                    {{ problem.message }}
-                  </li>
-                }
-              </ul>
-            }
-            @if (editRisks().length) {
-              <ul class="src-problems accepted">
-                @for (problem of editRisks(); track problem.field + problem.message) {
-                  <li>
-                    <code>{{ problem.field }}</code>
-                    {{ problem.message }}
-                    <b>Saving records that you accepted this.</b>
-                  </li>
-                }
-              </ul>
-            }
-
             <!--
-              The second yes.
-
-              Rendered as a question with the fields in it, not as an error: the edit is valid, and what
-              the steward has not yet done is agree to what it costs. Listing the changes matters more
-              than the sentence — "host, database" is the part that tells them whether they meant it.
+              Three states, and the pane says which. The click opens this immediately, so waiting and
+              failing are both visible — a form that appeared only on success made every failure look
+              like a button that was never wired up.
             -->
-            @if (editConfirm(); as confirmation) {
-              <div class="src-confirm">
-                <h3 class="src-h3">
-                  <opus-icon name="warning" [size]="15" />
-                  This discards the drift baseline
-                </h3>
-                <ul class="src-changes">
-                  @for (change of confirmation.changed; track change.field) {
-                    <li>
-                      <code>{{ change.field }}</code>
-                      <span class="src-was">{{ change.from || '(none)' }}</span>
-                      →
-                      <b>{{ change.to || '(none)' }}</b>
-                    </li>
-                  }
-                </ul>
-                <p>{{ confirmation.detail }}</p>
-                <div class="src-actions">
-                  <button type="button" class="opus-btn primary" (click)="saveEdit(true)">
-                    <opus-icon name="check" [size]="14" />
-                    Save and discard the baseline
-                  </button>
-                  <button type="button" class="opus-btn" (click)="editConfirm.set(null)">
-                    <opus-icon name="close" [size]="14" />
-                    Keep editing
-                  </button>
-                </div>
-              </div>
-            }
-
-            @if (editError(); as detail) {
+            @if (session.loadError; as detail) {
               <p class="src-problems src-problems-solo">{{ detail }}</p>
-            }
-
-            @if (!editConfirm()) {
               <div class="src-actions">
                 <button
                   type="button"
                   class="opus-btn primary"
-                  [disabled]="editBlockedBy().length > 0 || !!ingest.busy()"
-                  (click)="saveEdit()"
+                  (click)="loadEditValues(session.id, session.registeredBy)"
                 >
-                  <opus-icon name="check" [size]="14" />
-                  Save
+                  <opus-icon name="refresh" [size]="14" />
+                  Try again
                 </button>
                 <button type="button" class="opus-btn" (click)="cancelEdit()">
                   <opus-icon name="close" [size]="14" />
                   Cancel
                 </button>
               </div>
-            }
+            } @else if (session.form; as form) {
+              <dl class="src-facts">
+                <div>
+                  <dt>Kind</dt>
+                  <dd>{{ session.context?.kind }} — fixed at registration</dd>
+                </div>
+                <div>
+                  <dt>Credential</dt>
+                  <dd>
+                    {{
+                      session.context?.credential === 'managed'
+                        ? 'a password this platform stores'
+                        : session.context?.credential === 'reference'
+                          ? 'a secret your deployment holds'
+                          : 'none'
+                    }}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Baseline</dt>
+                  <dd>
+                    {{
+                      session.hasBaseline
+                        ? 'a promoted scan drift is measured against'
+                        : 'none — nothing published yet to compare against'
+                    }}
+                  </dd>
+                </div>
+              </dl>
 
-            <!--
-              What has been changed before, and whether it cost a baseline.
+              <div class="src-form">
+                <label class="opus-field">
+                  <span class="opus-field-label">Name</span>
+                  <input
+                    class="opus-input"
+                    [ngModel]="form.name"
+                    (ngModelChange)="editField('name', $event)"
+                  />
+                  <span class="opus-field-help">A label. Changing it costs nothing.</span>
+                </label>
 
-              On the edit screen rather than the detail screen because this is where the question gets
-              asked: "has anybody moved this source before" is what somebody about to move it wants to
-              know.
-            -->
-            @if (session.revisions.length) {
-              <h3 class="src-h3">Previous edits</h3>
-              <ul class="src-revisions">
-                @for (revision of session.revisions; track revision.at) {
-                  <li>
-                    <span class="src-rev-when">{{ when(revision.at) }} · {{ revision.by }}</span>
-                    <ul class="src-changes">
-                      @for (change of revision.changed; track change.field) {
-                        <li>
-                          <code>{{ change.field }}</code>
-                          <span class="src-was">{{ change.from || '(none)' }}</span>
-                          →
-                          <b>{{ change.to || '(none)' }}</b>
-                        </li>
+                <label class="opus-field">
+                  <span class="opus-field-label">Host</span>
+                  <input
+                    class="opus-input"
+                    [ngModel]="form.host"
+                    (ngModelChange)="editField('host', $event)"
+                  />
+                  <span class="opus-field-help">A name, an address, or HOST\\INSTANCE.</span>
+                </label>
+
+                <label class="opus-field">
+                  <span class="opus-field-label">Port</span>
+                  <input
+                    class="opus-input"
+                    type="number"
+                    [ngModel]="form.port"
+                    (ngModelChange)="editField('port', $event)"
+                  />
+                </label>
+
+                <label class="opus-field">
+                  <span class="opus-field-label">Database</span>
+                  <input
+                    class="opus-input"
+                    [ngModel]="form.database"
+                    (ngModelChange)="editField('database', $event)"
+                  />
+                </label>
+
+                <label class="opus-field">
+                  <span class="opus-field-label">Authentication</span>
+                  <select
+                    class="opus-select"
+                    [ngModel]="form.auth"
+                    (ngModelChange)="editField('auth', $event)"
+                  >
+                    <option value="integrated">Integrated — the host's own identity, no secret</option>
+                    <option value="managedIdentity">Managed identity — resolved by the host</option>
+                    <option value="sqlLogin">SQL login — a username and a password</option>
+                  </select>
+                  <span class="opus-field-help">
+                    Moving away from a SQL login deletes the password this platform stored for it.
+                  </span>
+                </label>
+
+                @if (form.auth === 'sqlLogin') {
+                  <label class="opus-field">
+                    <span class="opus-field-label">Username</span>
+                    <input
+                      class="opus-input"
+                      [ngModel]="form.username"
+                      (ngModelChange)="editField('username', $event)"
+                      autocomplete="off"
+                    />
+                  </label>
+
+                  <!--
+                    Only the *reference* route is editable here, and the field says which case it is in.
+
+                    A secret this platform wrote has a name this platform generated; showing it would
+                    invite somebody to retype it into something else, and the useful action on it is to
+                    store a new password rather than to rename it.
+                  -->
+                  <label class="opus-field">
+                    <span class="opus-field-label">Secret name</span>
+                    <input
+                      class="opus-input"
+                      [ngModel]="form.secretRef"
+                      (ngModelChange)="editField('secretRef', $event)"
+                      placeholder="kv/edm/reader"
+                      autocomplete="off"
+                    />
+                    <span class="opus-field-help">
+                      @if (session.context?.credential === 'managed') {
+                        This source uses a password this platform stores, so this is blank. Naming a
+                        secret here switches it to your deployment's store and deletes the stored
+                        password.
+                      } @else {
+                        The name of a secret your deployment already holds — never the secret. Leave it
+                        blank to leave this source without a credential until you set a password.
                       }
-                    </ul>
-                    @if (revision.baselineCleared) {
-                      <span class="src-rev-note">The drift baseline was discarded by this edit.</span>
-                    }
-                  </li>
+                    </span>
+                  </label>
                 }
-              </ul>
+
+                <label class="opus-field src-wide">
+                  <span class="opus-field-label">Schemas to scan</span>
+                  <input
+                    class="opus-input"
+                    [ngModel]="form.schemas"
+                    (ngModelChange)="editField('schemas', $event)"
+                    placeholder="dq, master, processing, vendor"
+                  />
+                  <span class="opus-field-help">Comma separated.</span>
+                </label>
+
+                <label class="src-check">
+                  <input
+                    type="checkbox"
+                    [ngModel]="form.encrypt"
+                    (ngModelChange)="editField('encrypt', $event)"
+                  />
+                  <span>Encrypt the transport</span>
+                </label>
+                <label class="src-check">
+                  <input
+                    type="checkbox"
+                    [ngModel]="form.trustServerCertificate"
+                    (ngModelChange)="editField('trustServerCertificate', $event)"
+                  />
+                  <span>Trust an unverified certificate</span>
+                </label>
+              </div>
+
+              @if (editBlockedBy().length) {
+                <ul class="src-problems">
+                  @for (problem of editBlockedBy(); track problem.field + problem.message) {
+                    <li>
+                      <code>{{ problem.field }}</code>
+                      {{ problem.message }}
+                    </li>
+                  }
+                </ul>
+              }
+              @if (editRisks().length) {
+                <ul class="src-problems accepted">
+                  @for (problem of editRisks(); track problem.field + problem.message) {
+                    <li>
+                      <code>{{ problem.field }}</code>
+                      {{ problem.message }}
+                      <b>Saving records that you accepted this.</b>
+                    </li>
+                  }
+                </ul>
+              }
+
+              <!--
+                The second yes.
+
+                Rendered as a question with the fields in it, not as an error: the edit is valid, and
+                what the steward has not yet done is agree to what it costs. Listing the changes matters
+                more than the sentence — "host, database" is the part that tells them whether they meant
+                it.
+              -->
+              @if (editConfirm(); as confirmation) {
+                <div class="src-confirm">
+                  <h3 class="src-h3">
+                    <opus-icon name="warning" [size]="15" />
+                    This discards the drift baseline
+                  </h3>
+                  <ul class="src-changes">
+                    @for (change of confirmation.changed; track change.field) {
+                      <li>
+                        <code>{{ change.field }}</code>
+                        <span class="src-was">{{ change.from || '(none)' }}</span>
+                        →
+                        <b>{{ change.to || '(none)' }}</b>
+                      </li>
+                    }
+                  </ul>
+                  <p>{{ confirmation.detail }}</p>
+                  <div class="src-actions">
+                    <button type="button" class="opus-btn primary" (click)="saveEdit(true)">
+                      <opus-icon name="check" [size]="14" />
+                      Save and discard the baseline
+                    </button>
+                    <button type="button" class="opus-btn" (click)="editConfirm.set(null)">
+                      <opus-icon name="close" [size]="14" />
+                      Keep editing
+                    </button>
+                  </div>
+                </div>
+              }
+
+              @if (editError(); as detail) {
+                <p class="src-problems src-problems-solo">{{ detail }}</p>
+              }
+
+              @if (!editConfirm()) {
+                <div class="src-actions">
+                  <button
+                    type="button"
+                    class="opus-btn primary"
+                    [disabled]="editBlockedBy().length > 0 || !!ingest.busy()"
+                    (click)="saveEdit()"
+                  >
+                    <opus-icon name="check" [size]="14" />
+                    Save
+                  </button>
+                  <button type="button" class="opus-btn" (click)="cancelEdit()">
+                    <opus-icon name="close" [size]="14" />
+                    Cancel
+                  </button>
+                </div>
+              }
+
+              <!--
+                What has been changed before, and whether it cost a baseline.
+
+                On the edit screen rather than the detail screen because this is where the question gets
+                asked: "has anybody moved this source before" is what somebody about to move it wants to
+                know.
+              -->
+              @if (session.revisions.length) {
+                <h3 class="src-h3">Previous edits</h3>
+                <ul class="src-revisions">
+                  @for (revision of session.revisions; track revision.at) {
+                    <li>
+                      <span class="src-rev-when">{{ when(revision.at) }} · {{ revision.by }}</span>
+                      <ul class="src-changes">
+                        @for (change of revision.changed; track change.field) {
+                          <li>
+                            <code>{{ change.field }}</code>
+                            <span class="src-was">{{ change.from || '(none)' }}</span>
+                            →
+                            <b>{{ change.to || '(none)' }}</b>
+                          </li>
+                        }
+                      </ul>
+                      @if (revision.baselineCleared) {
+                        <span class="src-rev-note">The drift baseline was discarded by this edit.</span>
+                      }
+                    </li>
+                  }
+                </ul>
+              }
+            } @else {
+              <p class="src-status">Reading this source's current values…</p>
             }
           } @else if (registering()) {
             <h2 class="src-h2">Register a source</h2>
@@ -2352,7 +2402,7 @@ export class SourcesComponent {
 
   protected editField<K extends keyof EditForm>(key: K, value: EditForm[K]): void {
     this.editing.update((session) =>
-      session ? { ...session, form: { ...session.form, [key]: value } } : session,
+      session?.form ? { ...session, form: { ...session.form, [key]: value } } : session,
     );
     /*
       Any keystroke retracts the confirmation.
@@ -2386,7 +2436,8 @@ export class SourcesComponent {
   /** The edit's problems, live — the same function the server runs before storing. */
   protected readonly editProblems = computed(() => {
     const session = this.editing();
-    return session ? this.ingest.checkEdit(session.context, this.asEdit(session.form)) : [];
+    if (!session?.form || !session.context) return [];
+    return this.ingest.checkEdit(session.context, this.asEdit(session.form));
   });
 
   protected readonly editBlockedBy = computed(() =>
@@ -2413,34 +2464,58 @@ export class SourcesComponent {
     this.editConfirm.set(null);
     this.editSaved.set(null);
 
-    const loaded = await this.ingest.loadEditable(state.summary.id);
-    if (!loaded) {
-      this.editError.set('Could not read this source’s current values, so there is nothing safe to edit.');
-      return;
-    }
+    /*
+      Edit mode opens *now*, before the request.
 
-    const { editable } = loaded;
+      This is the fix for the button that did nothing. The pane is what tells the user their click was
+      received, and gating it on a round trip means every way that round trip can fail — an API that
+      predates the screen, a proxy, a dropped connection — presents as an inert button.
+    */
     this.editing.set({
       id: state.summary.id,
-      context: {
-        kind: editable.kind,
-        credential: editable.credential,
-        registeredBy: state.summary.registeredBy,
-      },
-      hasBaseline: loaded.hasBaseline,
-      revisions: loaded.revisions,
-      form: {
-        name: editable.name,
-        host: editable.host,
-        port: editable.port ?? null,
-        database: editable.database,
-        auth: editable.auth,
-        username: editable.username ?? '',
-        secretRef: editable.secretRef ?? '',
-        schemas: editable.schemas.join(', '),
-        encrypt: editable.encrypt,
-        trustServerCertificate: editable.trustServerCertificate,
-      },
+      name: state.summary.name,
+      registeredBy: state.summary.registeredBy,
+      form: null,
+      context: null,
+      hasBaseline: false,
+      revisions: [],
+      loadError: null,
+    });
+
+    await this.loadEditValues(state.summary.id, state.summary.registeredBy);
+  }
+
+  /** Fetch the current values into the open session. Also the retry, which is why it is separate. */
+  protected async loadEditValues(id: string, registeredBy: string): Promise<void> {
+    this.editing.update((session) => (session ? { ...session, loadError: null } : session));
+
+    const loaded = await this.ingest.loadEditable(id);
+
+    this.editing.update((session) => {
+      // The user may have cancelled or switched source while this was in flight; that decision wins.
+      if (!session || session.id !== id) return session;
+      if (loaded.status === 'failed') return { ...session, form: null, loadError: loaded.detail };
+
+      const { editable } = loaded.value;
+      return {
+        ...session,
+        loadError: null,
+        context: { kind: editable.kind, credential: editable.credential, registeredBy },
+        hasBaseline: loaded.value.hasBaseline,
+        revisions: loaded.value.revisions,
+        form: {
+          name: editable.name,
+          host: editable.host,
+          port: editable.port ?? null,
+          database: editable.database,
+          auth: editable.auth,
+          username: editable.username ?? '',
+          secretRef: editable.secretRef ?? '',
+          schemas: editable.schemas.join(', '),
+          encrypt: editable.encrypt,
+          trustServerCertificate: editable.trustServerCertificate,
+        },
+      };
     });
   }
 
@@ -2479,7 +2554,7 @@ export class SourcesComponent {
    */
   protected async saveEdit(confirm = false): Promise<void> {
     const session = this.editing();
-    if (!session) return;
+    if (!session?.form) return;
 
     this.editError.set(null);
     const outcome = await this.ingest.updateSource(session.id, this.asEdit(session.form), confirm);
