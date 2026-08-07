@@ -78,7 +78,8 @@
             "tsConfig": "tsconfig.spec.json",
             "include": [
               "libs/**/*.spec.ts",
-              "apps/**/*.spec.ts"
+              "apps/**/*.spec.ts",
+              "server/**/*.spec.ts"
             ]
           }
         }

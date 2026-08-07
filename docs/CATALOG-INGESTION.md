@@ -192,17 +192,45 @@ Submitting both is refused rather than resolved. Two credentials with no rule ab
 failed login against a production account, and a failed login against a production account is a
 locked-out production account.
 
-### No encryption key means no stored password
+### Where the encryption key comes from
+
+`OPUS_SECRET_KEY` (32 random bytes, base64) if the deployment sets one. Otherwise, **in development**, a
+key is generated once at `server/data/secrets/.local-key`, 0600, and kept — a key regenerated per run
+would leave every stored password undecryptable on the next restart, which is indistinguishable from the
+platform being broken. The API says so on startup rather than being quiet about it:
+
+```
+No OPUS_SECRET_KEY is set, so a development key was generated at …/.local-key.
+Stored passwords are encrypted, but the key sits beside them — enough to keep a credential
+out of a backup or an image layer, not enough to withstand filesystem access.
+```
+
+That generated key is worth being explicit about, because the first version of this refused outright —
+on the reasoning that a key kept beside the data it protects is obfuscation with a ceremony. True, and
+the wrong comparison: it measured a local key against real key management when the alternative on offer
+was *the feature not working*. A developer with no vault is precisely who types a password rather than
+naming a secret, and they found the field disabled with a paragraph about an environment variable where
+the input should have been. A local key still defends against the threat that actually applies here — a
+copied directory, a restored backup, a shared image layer, a collected support bundle — which is exactly
+what plaintext fails. It is the same bargain Django's `SECRET_KEY`, Rails' master key and Airflow's
+Fernet key all make.
+
+**Production refuses.** With `NODE_ENV=production` or `OPUS_ENV=production` and no `OPUS_SECRET_KEY`,
+nothing is written and the message names the variable and the flow that needs no key. Both signals are
+checked because bundlers replace `NODE_ENV` at build time — a test caught that, and a security decision
+resting on a build-time-replaceable global is one that stops being made the day something bundles the
+file.
+
+`OPUS_SECRET_DIR` moves the encrypted files off the application directory, onto a volume with its own
+backup policy.
 
 `GET /api/sources` reports `canStorePassword`, and the form asks before rendering the field — offering
 one the server will refuse is worse than not offering it, because the steward types a real credential
-into it first. With no `OPUS_SECRET_KEY` the answer is false and the message names the variable to set
-(`openssl rand -base64 32`) and the alternative flow that needs no key.
-
-It does not fall back to plaintext, and it does not invent a key and store it beside the ciphertext — a
-key kept next to the data it protects is obfuscation with a ceremony. GCM rather than CBC because it
-authenticates: an edited ciphertext fails to open rather than decrypting to rubbish that then goes to a
-database as a password. Files are written 0600 at creation, not chmodded afterwards.
+into it first. When the answer is no, the form opens on the *other* route with the unavailable option
+marked "not configured" and the reason beneath it. That last part was a bug worth recording: the form
+initialised to the password route unconditionally, so on a platform without a key it opened with that
+option checked **and** disabled — a state a user can neither act on nor leave by clicking the thing that
+looks selected, and it was reported exactly as "the type password field is not working".
 
 ### Rotation is its own route
 

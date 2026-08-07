@@ -7,16 +7,30 @@
  * able to keep this file switched off entirely. Splitting them means the write capability is a thing
  * that is present or absent rather than a branch inside a function everything calls.
  *
- * ── ENCRYPTED AT REST, AND NO KEY MEANS NO WRITING ──────────────────────────────────────
+ * ── ENCRYPTED AT REST, AND WHERE THE KEY COMES FROM ─────────────────────────────────────
  * A password typed into a form has to be kept somewhere the server can read it again on the next scan.
  * Plaintext on disk is not that place: `server/data` ends up in a backup, in a container image layer,
  * in whatever somebody rsyncs to look at a problem.
  *
- * So it is AES-256-GCM, with a key supplied by the deployment in `OPUS_SECRET_KEY`, and **if that key
- * is absent the write path does not exist**. It does not fall back to plaintext, and it does not invent
- * a key and store it next to the ciphertext — a key kept beside the data it protects is obfuscation
- * with a ceremony, and the honest thing is to say so and refuse. The error names the variable to set
- * and the alternative flow that needs no key at all.
+ * So it is AES-256-GCM, and the key comes from `OPUS_SECRET_KEY` — or, in development only, from a
+ * file this process generates on first use.
+ *
+ * That generated key is the part worth arguing about, and the first version of this file got it wrong.
+ * It refused to store a password at all without `OPUS_SECRET_KEY`, on the reasoning that a key kept
+ * beside the data it protects is "obfuscation with a ceremony". True as far as it goes — and the wrong
+ * comparison. It measured a local key against real key management, when the actual alternative on offer
+ * was *the feature not working*: a developer with no vault, which is precisely who types a password
+ * rather than naming a secret, found the field disabled and a paragraph about an environment variable
+ * where the input should have been.
+ *
+ * A local key still defends against the threat that matters here — a directory copied, a backup
+ * restored, an image layer shared, a support bundle collected — which is exactly what plaintext fails.
+ * It does not defend against somebody who can read the filesystem, and this file says so rather than
+ * implying otherwise. That is the same bargain Django's `SECRET_KEY`, Rails' master key and Airflow's
+ * Fernet key all make: generated in development, required in production.
+ *
+ * **Production still refuses.** With `NODE_ENV=production` and no `OPUS_SECRET_KEY`, nothing is written
+ * and the error names the variable and the flow that needs no key.
  *
  * GCM rather than CBC because it authenticates: a ciphertext somebody edited fails to open rather than
  * decrypting to rubbish that then goes to a database as a password. Each secret gets its own random
@@ -35,6 +49,21 @@ import { MANAGED_SECRET_PREFIX, checkSecretRef } from '@opus/catalog-ingest';
 
 import { PATHS } from '../config';
 
+/**
+ * Is this a production deployment?
+ *
+ * Two signals, on purpose. `NODE_ENV` is the convention and works under `tsx`, where the backend runs
+ * unbundled — but it is also the one environment variable every bundler *replaces at build time*, so a
+ * module compiled by one reads a literal and never sees a runtime change. That was found by a test:
+ * setting `NODE_ENV` at run time had no effect on the compiled module, which means a security decision
+ * resting on it alone is one that quietly stops being made the day something bundles this file.
+ *
+ * `OPUS_ENV` is this platform's own, and nothing rewrites it. Either one is enough to refuse.
+ */
+function inProduction(): boolean {
+  return process.env['NODE_ENV'] === 'production' || process.env['OPUS_ENV'] === 'production';
+}
+
 /** AES-256-GCM: a 32-byte key, a 12-byte nonce, a 16-byte tag. */
 const KEY_BYTES = 32;
 const NONCE_BYTES = 12;
@@ -50,31 +79,98 @@ interface SealedSecret {
 }
 
 /**
+ * Where secrets live, resolved per call.
+ *
+ * `OPUS_SECRET_DIR` overrides it, which a deployment wants regardless — the encrypted files belong on a
+ * mounted volume with its own backup policy rather than inside the application directory. Resolved per
+ * call rather than captured at import so the override is honoured by a process that sets it late, and so
+ * a test can point it at a temporary directory without mocking a module.
+ */
+function secretsDirectory(): string {
+  return process.env['OPUS_SECRET_DIR']?.trim() || PATHS.secrets;
+}
+
+/** Where a generated development key lives. Never read when `OPUS_SECRET_KEY` is set. */
+function generatedKeyPath(): string {
+  return join(secretsDirectory(), '.local-key');
+}
+
+/** Said once per directory, not once per call — a warning repeated on every scan is a warning ignored. */
+const announced = new Set<string>();
+
+/**
  * The key, or a stated reason there is none.
  *
- * Read on every call rather than cached, so rotating the key is a restart of nothing — and so a process
- * that started without one picks it up when the platform provides it.
+ * Read on every call rather than cached, so rotating `OPUS_SECRET_KEY` takes effect without a restart
+ * and a process that started without one picks it up when the platform provides it.
  */
 function key(): { ok: true; value: Buffer } | { ok: false; reason: string } {
   const configured = process.env['OPUS_SECRET_KEY']?.trim();
-  if (!configured) {
+  if (configured) return decode(configured, 'OPUS_SECRET_KEY');
+
+  /*
+    No configured key. In production that is the end of it — a generated key in a deployment is a key
+    nobody rotated, nobody backed up, and nobody knows exists until a restore fails.
+  */
+  if (inProduction()) {
     return {
       ok: false,
       reason:
-        'This platform has no secret-encryption key, so it will not store a password. Set OPUS_SECRET_KEY to 32 random bytes, base64 encoded — `openssl rand -base64 32` — or register the source with the name of a secret your deployment already holds, which needs no key.',
+        'This deployment has no secret-encryption key, so it will not store a password. Set OPUS_SECRET_KEY to 32 random bytes, base64 encoded — `openssl rand -base64 32` — or register the source with the name of a secret your own secret store already holds, which needs no key.',
     };
   }
 
+  return localKey();
+}
+
+/**
+ * The development key: read it, or make one.
+ *
+ * Generated once and kept, because a key that changed per run would make every stored password
+ * undecryptable on the next restart — which looks exactly like a bug in the platform.
+ */
+function localKey(): { ok: true; value: Buffer } | { ok: false; reason: string } {
+  try {
+    if (existsSync(generatedKeyPath())) {
+      return decode(readFileSync(generatedKeyPath(), 'utf8').trim(), generatedKeyPath());
+    }
+
+    const generated = randomBytes(KEY_BYTES);
+    mkdirSync(dirname(generatedKeyPath()), { recursive: true, mode: 0o700 });
+    writeFileSync(generatedKeyPath(), generated.toString('base64'), { encoding: 'utf8', mode: 0o600 });
+
+    if (!announced.has(generatedKeyPath())) {
+      announced.add(generatedKeyPath());
+      // Said out loud, because the limitation is real: this protects a copied directory, not a reader.
+      console.warn(
+        `\n  No OPUS_SECRET_KEY is set, so a development key was generated at ${generatedKeyPath()}.` +
+          `\n  Stored passwords are encrypted, but the key sits beside them — enough to keep a credential` +
+          `\n  out of a backup or an image layer, not enough to withstand filesystem access.` +
+          `\n  Set OPUS_SECRET_KEY from your platform's secret manager before this holds anything real.\n`,
+      );
+    }
+    return { ok: true, value: generated };
+  } catch (error) {
+    return {
+      ok: false,
+      reason: `Could not read or create a local secret key at ${generatedKeyPath()}: ${
+        error instanceof Error ? error.message : String(error)
+      }. Set OPUS_SECRET_KEY instead.`,
+    };
+  }
+}
+
+function decode(value: string, source: string): { ok: true; value: Buffer } | { ok: false; reason: string } {
   let decoded: Buffer;
   try {
-    decoded = Buffer.from(configured, 'base64');
+    decoded = Buffer.from(value, 'base64');
   } catch {
-    return { ok: false, reason: 'OPUS_SECRET_KEY is not valid base64.' };
+    return { ok: false, reason: `${source} is not valid base64.` };
   }
   if (decoded.length !== KEY_BYTES) {
     return {
       ok: false,
-      reason: `OPUS_SECRET_KEY decodes to ${decoded.length} bytes; AES-256 needs exactly ${KEY_BYTES}. Generate one with: openssl rand -base64 32`,
+      reason: `${source} decodes to ${decoded.length} bytes; AES-256 needs exactly ${KEY_BYTES}. Generate one with: openssl rand -base64 32`,
     };
   }
   return { ok: true, value: decoded };
@@ -107,7 +203,7 @@ function pathFor(reference: string): string {
       `"${reference}" is not a secret this platform manages. Managed names begin with "${MANAGED_SECRET_PREFIX}".`,
     );
   }
-  return join(PATHS.secrets, `${reference.replace(/[/]/g, '__')}.json`);
+  return join(secretsDirectory(), `${reference.replace(/[/]/g, '__')}.json`);
 }
 
 export function writeSecret(reference: string, value: string, writtenBy: string): void {

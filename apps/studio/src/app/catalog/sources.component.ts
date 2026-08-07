@@ -165,7 +165,11 @@ interface RegisterForm {
             [selectedId]="ingest.selectedId()"
             (pick)="onPick($event)"
           />
-          <button type="button" class="opus-btn sm" (click)="registering.set(!registering())">
+          <button
+            type="button"
+            class="opus-btn sm"
+            (click)="registering() ? registering.set(false) : openRegisterForm()"
+          >
             <opus-icon [name]="registering() ? 'close' : 'plus'" [size]="14" />
             {{ registering() ? 'Cancel' : 'Register a source' }}
           </button>
@@ -278,7 +282,7 @@ interface RegisterForm {
                 <div class="opus-field src-wide">
                   <span class="opus-field-label">Credential</span>
                   <div class="src-choice">
-                    <label class="src-check">
+                    <label class="src-check" [class.unavailable]="!ingest.canStorePassword()">
                       <input
                         type="radio"
                         name="credential"
@@ -287,6 +291,16 @@ interface RegisterForm {
                         (change)="edit('credential', 'password')"
                       />
                       <span>Type the password</span>
+                      <!--
+                        The reason sits on the control, not only under it.
+
+                        A radio that is merely disabled reads as a broken form — which is exactly how
+                        this was reported. Six words here turn "it does not work" into "it is not
+                        configured", and the full explanation is still below.
+                      -->
+                      @if (!ingest.canStorePassword()) {
+                        <span class="src-chip warn">not configured</span>
+                      }
                     </label>
                     <label class="src-check">
                       <input
@@ -298,6 +312,18 @@ interface RegisterForm {
                       <span>Name a secret my deployment already holds</span>
                     </label>
                   </div>
+
+                  <!--
+                    Why the option is unavailable, once, under the choice it applies to.
+
+                    Not only inside the password branch: after the fix the form opens on the *other*
+                    route when this one is off, so a reason rendered only in the branch nobody is looking
+                    at is a reason nobody reads — and the chip alone says "not configured" without saying
+                    what to configure.
+                  -->
+                  @if (!ingest.canStorePassword() && ingest.passwordUnavailableReason(); as reason) {
+                    <span class="opus-field-help src-why-not">{{ reason }}</span>
+                  }
 
                   @if (form().credential === 'password') {
                     @if (ingest.canStorePassword()) {
@@ -1242,6 +1268,18 @@ interface RegisterForm {
       grid-column: 1 / -1;
     }
 
+    /* The reason an option is unavailable: present, and not competing with the field that is. */
+    .src-why-not {
+      display: block;
+      margin-block-end: 6px;
+    }
+
+    /* An option that is present but not available: legible, and visibly not a live control. */
+    .src-check.unavailable {
+      opacity: 0.65;
+      cursor: not-allowed;
+    }
+
     /* The two credential routes, side by side above the field they choose between. */
     .src-choice {
       display: flex;
@@ -1741,6 +1779,22 @@ export class SourcesComponent {
       return;
     }
     this.rotating.set(false);
+  }
+
+  /**
+   * Open the register form on a credential route that is available.
+   *
+   * The form used to initialise to `password` unconditionally, so on a platform with no encryption key
+   * it opened with that option checked *and* disabled — a state the user cannot act on and cannot leave
+   * by clicking the thing that looks selected. Which is precisely how it was reported: "the type
+   * password field is not working."
+   */
+  protected openRegisterForm(): void {
+    this.form.update((form) => ({
+      ...form,
+      credential: this.ingest.canStorePassword() ? 'password' : 'secretRef',
+    }));
+    this.registering.set(true);
   }
 
   protected onPick(id: string): void {

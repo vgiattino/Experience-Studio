@@ -189,6 +189,17 @@ export class IngestService {
       this.setSources([]);
     } else if (fixtureFallbackAllowed()) {
       this.mode.set('fixture');
+      /*
+        Fixture mode cannot store a password, and has to say why.
+
+        Left unset, `passwordUnavailableReason` was undefined here and the form rendered an empty box
+        where the explanation should have been — the same "it is broken" reading as the disabled radio.
+        There is no server, so there is nowhere for a credential to go, and that is the sentence.
+      */
+      this.canStorePassword.set(false);
+      this.passwordUnavailableReason.set(
+        'There is no catalog service running, so there is nowhere to store a password. This mode reads a built-in schema and connects to nothing.',
+      );
       this.unreachable.set(result);
       this.local.set(FIXTURE_SOURCE.id, FIXTURE_SOURCE);
       this.setSources([{ summary: redactForClient(FIXTURE_SOURCE), stage: 'registered' }]);
