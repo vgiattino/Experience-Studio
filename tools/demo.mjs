@@ -21,6 +21,7 @@
  */
 
 import { spawn, execFile } from 'node:child_process';
+import { createServer } from 'node:net';
 import { promisify } from 'node:util';
 
 const run = promisify(execFile);
@@ -64,6 +65,40 @@ if (!(await sandboxRunning())) {
   say('No SQL Server sandbox is running, so the Sources screen will use its built-in schema and say so.');
   say('For a live scan, stop this and run:  npm run edm:up');
   say('');
+}
+
+/**
+ * Is a port free?
+ *
+ * Checked before anything starts, because the alternative is what this script exists to prevent: a
+ * leftover `ng serve` holds :4300, the Studio fails to bind, and the one line saying so scrolls past in
+ * the API's startup banner. The result looks like the demo being broken rather than a process being left
+ * running.
+ */
+function portFree(port) {
+  return new Promise((resolve) => {
+    const probe = createServer();
+    probe.once('error', () => resolve(false));
+    probe.once('listening', () => probe.close(() => resolve(true)));
+    probe.listen(Number(port), '127.0.0.1');
+  });
+}
+
+const busy = [];
+for (const [port, what] of [[API_PORT, 'the API'], [STUDIO_PORT, 'the Studio']]) {
+  if (!(await portFree(port))) busy.push(`:${port} (${what})`);
+}
+
+if (busy.length) {
+  say(`Already in use: ${busy.join(' and ')}.`);
+  say('');
+  say('Something is still running from a previous session. Stop it and try again:');
+  say('');
+  say(`  Find it     lsof -ti :${busy.length > 1 ? `${API_PORT},:${STUDIO_PORT}` : busy[0].slice(1).split(' ')[0]}`);
+  say('  Stop it     pkill -f "tsx server/index" ; pkill -f "ng serve studio"');
+  say('');
+  say('Or change the ports:  PORT=4010 npm run demo');
+  process.exit(1);
 }
 
 say(`Starting the API on :${API_PORT} and the Studio on :${STUDIO_PORT}.`);

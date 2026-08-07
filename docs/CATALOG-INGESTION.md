@@ -635,6 +635,11 @@ source detail afterwards records that you accepted it, beside your name.
 | `npm run edm:reset` | re-apply schema and data without recreating the container |
 | `npm run edm:down` | remove the container and its data |
 
+`npm run demo` refuses to start if :4000 or :4300 is already taken, and says what to stop. Without that
+check a leftover `ng serve` holds :4300, the Studio fails to bind, and the one line saying so scrolls past
+in the API's startup banner — which reads as the demo being broken rather than a process being left
+running.
+
 `npm run edm:up` polls until the server accepts a connection rather than sleeping for a fixed time —
 SQL Server's first boot initialises system databases and takes about a minute, and a fixed wait is how
 this fails the first time somebody tries it.
