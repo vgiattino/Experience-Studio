@@ -33,6 +33,31 @@ const run = promisify(execFile);
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(join(ROOT, 'package.json'));
 
+/**
+ * Run `npm`, on Windows too.
+ *
+ * On Windows `npm` is `npm.cmd`, and since the shell-injection fix in Node 18.20 / 20.12 `execFile`
+ * refuses to spawn a `.cmd` without a shell. Without this the global-CLI check below silently did
+ * nothing — on the one platform where a globally installed Angular CLI is most likely to be the cause of
+ * the error it is looking for.
+ */
+function npm(args) {
+  return run('npm', args, { cwd: ROOT, shell: process.platform === 'win32' });
+}
+
+/**
+ * Advice a reader can paste into the shell they are actually using.
+ *
+ * `rm -rf` and `pkill` are not commands on Windows, and PowerShell 5.1 does not accept `&&` either — so
+ * a fix line written for a Unix shell is a fix line half this project's audience cannot run. `npm ci`
+ * removes `node_modules` itself, which is why the reinstall advice does not need a delete at all.
+ */
+const WINDOWS = process.platform === 'win32';
+
+const REINSTALL = WINDOWS
+  ? 'Close any running dev server first (a locked file makes this fail on Windows), then run: npm ci'
+  : 'Run: npm ci';
+
 const API_PORT = process.env['PORT'] ?? '4000';
 const STUDIO_PORT = '4300';
 
@@ -74,7 +99,7 @@ process.stdout.write('\nRuntime\n');
 process.stdout.write('\nDependencies\n');
 {
   if (!existsSync(join(ROOT, 'node_modules'))) {
-    fail('node_modules is missing', 'Run: npm ci');
+    fail('node_modules is missing', REINSTALL);
   } else {
     /*
       Every Angular package must agree, and the check is against `@angular/core` rather than against a
@@ -86,15 +111,34 @@ process.stdout.write('\nDependencies\n');
       .map((name) => [name, installed(name)])
       .filter(([, version]) => version && version.split('.')[0] !== core?.split('.')[0]);
 
+    /*
+      What the manifest *asks for*, not only what is installed.
+
+      These are different problems with the same symptom. A declared `^20` means this checkout is not the
+      one that expects Angular 21 — a stray project, or a merge that lost the bump — and no amount of
+      reinstalling will fix it. A declared `^21` with a 20 on disk is a stale tree, which `npm ci` fixes.
+      Telling somebody to reinstall when the manifest is the problem sends them round a loop.
+    */
+    const manifest = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
+    const declaredBuild = manifest.devDependencies?.['@angular/build'] ?? manifest.dependencies?.['@angular/build'];
+    const declaredMajor = declaredBuild?.match(/(\d+)/)?.[1];
+
     if (!core) {
-      fail('@angular/core is not installed', 'Run: npm ci');
+      fail('@angular/core is not installed', REINSTALL);
+    } else if (declaredMajor && declaredMajor !== core.split('.')[0]) {
+      fail(
+        `package.json asks for @angular/build ${declaredBuild}, but @angular/core is ${core}`,
+        'This checkout is not the one that expects Angular ' +
+          `${core.split('.')[0]} — reinstalling will not change it. Check you are in the right directory ` +
+          'and on the right branch: git remote -v ; git log --oneline -1',
+      );
     } else if (wrong.length) {
       fail(
         `Angular packages disagree: core is ${core}, but ${wrong
           .map(([name, version]) => `${name} is ${version}`)
           .join(', ')}`,
-        'A part-installed tree. Run: rm -rf node_modules && npm ci  (npm ci installs exactly the ' +
-          'lockfile; npm install can leave a tree half-updated)',
+        `A part-installed tree — npm install can leave one half-updated. ${REINSTALL}` +
+          ' (npm ci deletes node_modules and installs exactly the lockfile)',
       );
     } else {
       ok('Angular', `${core} — core, build, cli and compiler all agree`);
@@ -103,16 +147,14 @@ process.stdout.write('\nDependencies\n');
     // The dependency most recently added, so the one most likely to be missing from an older install.
     const driver = installed('mssql');
     if (driver) ok('mssql driver', driver);
-    else fail('the mssql driver is not installed', 'Run: npm ci');
+    else fail('the mssql driver is not installed', REINSTALL);
 
     /*
       A global Angular CLI shadowing the local one produces the same version error, from a completely
       different cause, so it is worth naming separately.
     */
     try {
-      const { stdout } = await run('npm', ['ls', '-g', '--depth', '0', '@angular/cli', '--json'], {
-        cwd: ROOT,
-      });
+      const { stdout } = await npm(['ls', '-g', '--depth', '0', '@angular/cli', '--json']);
       const globalVersion = JSON.parse(stdout)?.dependencies?.['@angular/cli']?.version;
       if (globalVersion && globalVersion.split('.')[0] !== core?.split('.')[0]) {
         warn(
@@ -181,7 +223,7 @@ process.stdout.write('\nCatalog service\n');
   if (reached) {
     // An API that is up but pre-dates the password work is the case a version check cannot see.
     const hasRotate = existsSync(join(ROOT, 'server/sources/secret-store.ts'));
-    if (!hasRotate) fail('this checkout pre-dates the credential store', 'Run: git pull && npm ci');
+    if (!hasRotate) fail('this checkout pre-dates the credential store', `git pull, then. ${REINSTALL}`);
   }
 }
 

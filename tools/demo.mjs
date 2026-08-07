@@ -94,10 +94,23 @@ if (busy.length) {
   say('');
   say('Something is still running from a previous session. Stop it and try again:');
   say('');
-  say(`  Find it     lsof -ti :${busy.length > 1 ? `${API_PORT},:${STUDIO_PORT}` : busy[0].slice(1).split(' ')[0]}`);
-  say('  Stop it     pkill -f "tsx server/index" ; pkill -f "ng serve studio"');
-  say('');
-  say('Or change the ports:  PORT=4010 npm run demo');
+  /*
+    Two shells, two sets of commands.
+
+    `lsof` and `pkill` do not exist on Windows, and PowerShell 5.1 rejects `&&` — a fix line nobody on
+    that platform can paste is not a fix line.
+  */
+  if (process.platform === 'win32') {
+    say(`  Find it     netstat -ano | findstr ":${API_PORT} :${STUDIO_PORT}"`);
+    say('  Stop it     Get-Process node | Stop-Process -Force');
+    say('');
+    say('Or change the ports:  $env:PORT="4010"; npm run demo');
+  } else {
+    say(`  Find it     lsof -ti :${API_PORT} -ti :${STUDIO_PORT}`);
+    say('  Stop it     pkill -f "tsx server/index" ; pkill -f "ng serve studio"');
+    say('');
+    say('Or change the ports:  PORT=4010 npm run demo');
+  }
   process.exit(1);
 }
 
