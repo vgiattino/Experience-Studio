@@ -38,7 +38,7 @@ import { SOURCE_KINDS } from '@opus/catalog-ingest';
 import { AUTHOR } from '../session';
 import { CatalogService } from '@opus/catalog';
 
-import { IngestService } from './ingest.service';
+import { IngestService, type SourceState } from './ingest.service';
 
 interface RegisterForm {
   name: string;
@@ -178,6 +178,24 @@ interface RegisterForm {
         <section class="src-detail">
           @if (registering()) {
             <h2 class="src-h2">Register a source</h2>
+            <!--
+              Repeated here, because this is where somebody is standing when it matters.
+
+              The banner at the top says the transport, but a steward filling in a form has scrolled past
+              it and is looking at a disabled password option. Saying it again, next to the thing that is
+              disabled because of it, is the difference between a diagnosis and a mystery.
+            -->
+            @if (ingest.mode() === 'fixture') {
+              <p class="src-problems src-problems-solo">
+                <b>No catalog service is answering</b>, so this form registers a source in the browser
+                only — it cannot store a password and it cannot connect to a database. If the API is
+                starting, give it a moment and
+                <button type="button" class="opus-btn sm src-retry" (click)="ingest.connect()">
+                  <opus-icon name="refresh" [size]="13" />
+                  try again
+                </button>
+              </p>
+            }
             <p class="src-lead">
               Two halves: what the source <b>is</b> — read by a reviewer, recorded in an audit log — and
               how the platform <b>authenticates</b> to it. The second never becomes part of the first. A
@@ -507,12 +525,23 @@ interface RegisterForm {
               <button
                 type="button"
                 class="opus-btn primary"
-                [disabled]="!state.summary.scannable || !!ingest.busy()"
+                [disabled]="!!scanBlockedBecause(state)"
+                [title]="scanBlockedBecause(state) ?? 'Read the schema from this source'"
                 (click)="ingest.scan(sample())"
               >
                 <opus-icon name="refresh" [size]="14" />
                 {{ state.schema ? 'Re-scan' : 'Scan' }}
               </button>
+              <!--
+                A disabled button says why, beside itself.
+
+                The same fault as a disabled radio with the reason two clicks away: "Scan is greyed out"
+                and "this source's kind has no probe" are the same pixel and completely different
+                problems, and only one of them is something the reader can fix.
+              -->
+              @if (scanBlockedBecause(state); as reason) {
+                <span class="opus-field-help src-inline-help">{{ reason }}</span>
+              }
               @if (ingest.mode() === 'api') {
                 <button
                   type="button"
@@ -1766,6 +1795,23 @@ export class SourcesComponent {
       trustServerCertificate: form.trustServerCertificate,
       registeredBy: AUTHOR.displayName,
     };
+  }
+
+  /**
+   * Why Scan cannot run, or nothing.
+   *
+   * One function rather than a condition in the template, because the button's disabled state and the
+   * sentence explaining it must never disagree — and they will if they are written twice.
+   */
+  protected scanBlockedBecause(state: SourceState): string | null {
+    if (this.ingest.busy()) return this.ingest.busy();
+    if (!state.summary.scannable) {
+      return `This platform has no probe for ${state.summary.kind} yet, so its schema cannot be read. MS SQL Server is the dialect implemented today.`;
+    }
+    if (state.summary.auth === 'sqlLogin' && state.summary.credential === 'none') {
+      return 'This source has no credential. Register it again with a password, or with the name of a secret.';
+    }
+    return null;
   }
 
   protected async rotate(id: string): Promise<void> {

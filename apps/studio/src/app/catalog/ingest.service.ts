@@ -159,13 +159,22 @@ export class IngestService {
   }
 
   /**
-   * Decide the transport once, at construction, and load the roster.
+   * Decide the transport, and load the roster.
    *
-   * Once rather than per call: a screen whose mode flickers between requests is a screen that cannot
-   * label itself honestly, and re-probing on every scan would double the round trips to answer a
-   * question whose answer does not change while a page is open.
+   * Once per attempt rather than per request: a screen whose mode flickers between calls cannot label
+   * itself honestly, and re-probing on every scan would double the round trips to answer a question
+   * whose answer does not change while a page is open.
+   *
+   * `attempt` exists because of a race that is not the user's fault. `npm run demo` starts the API and
+   * the dev server together, and a browser that loads before the API finishes booting probes once,
+   * fails, and settles into the built-in schema — where the password option is disabled and the reason
+   * is two clicks away. A steward then reports that the password field does not work, which is exactly
+   * what it looks like. So a failed probe retries a few times, briefly, and the mode heals itself.
+   *
+   * Only *unreachable* retries. A 403 is a decision, and repeating a request somebody already refused
+   * is noise in an audit log.
    */
-  async connect(): Promise<void> {
+  async connect(attempts = 4): Promise<void> {
     this.mode.set('connecting');
     this.refusal.set(null);
     this.unreachable.set(null);
@@ -187,6 +196,16 @@ export class IngestService {
       this.mode.set('forbidden');
       this.refusal.set(result.detail);
       this.setSources([]);
+    } else if (attempts > 1) {
+      /*
+        Wait, then ask again — the API is probably still starting.
+
+        Kept short and finite: three retries over about three seconds covers a process race and does not
+        turn a genuinely absent backend into a screen that spins. The mode stays `connecting` throughout,
+        so nothing claims to be reading a built-in schema while the question is still open.
+      */
+      await new Promise((wake) => setTimeout(wake, 900));
+      return this.connect(attempts - 1);
     } else if (fixtureFallbackAllowed()) {
       this.mode.set('fixture');
       /*
