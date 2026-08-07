@@ -7,6 +7,9 @@ workspace.
 MS SQL Server is the first dialect, because that is where Opus EDM lives: vendor and source
 registers, processing tables, exception data, and mastered data for a range of industry use cases.
 
+**To see it working:** `npm run edm:up` then `npm run demo`, and follow the click path it prints.
+[Running it](#running-it) has the detail.
+
 ---
 
 ## Why this exists
@@ -491,29 +494,76 @@ back off it. A catalog this produces has to be one the platform can actually use
 
 ## Running it
 
+Three commands. The first needs Docker; the rest do not.
+
 ```
-# 1. a SQL Server to scan
-docker run -d --name opus-edm-sql -e ACCEPT_EULA=Y -e 'MSSQL_SA_PASSWORD=<password>' \
-  -e MSSQL_PID=Developer -p 11433:1433 mcr.microsoft.com/mssql/server:2022-latest
-node tools/fixture-ddl.mjs > /tmp/opus-edm.sql
-docker cp /tmp/opus-edm.sql opus-edm-sql:/tmp/ && docker exec opus-edm-sql \
-  /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P '<password>' -C -i /tmp/opus-edm.sql
-
-# 2. the API, with the secret named rather than inlined
-OPUS_SECRET_KV_EDM_SA='<password>' npm run api
-
-# 3. the Studio, which proxies /api
-npm run studio
+npm run edm:up     # a SQL Server, the schema, and 3.7M rows of plausible data  (~2 min first time)
+npm run demo       # the API and the Studio together, with the secret in the environment
 ```
 
-Then **Catalog → Sources → Register a source**: host `localhost`, port `11433`, database `OpusEDM`,
-SQL login `sa`, secret name `kv/edm/sa`, schemas `dq, master, processing, vendor`. Tick *Trust an
-unverified certificate* — a development container's certificate is self-signed, the form will tell you
-what accepting that means, and the registration records that you accepted it.
+Then open <http://localhost:4300/> → **Catalog → Sources → Register a source**, and fill in what
+`npm run demo` printed:
 
-Secrets reach the process as `OPUS_SECRET_<REFERENCE>` in the environment, or as a file under
-`SECRET_DIR`. A deployment with Key Vault or Secrets Manager replaces `resolveSecret` and nothing else,
-because nothing else in the codebase knows what a password is.
+| Field | Value |
+| --- | --- |
+| Name | Opus EDM — production |
+| Host | `localhost` |
+| Port | `11433` |
+| Database | `OpusEDM` |
+| Authentication | SQL login |
+| Username | `sa` |
+| Secret name | `kv/edm/sa` |
+| Schemas to scan | `dq, master, processing, vendor` |
+| Trust an unverified certificate | tick — the container's certificate is self-signed |
+
+**Register** → **Test the connection** → **Scan** → expand an entity → **Publish**.
+
+The certificate tick is worth pausing on in a demo: the form warns about it, does not block it, and the
+source detail afterwards records that you accepted it, beside your name.
+
+| | |
+| --- | --- |
+| `npm run edm:up` | start the container, apply the schema, seed the data, print the click path |
+| `npm run edm:status` | is it running, and what is in it |
+| `npm run edm:reset` | re-apply schema and data without recreating the container |
+| `npm run edm:down` | remove the container and its data |
+
+`npm run edm:up` polls until the server accepts a connection rather than sleeping for a fixed time —
+SQL Server's first boot initialises system databases and takes about a minute, and a fixed wait is how
+this fails the first time somebody tries it.
+
+**Without Docker**, run `npm run studio` alone. The Sources screen falls back to running the same
+pipeline in the browser over the built-in schema, and the banner says so.
+
+### The password, said plainly
+
+There is a development default (`Opus!Edm2026Scan`) in `tools/edm-sandbox.mjs`, in plain sight. It
+belongs to a throwaway container on a loopback port with nothing real in it, and the alternative — a
+step that says "choose a password and use the same one in three other places" — is the step that makes a
+demo fail in front of an audience. Override it with `EDM_SA_PASSWORD`.
+
+It never becomes a registration. `npm run demo` puts it in the API's environment as
+`OPUS_SECRET_KV_EDM_SA`; the registration on disk holds the *name* `kv/edm/sa`. Nothing under
+`server/data` contains the password.
+
+### What the seeded data is for
+
+A schema with no rows scans perfectly and demonstrates almost nothing: three of the pipeline's
+judgements read `sys.partitions` and read zero, and enumeration sampling reads the data itself, so it
+finds no code lists. With `tools/opus-edm-seed.sql` behind it, the scan comes back with things to look at:
+
+| Entity | Rows | What the scan concludes |
+| --- | --- | --- |
+| `dq.exception` | 1,200,000 | needs a filter · medium cost |
+| `processing.load-step` | 1,600,000 | needs a filter · medium cost |
+| `processing.file-load` | 400,000 | low cost — the same rule, the other side of the line |
+| `master.customer-account` | 89,000 | low cost · **5 personal** columns awaiting an entitlement |
+| `master.product` | 74,000 | `CATEGORY` becomes an enum of 6 — discoverable *only* by sampling, since it has no CHECK constraint |
+
+Distributions are deterministic (`% n` over a row number), so two people running this see the same
+database, and so do two scans. Most loads complete, a few are late, fewer fail; exceptions skew towards
+OPEN; mastering confidence is mostly high. The data is set-based — one statement per table over a
+numbers CTE — so 3.7 million rows take about a minute rather than an afternoon.
 
 ---
 
@@ -525,6 +575,8 @@ because nothing else in the codebase knows what a password is.
 | --- | --- |
 | Connection test | `mssql://localhost:11433/OpusEDM`, version reported |
 | Scan | 12 objects — 11 tables, 1 view — no warnings, timestamped from `SYSUTCDATETIME()` |
+| Row counts | read from `sys.partitions`: 1.2M exceptions and 1.6M load steps come back "needs a filter · medium cost", 400k file loads "low cost" |
+| Enumeration sampling | `master.PRODUCT.CATEGORY` discovered as a 6-value code list from the data, having no CHECK constraint |
 | Inference | 10 entities, 2 blocked with their two different messages, 7 relationships |
 | Fixture fidelity | **0 substantive differences** from the fixture scan; inferred draft identical |
 | Determinism | two consecutive real scans byte-identical |

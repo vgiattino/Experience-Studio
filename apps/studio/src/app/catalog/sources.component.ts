@@ -480,6 +480,16 @@ interface RegisterForm {
                         {{ entity.measures.length }}
                         {{ entity.measures.length === 1 ? 'measure' : 'measures' }}
                       </span>
+                      <!--
+                        The row count on the collapsed row, not only in the detail.
+
+                        It is the fact that explains the two chips beside it: "needs a filter" and the
+                        cost class are computed from it, so showing the conclusion without the number
+                        makes them look like settings rather than measurements.
+                      -->
+                      @if (entity.approxRows !== undefined) {
+                        <span class="src-chip">~{{ entity.approxRows.toLocaleString() }} rows</span>
+                      }
                       @if (entity.requiresFilter) {
                         <span class="src-chip warn">needs a filter</span>
                       }

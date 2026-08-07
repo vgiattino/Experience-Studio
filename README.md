@@ -99,8 +99,24 @@ npm run app      # front end only → http://localhost:4400
 
 npm start        # Viewer (M1 runtime)  → http://localhost:4200
 npm run studio   # Visual builder       → http://localhost:4300
-npm run verify   # validate metadata, run tests, build all three apps
+npm run verify   # typecheck, validate metadata, run tests, build all three apps
 ```
+
+### Scanning a real database
+
+The Studio can register a SQL Server, scan it, and publish its schema as a governed catalog. Two
+commands stand the whole thing up, the first of which needs Docker:
+
+```bash
+npm run edm:up   # SQL Server 2022 + the Opus EDM schema + 3.7M rows   (~2 min first time)
+npm run demo     # API on :4000 + Studio on :4300, with the secret in the environment
+```
+
+Then **Catalog → Sources → Register a source**, using the values `npm run demo` prints, and
+**Test the connection → Scan → Publish**. `npm run edm:down` removes the container.
+
+Without Docker, `npm run studio` alone still works: Sources falls back to the same pipeline over a
+built-in schema, and says so. See [docs/CATALOG-INGESTION.md](docs/CATALOG-INGESTION.md).
 
 Useful URL switches, which make the architecture's claims checkable in the running app:
 
