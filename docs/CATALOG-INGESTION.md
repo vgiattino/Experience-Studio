@@ -600,9 +600,16 @@ back off it. A catalog this produces has to be one the platform can actually use
 Three commands. The first needs Docker; the rest do not.
 
 ```
+npm ci             # exactly the committed lockfile — see the note below
 npm run edm:up     # a SQL Server, the schema, and 3.7M rows of plausible data  (~2 min first time)
 npm run demo       # the API and the Studio together, with the secret in the environment
 ```
+
+`npm run doctor` checks everything that has actually gone wrong while getting this running — Node
+version, Angular packages agreeing with each other, ports held by an earlier session, whether the API is
+up and can store a password, and the container's state — and answers each with the fix. Use `npm ci`
+rather than `npm install`: a half-updated tree surfaces as *"@angular/build supports Angular versions
+^20.0.0"*, which reads as a repository problem and is a local install.
 
 Then open <http://localhost:4300/> → **Catalog → Sources → Register a source**, and fill in what
 `npm run demo` printed:

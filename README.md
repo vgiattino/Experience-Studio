@@ -89,10 +89,17 @@ render — see [`architecture/architecture-review.md`](./architecture/architectu
 > Node 20.19+ or 22+ (Angular 21). A plain `git clone` of `main` is runnable — architecture, schemas,
 > docs and code are all there. On PowerShell, set environment variables as
 > `$env:PORT="4100"; npm run api`.
+>
+> **Use `npm ci`, not `npm install`.** `npm ci` installs exactly the committed lockfile; `npm install`
+> can leave a tree half-updated, and the symptom is a version error that reads as a repository problem:
+> *"@angular/build supports Angular versions ^20.0.0, but detected 21.2.19"*. If you see that, or
+> anything else that looks like the setup rather than the code, run **`npm run doctor`** — it checks the
+> handful of things that actually go wrong and answers with the fix rather than the symptom.
 
 ```bash
-npm install
+npm ci           # not `npm install` — see below
 
+npm run doctor   # check Node, dependency agreement, ports, API and sandbox
 npm run dev      # Experience Builder: API on :4000 + app on :4400   ← start here
 npm run api      # backend only   → http://localhost:4000/api/health
 npm run app      # front end only → http://localhost:4400

@@ -12,6 +12,7 @@
     "validate": "node tools/validate-metadata.mjs",
     "verify": "npm run typecheck && npm run validate && npm run test -- --watch=false && npm run build",
     "studio": "ng serve studio",
+    "doctor": "node tools/doctor.mjs",
     "edm:up": "node tools/edm-sandbox.mjs up",
     "edm:down": "node tools/edm-sandbox.mjs down",
     "edm:status": "node tools/edm-sandbox.mjs status",
