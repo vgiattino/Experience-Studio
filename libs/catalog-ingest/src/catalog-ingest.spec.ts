@@ -26,13 +26,20 @@ import type { PhysicalSchema } from './physical';
 import { defaultDecisions, promote } from './promote';
 import {
   IMPLEMENTED_KINDS,
+  applyEdit,
   blockingProblems,
+  changedFields,
+  checkEdit,
   checkRegistration,
   checkSecretRef,
+  editContextOf,
+  editableView,
   managedSecretRefFor,
+  materialChanges,
   normalise,
   quoteIdentifier,
   redactForClient,
+  type SourceEdit,
   type SourceRegistration,
   type SourceRegistrationInput,
 } from './source';
@@ -297,6 +304,176 @@ describe('source registration', () => {
     const stored = normalise(registration({ kind: 'oracle' }), 'src-2', '2026-08-06T09:00:00.000Z');
     expect(redactForClient(stored).scannable).toBe(false);
     expect(IMPLEMENTED_KINDS).toEqual(['mssql']);
+  });
+});
+
+// ── editing a registration ─────────────────────────────────────────────────────────────
+
+/**
+ * A stored source to edit, and the edit that leaves it untouched.
+ *
+ * The second helper is the one that earns its place: most of these tests assert what *one* changed
+ * field does, and building the whole edit each time would hide which field the test is about.
+ */
+function stored(overrides: Partial<SourceRegistrationInput> = {}): SourceRegistration {
+  return normalise(registration(overrides), 'opus-edm-prod', '2026-08-06T09:00:00.000Z');
+}
+
+function editOf(source: SourceRegistration, overrides: Partial<SourceEdit> = {}): SourceEdit {
+  const view = editableView(source);
+  return {
+    name: view.name,
+    host: view.host,
+    port: view.port,
+    database: view.database,
+    auth: view.auth,
+    username: view.username,
+    secretRef: view.secretRef,
+    schemas: view.schemas,
+    encrypt: view.encrypt,
+    trustServerCertificate: view.trustServerCertificate,
+    ...overrides,
+  };
+}
+
+describe('editing a registration', () => {
+  it('changes nothing when nothing was changed, including after a round trip through the form', () => {
+    const source = stored();
+    const after = applyEdit(source, editOf(source), '2026-08-07T10:00:00.000Z', 'Steward');
+    expect(changedFields(source, after)).toEqual([]);
+  });
+
+  it('does not read a reordered schema list as a change to the scan scope', () => {
+    const source = stored({ schemas: ['vendor', 'dq'] });
+    // The form hands back what the steward typed, which may be the same set in another order.
+    const after = applyEdit(source, editOf(source, { schemas: ['dq', ' vendor '] }), 'now', 'Steward');
+    expect(changedFields(source, after)).toEqual([]);
+  });
+
+  it('keeps the identity of the record and refuses to take it from the edit', () => {
+    const source = stored();
+    const after = applyEdit(source, editOf(source, { name: 'Renamed' }), '2026-08-07T10:00:00.000Z', 'Ana');
+
+    expect(after.id).toBe(source.id);
+    expect(after.kind).toBe(source.kind);
+    expect(after.registeredBy).toBe(source.registeredBy);
+    expect(after.registeredAt).toBe(source.registeredAt);
+    expect(after.readOnly).toBe(true);
+    // The edit is recorded beside the registration rather than over it.
+    expect(after.updatedBy).toBe('Ana');
+    expect(after.updatedAt).toBe('2026-08-07T10:00:00.000Z');
+  });
+
+  it('cannot carry a password across, because the edit type has nowhere to hold one', () => {
+    const source = stored();
+    // What a hostile or careless client would post. `SourceEdit` has no such field, and the result is
+    // built field by field — so this is asserting the mechanism, not a filter.
+    const hostile = { ...editOf(source), password: 'Sup3rSecret' } as SourceEdit;
+    const after = applyEdit(source, hostile, 'now', 'Steward');
+    expect(JSON.stringify(after)).not.toContain('Sup3rSecret');
+    expect('password' in after).toBe(false);
+  });
+
+  it('classifies a move as material and a rename as not', () => {
+    const source = stored();
+
+    const moved = applyEdit(source, editOf(source, { database: 'OpusEDM_UAT' }), 'now', 'Steward');
+    expect(materialChanges(changedFields(source, moved)).map((change) => change.field)).toEqual([
+      'database',
+    ]);
+
+    const renamed = applyEdit(source, editOf(source, { name: 'Opus EDM — UAT' }), 'now', 'Steward');
+    const changes = changedFields(source, renamed);
+    expect(changes.map((change) => change.field)).toEqual(['name']);
+    expect(materialChanges(changes)).toEqual([]);
+  });
+
+  it('does not treat a repointed secret reference as material', () => {
+    /*
+      The distinction this asserts is the one most likely to be got wrong: a reference names the
+      *password* for the login in `username`, not the login. Treating it as material would discard the
+      drift baseline every time a deployment rotated a credential in its own store.
+    */
+    const source = stored({ auth: 'sqlLogin', username: 'edm_reader', secretRef: 'kv/edm/reader' });
+    const after = applyEdit(source, editOf(source, { secretRef: 'kv/edm/reader-v2' }), 'now', 'Steward');
+
+    const changes = changedFields(source, after);
+    expect(changes.map((change) => change.field)).toEqual(['secretRef']);
+    expect(materialChanges(changes)).toEqual([]);
+  });
+
+  it('treats a different login as material, because a scan sees only what its login can', () => {
+    const source = stored({ auth: 'sqlLogin', username: 'edm_reader', secretRef: 'kv/edm/reader' });
+    const after = applyEdit(source, editOf(source, { username: 'edm_admin' }), 'now', 'Steward');
+    expect(materialChanges(changedFields(source, after)).map((change) => change.field)).toEqual([
+      'username',
+    ]);
+  });
+
+  it('keeps a managed secret through an edit that says nothing about the credential', () => {
+    const source = stored({ auth: 'sqlLogin', username: 'edm_reader', secretRef: undefined });
+    const managed = { ...source, secretRef: managedSecretRefFor(source.id) };
+
+    const after = applyEdit(managed, editOf(managed, { host: 'sql-edm-dr-01' }), 'now', 'Steward');
+
+    // The form never showed the managed name, so a blank field must not mean "remove the credential".
+    expect(editableView(managed).secretRef).toBeUndefined();
+    expect(after.secretRef).toBe(managedSecretRefFor(source.id));
+    expect(redactForClient(after).credential).toBe('managed');
+  });
+
+  it('drops the credential when the source stops being a SQL login', () => {
+    const source = stored({ auth: 'sqlLogin', username: 'edm_reader', secretRef: 'kv/edm/reader' });
+    const after = applyEdit(source, editOf(source, { auth: 'integrated' }), 'now', 'Steward');
+
+    // Both go: a username and a secret belonging to no authentication mode mislead the next reader,
+    // and the route deletes the stored password to match.
+    expect(after.username).toBeUndefined();
+    expect(after.secretRef).toBeUndefined();
+    expect(redactForClient(after).credential).toBe('none');
+  });
+
+  it('warns rather than blocks when an edit leaves a SQL login with no credential', () => {
+    /*
+      The trap this avoids: blocking here would mean a steward switching from integrated auth to a SQL
+      login could never save, and so could never reach the credential screen that completes it.
+    */
+    const source = stored();
+    const problems = checkEdit(editContextOf(source), editOf(source, { auth: 'sqlLogin', username: 'sa' }));
+
+    expect(blockingProblems(problems)).toEqual([]);
+    expect(problems.some((problem) => problem.field === 'secretRef' && problem.severity === 'warning')).toBe(
+      true,
+    );
+  });
+
+  it('runs the same field rules as registration', () => {
+    const source = stored();
+    const problems = checkEdit(editContextOf(source), editOf(source, { host: 'db;Initial Catalog=other' }));
+    expect(blockingProblems(problems).map((problem) => problem.field)).toContain('host');
+  });
+
+  it('re-derives the accepted risks instead of carrying the old ones forward', () => {
+    const risky = stored({ trustServerCertificate: true });
+    expect(risky.acknowledged).toContain('trustServerCertificate');
+
+    const fixed = applyEdit(risky, editOf(risky, { trustServerCertificate: false }), 'now', 'Steward');
+    // Otherwise the record would still read as "certificate checking accepted" after it was turned on.
+    expect(fixed.acknowledged).not.toContain('trustServerCertificate');
+  });
+
+  it('gives an edit form the values the roster withholds, and still withholds the secret', () => {
+    const source = stored({ auth: 'sqlLogin', username: 'edm_reader', secretRef: 'kv/edm/reader' });
+    const view = editableView(source);
+
+    // The roster has these collapsed into one string and the username not at all.
+    expect(redactForClient(source).target).toBe('sql-edm-prod-01:1433/OpusEDM');
+    expect(view.host).toBe('sql-edm-prod-01');
+    expect(view.database).toBe('OpusEDM');
+    expect(view.username).toBe('edm_reader');
+    // A reference is a name the steward chose and may change; it is not the secret.
+    expect(view.secretRef).toBe('kv/edm/reader');
+    expect(view.credential).toBe('reference');
   });
 });
 

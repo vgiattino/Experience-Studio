@@ -26,9 +26,30 @@
 import { mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync, existsSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 
-import type { PhysicalSchema, SourceRegistration } from '@opus/catalog-ingest';
+import type { FieldChange, PhysicalSchema, SourceRegistration } from '@opus/catalog-ingest';
 
 import { PATHS } from '../config';
+
+/**
+ * One edit to a registration, kept.
+ *
+ * ── WHY THE HISTORY IS PERSISTED WHEN THE DRAFT IS NOT ──────────────────────────────────
+ * The draft is derived and can be recomputed; this cannot. A registration holds only its current
+ * values, so once a steward changes the host there is nothing on the record that says it used to point
+ * somewhere else — and "which database was this catalog actually built from in March" becomes a
+ * question with no answer, on a platform whose whole claim is governed data.
+ *
+ * `baselineCleared` is on the entry rather than inferred from the fields, because the two can differ:
+ * a material change to a source that had never been promoted clears nothing, and a reader six months
+ * later should not have to reconstruct whether it did.
+ */
+export interface SourceRevision {
+  at: string;
+  by: string;
+  changed: FieldChange[];
+  /** True when this edit discarded the promoted scan that drift was measured against. */
+  baselineCleared: boolean;
+}
 
 export interface StoredSource {
   registration: SourceRegistration;
@@ -36,6 +57,8 @@ export interface StoredSource {
   promotedSchema?: PhysicalSchema;
   promotedAt?: string;
   promotedBy?: string;
+  /** Every edit since registration, oldest first. Absent on a source nobody has edited. */
+  revisions?: SourceRevision[];
 }
 
 const DIR = PATHS.sources;

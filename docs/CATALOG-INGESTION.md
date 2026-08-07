@@ -116,7 +116,9 @@ appears to have read production and did not is the worst thing this surface coul
 | --- | --- |
 | `GET /api/sources` | The roster, redacted |
 | `POST /api/sources` | Register. Refuses on blocking problems; records accepted warnings. Accepts a typed password and stores it encrypted |
-| `PUT /api/sources/:id/credential` | Rotate a stored password, and drop the pool so the next scan proves it |
+| `GET /api/sources/:id/editable` | The current values wide enough to fill an edit form, plus the revision history |
+| `PUT /api/sources/:id` | Edit the registration. Refuses a password; asks twice before discarding the drift baseline |
+| `PUT /api/sources/:id/credential` | Set or rotate a stored password, and drop the pool so the next scan proves it |
 | `DELETE /api/sources/:id` | Deregister, close its pool, and delete its managed secret |
 | `POST /api/sources/:id/test` | Connect, read the version, disconnect — the cheapest question worth asking, and the one a steward has when a scan fails |
 | `POST /api/sources/:id/scan` | Scan, infer, and diff against the promoted baseline |
@@ -244,6 +246,77 @@ still used the credential just replaced.
 
 Deleting a source deletes its managed secret, which is otherwise how a decommissioned database's
 password outlives the database.
+
+### Editing a registration
+
+`PUT /api/sources/:id`, with `GET /api/sources/:id/editable` to fill the form.
+
+An edit is not a delete and a re-register, because the id survives and things point at it: `promote`
+writes `physical.sourceId` onto every published entity, and `promotedSchema` is the baseline drift is
+measured against. Deleting and re-registering a source that moved to a new host silently orphans a
+published catalog and resets its history to accomplish what is really a two-field change.
+
+**Four fields cannot change, for four different reasons.** `id` names the record. `kind` chooses the
+probe, the type mapping and the identifier quoting, so a registration whose kind changed describes a
+database that was scanned by a different dialect's SQL. `registeredBy`/`registeredAt` are the
+provenance an audit log is for — an edit adds `updatedBy`/`updatedAt` beside them rather than over
+them. And `password` is absent from `SourceEdit` entirely, so `applyEdit` has nothing to copy; a body
+carrying one is refused with a 422 rather than ignored, because a silent 200 means the steward believes
+a credential is set while the next scan fails on the old one.
+
+#### Material changes, and the second yes
+
+Drift is a diff against the promoted scan. A field is **material** when changing it means the next scan
+reads a different set of objects — so the diff would attribute to the *database* a change that was
+really made to the *registration*.
+
+| Field | Material | Why |
+| --- | --- | --- |
+| `host`, `port`, `database` | yes | points somewhere else |
+| `schemas` | yes | changes what is in scope |
+| `auth`, `username` | yes | a scan sees only what its login has `VIEW DEFINITION` on |
+| `secretRef` | **no** | names the *password* for the login in `username`, not the login. Treating it as material would reset the baseline every time a deployment rotated a credential in its own store — the one thing that is supposed to be invisible |
+| `name`, `encrypt`, `trustServerCertificate` | no | a label, and how the connection is made rather than what it can read |
+
+A material change to a source that has a baseline is refused once with a 409
+(`code: "baseline-reset-required"`) listing the offending fields, and accepted on a second request
+carrying `confirmBaselineReset`. The baseline is then **dropped rather than kept**: a stale baseline is
+worse than none, because none reports honestly that there is nothing to compare against. `promotedAt`
+and `promotedBy` stay — that publish did happen, and rewriting it would be a different kind of lie.
+The published catalog is untouched either way.
+
+The pool is dropped on every edit, not only on a host change. A cached connection was opened with the
+previous host, database, login and transport settings and keeps answering until it idles out.
+
+#### The credential, on an edit
+
+A **managed** secret — one this platform wrote — is not shown in the edit form and is not settable
+there. It survives an edit that says nothing about it, which is what makes changing the host not also a
+credential change. A **reference** into the deployment's own store *is* shown and *is* editable,
+because it is a name and changing it is a metadata edit.
+
+`checkEdit` differs from `checkRegistration` in exactly one place. Registration refuses a SQL login with
+no credential, because that would create a source that cannot be used. On an edit that refusal is a
+trap: switching from integrated auth to a SQL login is legitimate, the password is set on a different
+route, and blocking here means the steward can never reach that route. So it is a **warning**, the edit
+saves with `credential: "none"`, the scan is already blocked with a sentence saying why, and the
+acceptance lands in `acknowledged` like every other warning. The screen's credential button widened to
+match — it now reads "Set a password" for a SQL login that has none, where before it appeared only once
+a managed password already existed and so gave no way out of the state an edit could create.
+
+Moving a source off `sqlLogin`, or replacing a managed secret with a reference, deletes the managed
+secret. Otherwise it is a password on disk belonging to nothing that no screen will mention again.
+
+#### The history
+
+Every edit appends a `SourceRevision` — when, who, the changed fields with their before and after, and
+whether the baseline was discarded. Persisted, unlike the draft, because a registration holds only its
+current values: once a steward changes the host there is nothing on the record saying it used to point
+somewhere else, and "which database was this catalog actually built from in March" becomes a question
+with no answer.
+
+`baselineCleared` is stored on the entry rather than inferred from the fields, because the two differ —
+a material change to a source that was never promoted clears nothing.
 
 ### What `checkRegistration` refuses, and what it merely warns about
 
@@ -562,6 +635,28 @@ the catalog and the client re-fetches its projection; in fixture mode the browse
 into its own `CatalogService`, which the builder's entity picker, the AI's grounding pack and the
 validator all read.
 
+**Edit** opens the registration in a form of its own rather than reusing the register form, because
+three of that form's fields have no meaning on an edit — `kind`, and the two credential fields. A form
+that renders a disabled password box beside an edit invites somebody to type a password into something
+that will not store it.
+
+The form is filled from `GET /:id/editable` rather than from the roster the screen already holds. The
+roster is redacted: the target is one string there and the username is absent entirely, so a form built
+from it would open with three blanks and write those blanks back on save. That is a second, wider
+disclosure with its own name, served one source at a time to a caller holding `catalog.edit` — the same
+scoped exception the review screen runs under, for the same reason.
+
+Editing is offered in browser-only mode too, unlike Test and the credential form. Those need a network;
+changing where a registration points does not, and hiding it would make the screen untestable without a
+database for no reason other than symmetry with the buttons beside it.
+
+A material change is confirmed in place, with the fields listed above the button that agrees to it —
+styled as a decision rather than as an error, because the edit is valid and what the steward has not
+yet done is agree to what it costs. Any keystroke retracts the confirmation, so consent given about one
+set of changes cannot carry into another. Timestamps render in the author's locale and timezone: the
+record stores ISO 8601 because that is what an audit trail should store, and that is not what belongs
+beside a person's name on a screen built for business analysts.
+
 ---
 
 ## Adding a dialect
@@ -780,7 +875,26 @@ numbers CTE — so 3.7 million rows take about a minute rather than an afternoon
 | Drift | a re-scan with sampling on reports `master.PRODUCT.CATEGORY` as a new code list |
 | Console | no errors on any path |
 
-Gate: `npm run typecheck` (new — see below), metadata validation, 499 unit tests, all three apps build
+### Editing a registration, against the same live server
+
+| Checked | Result |
+| --- | --- |
+| Editable view | returns host, port, database and username separately, which the roster does not; `secretRef` present for a reference, **absent for a managed secret** |
+| Rename | saves with no question; `baselineCleared: false`; baseline intact |
+| No-op | 200 with an empty change list — opening a form and saving it unchanged is not an error |
+| Reordered schemas | `dq, vendor` retyped as `vendor, dq` reports **no change**, so the scan scope is not reset by a cosmetic edit |
+| Material change, unconfirmed | 409 `baseline-reset-required`, naming `schemas dq, vendor → dq, master, vendor` |
+| Material change, confirmed | saved; `hasBaseline` false; the next scan really reads the wider scope — **5 tables → 9** |
+| Password in an edit body | 422 pointing at the credential route, rather than a silent 200 |
+| Managed secret, host edited with a blank secret field | password survives, pool dropped, reconnects to the new host |
+| Moved off `sqlLogin` | `credential: "none"`, and the orphaned password file is gone from `server/data/secrets/` |
+| Back to `sqlLogin` with no credential | saves with a **warning**, not a refusal; recorded in `acknowledged`; the scan is blocked with a sentence |
+| "Set a password" on that source | stores it and the scan runs — the path that did not exist before |
+| Entitlement | analyst 403; unknown id 404; a connection string in the host field 422 |
+| History | three edits recorded with before/after and which discarded the baseline |
+| In the browser | form pre-fills from the live values; confirmation renders in place with the fields listed; save banner names what changed; "Last edited by" appears on the detail; timestamps read `7 Aug 2026, 22:59` |
+
+Gate: `npm run typecheck` (new — see below), metadata validation, 544 unit tests, all three apps build
 with no budget warnings.
 
 ### The typecheck that was checking nothing

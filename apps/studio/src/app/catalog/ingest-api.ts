@@ -27,8 +27,11 @@ import { apiBaseUrl, personaHeader } from './api-config';
 import type {
   CatalogDraft,
   DriftReport,
+  FieldChange,
   PhysicalSchema,
   PromotionNote,
+  SourceEdit,
+  SourceKind,
   SourceSummary,
   StewardDecisions,
 } from '@opus/catalog-ingest';
@@ -76,6 +79,28 @@ function headers(): HeadersInit {
 }
 
 /**
+ * A refusal the caller may need to *branch* on, not only display.
+ *
+ * Every failure carries the server's sentence as its message, which is what a screen shows. Some also
+ * need to be recognised: a 409 `baseline-reset-required` is not an error to report but a question to
+ * ask, and the only honest way to tell it apart from a 409 about something else is the code the server
+ * put in the problem document. Matching on the message text would work until somebody improved the
+ * wording.
+ */
+export class ApiProblem extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly code: string,
+    /** Whatever else the problem document carried — the changed fields, on a baseline refusal. */
+    readonly body: Record<string, unknown>,
+  ) {
+    super(message);
+    this.name = 'ApiProblem';
+  }
+}
+
+/**
  * The server's own sentence, or a description of why there wasn't one.
  *
  * A problem document's `detail` is written for the person reading it — "the login does not have
@@ -84,13 +109,14 @@ function headers(): HeadersInit {
  */
 async function fail(response: Response): Promise<never> {
   let detail = `${response.status} ${response.statusText}`;
+  let body: Record<string, unknown> = {};
   try {
-    const body = (await response.json()) as { detail?: string; category?: string };
-    if (body?.detail) detail = body.detail;
+    body = (await response.json()) as Record<string, unknown>;
+    if (typeof body?.['detail'] === 'string') detail = body['detail'];
   } catch {
     // Not JSON. The status line is all there is.
   }
-  throw new Error(detail);
+  throw new ApiProblem(detail, response.status, String(body['code'] ?? ''), body);
 }
 
 async function json<T>(response: Response): Promise<T> {
@@ -230,6 +256,45 @@ export async function rotateCredential(
 
 export async function register(input: Record<string, unknown>): Promise<ApiSource> {
   return json(await fetch(base(), { method: 'POST', headers: headers(), body: JSON.stringify(input) }));
+}
+
+/** What an edit form needs, which is more than the roster says. See the route's comment. */
+export interface EditableSource {
+  editable: SourceEdit & { kind: SourceKind; credential: SourceSummary['credential'] };
+  /** True when a promoted scan exists, so a material change would have something to discard. */
+  hasBaseline: boolean;
+  revisions: { at: string; by: string; changed: FieldChange[]; baselineCleared: boolean }[];
+}
+
+export async function editable(id: string): Promise<EditableSource> {
+  return json(await fetch(`${base()}/${encodeURIComponent(id)}/editable`, { headers: headers() }));
+}
+
+/** The result of a saved edit: the new summary, plus what actually changed. */
+export interface EditResult extends ApiSource {
+  changed: FieldChange[];
+  baselineCleared: boolean;
+}
+
+/**
+ * Save an edit.
+ *
+ * `confirmBaselineReset` is the second yes. Sent false the first time deliberately — the server decides
+ * whether the question needs asking, because only it holds the promoted scan, and a client that decided
+ * for itself would ask on edits that cost nothing and stay silent on the ones that do.
+ */
+export async function update(
+  id: string,
+  edit: SourceEdit,
+  confirmBaselineReset = false,
+): Promise<EditResult> {
+  return json(
+    await fetch(`${base()}/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      headers: headers(),
+      body: JSON.stringify({ ...edit, confirmBaselineReset }),
+    }),
+  );
 }
 
 export async function remove(id: string): Promise<void> {

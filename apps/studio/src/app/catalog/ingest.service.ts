@@ -45,19 +45,43 @@ import {
   type SourceSummary,
   type SqlExecutor,
   type StewardDecisions,
+  applyEdit,
   blockingProblems,
+  changedFields,
+  checkEdit,
   checkRegistration,
   defaultDecisions,
   detectDrift,
+  editContextOf,
+  editableView,
   infer,
+  materialChanges,
   normalise,
   promote,
   redactForClient,
+  type EditContext,
+  type FieldChange,
+  type SourceEdit,
 } from '@opus/catalog-ingest';
 
+import { AUTHOR } from '../session';
 import { apiBaseUrl, fixtureFallbackAllowed, personaHeader } from './api-config';
 import * as api from './ingest-api';
 import { PublishedCatalogService } from './published-catalog.service';
+
+/** Who an edit is attributed to in browser-only mode. Over the API the server uses the caller. */
+const AUTHOR_NAME = AUTHOR.displayName;
+
+/**
+ * What came of an edit.
+ *
+ * `needs-confirmation` is not a failure and is deliberately not modelled as one: the edit is valid, and
+ * what the steward has not yet done is agree to what it costs the drift baseline.
+ */
+export type EditOutcome =
+  | { status: 'saved'; changed: FieldChange[]; baselineCleared: boolean }
+  | { status: 'needs-confirmation'; detail: string; changed: FieldChange[] }
+  | { status: 'failed'; detail: string };
 
 /** What a source's ingestion has reached. Drives which pane the screen shows. */
 export type SourceStage = 'registered' | 'scanned' | 'promoted';
@@ -274,6 +298,104 @@ export class IngestService {
     ]);
     this.selectedId.set(registration.id);
     return null;
+  }
+
+  // ── editing a registration ───────────────────────────────────────────────────────────
+
+  /** Validation as the steward types, on an edit. The same function the server runs before storing. */
+  checkEdit(context: EditContext, edit: SourceEdit) {
+    return checkEdit(context, edit);
+  }
+
+  /**
+   * The current values, wide enough to fill an edit form.
+   *
+   * Fetched rather than derived from the roster, because the roster is redacted: it has
+   * `host:port/database` as one string and no username at all, so a form built from it would open with
+   * three empty fields and overwrite them with blanks on save.
+   */
+  async loadEditable(id: string): Promise<api.EditableSource | null> {
+    if (this.mode() === 'api') {
+      try {
+        return await api.editable(id);
+      } catch (error) {
+        this.problem.set(asText(error));
+        return null;
+      }
+    }
+
+    const registration = this.local.get(id);
+    if (!registration) return null;
+    return {
+      editable: editableView(registration),
+      hasBaseline: !!this.states().find((state) => state.summary.id === id)?.promotedSchema,
+      revisions: [],
+    };
+  }
+
+  /**
+   * Save an edit, or report that it needs a second yes.
+   *
+   * Three outcomes rather than a boolean, because the middle one is not a failure. A change that would
+   * invalidate the promoted baseline is a legitimate edit the steward has not yet been told the cost of,
+   * and collapsing it into "failed" would put a red message under a form whose contents are perfectly
+   * valid.
+   *
+   * The server decides which outcome it is, in both modes — `materialChanges` here runs the same
+   * function the route runs, so the browser-only mode asks the same question rather than a simpler one.
+   */
+  async updateSource(id: string, edit: SourceEdit, confirmBaselineReset = false): Promise<EditOutcome> {
+    if (this.mode() === 'api') {
+      this.busy.set('Saving…');
+      try {
+        const result = await api.update(id, edit, confirmBaselineReset);
+        this.patch(id, {
+          summary: result,
+          // The baseline lived on the server; when it goes, so does any drift computed against it.
+          ...(result.baselineCleared ? { drift: undefined } : {}),
+        });
+        return { status: 'saved', changed: result.changed, baselineCleared: result.baselineCleared };
+      } catch (error) {
+        if (error instanceof api.ApiProblem && error.code === 'baseline-reset-required') {
+          return {
+            status: 'needs-confirmation',
+            detail: error.message,
+            changed: (error.body['changes'] as FieldChange[] | undefined) ?? [],
+          };
+        }
+        return { status: 'failed', detail: asText(error) };
+      } finally {
+        this.busy.set(null);
+      }
+    }
+
+    const current = this.local.get(id);
+    if (!current) return { status: 'failed', detail: 'That source is not held in this browser.' };
+
+    const problems = blockingProblems(checkEdit(editContextOf(current), edit));
+    if (problems.length) return { status: 'failed', detail: problems[0]!.message };
+
+    const next = applyEdit(current, edit, new Date().toISOString(), AUTHOR_NAME);
+    const changed = changedFields(current, next);
+    if (!changed.length) return { status: 'saved', changed: [], baselineCleared: false };
+
+    const state = this.states().find((held) => held.summary.id === id);
+    const clearsBaseline = materialChanges(changed).length > 0 && !!state?.promotedSchema;
+    if (clearsBaseline && !confirmBaselineReset) {
+      return {
+        status: 'needs-confirmation',
+        detail:
+          'This changes what the next scan reads, so the promoted scan can no longer be used as a baseline. Saving discards it — drift reports nothing until this source is scanned and published again.',
+        changed: materialChanges(changed),
+      };
+    }
+
+    this.local.set(id, next);
+    this.patch(id, {
+      summary: { ...redactForClient(next), hasBaseline: !clearsBaseline },
+      ...(clearsBaseline ? { promotedSchema: undefined, drift: undefined } : {}),
+    });
+    return { status: 'saved', changed, baselineCleared: clearsBaseline };
   }
 
   // ── connection test ──────────────────────────────────────────────────────────────────

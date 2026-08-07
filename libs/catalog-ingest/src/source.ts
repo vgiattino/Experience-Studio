@@ -127,6 +127,16 @@ export interface SourceRegistration {
   acknowledged: string[];
   registeredBy: string;
   registeredAt: string;
+  /**
+   * Who last edited the registration, and when. Absent until somebody does.
+   *
+   * Kept alongside `registeredBy`/`registeredAt` rather than replacing them, because they answer
+   * different questions — "who brought this database into the platform" and "who last changed where it
+   * points" — and a screen that shows only the second cannot tell a reviewer that a source registered
+   * against a development instance is now aimed at production.
+   */
+  updatedBy?: string;
+  updatedAt?: string;
 }
 
 /** The client's view. No `secretRef`, no username, no host detail beyond what a reviewer needs. */
@@ -142,6 +152,9 @@ export interface SourceSummary {
   trustServerCertificate: boolean;
   registeredBy: string;
   registeredAt: string;
+  /** Who last edited the registration, and when. Neither is a disclosure; both are provenance. */
+  updatedBy?: string;
+  updatedAt?: string;
   /** True when this platform has a probe for the kind. */
   scannable: boolean;
   /** Warnings accepted at registration, so the detail view can show what was waved through. */
@@ -418,6 +431,8 @@ export function redactForClient(source: SourceRegistration): SourceSummary {
     trustServerCertificate: source.trustServerCertificate,
     registeredBy: source.registeredBy,
     registeredAt: source.registeredAt,
+    updatedBy: source.updatedBy,
+    updatedAt: source.updatedAt,
     scannable: IMPLEMENTED_KINDS.includes(source.kind),
     acknowledged: [...source.acknowledged],
     credential: credentialKind(source),
@@ -434,6 +449,345 @@ export function redactForClient(source: SourceRegistration): SourceSummary {
 function credentialKind(source: SourceRegistration): SourceSummary['credential'] {
   if (!source.secretRef) return 'none';
   return source.secretRef.startsWith(MANAGED_SECRET_PREFIX) ? 'managed' : 'reference';
+}
+
+// ── editing a registration ──────────────────────────────────────────────────────────────
+
+/**
+ * What may be changed on a source after it is registered, and nothing else.
+ *
+ * ── WHY THIS IS A THIRD TYPE AND NOT `Partial<SourceRegistration>` ──────────────────────
+ * Because the interesting part of an edit is what it *cannot* touch, and a partial of the stored type
+ * says the opposite. Four fields are fixed for four different reasons:
+ *
+ *   · **`id`** names the record, and the promoted catalog's entities point at it by that name.
+ *   · **`kind`** chooses the probe, the type mapping and the identifier quoting. A registration whose
+ *     kind changed describes a database that was scanned by a different dialect's SQL, so the honest
+ *     operation is to register the new one and retire this — not to relabel the old record.
+ *   · **`registeredBy` / `registeredAt`** are the provenance an audit log is for. An edit adds
+ *     `updatedBy`/`updatedAt` beside them rather than overwriting who brought the source in.
+ *   · **`password`** is absent for the reason the file opens with. A credential travels on its own
+ *     route, once, and a metadata edit is not that route — so this type has nowhere to put one and
+ *     `applyEdit` has nothing to copy.
+ */
+export interface SourceEdit {
+  name: string;
+  host: string;
+  port?: number;
+  database: string;
+  auth: AuthMode;
+  username?: string;
+  /**
+   * The name of a secret the *deployment* holds. Blank leaves a managed secret alone.
+   *
+   * A secret this platform wrote is deliberately not editable here: it is changed by storing a new
+   * password, which is a different act on a different route. Only a reference into somebody else's
+   * store is a name, and only a name is metadata.
+   */
+  secretRef?: string;
+  schemas: string[];
+  encrypt: boolean;
+  trustServerCertificate: boolean;
+}
+
+/**
+ * The registration as an edit form needs it — for a caller already entitled to steward the catalog.
+ *
+ * ── WHY THIS IS NOT `redactForClient` ───────────────────────────────────────────────────
+ * `redactForClient` answers "what may be said about this source", and its answer is deliberately
+ * lossy: `host:port/database` collapsed into one string, no username, no secret name. That is right
+ * for a roster. It is useless for an edit form, which cannot pre-fill a field it was never told the
+ * value of — and a form that opens blank is a form that erases whatever the steward does not retype.
+ *
+ * So this is a second, narrower disclosure with its own name, and the name is the point. It is served
+ * from one route, for one source at a time, to a caller holding `catalog.edit` — the same scoped
+ * exception the review screen already runs under, for the same reason: the job cannot be done without
+ * the values, and the values are metadata rather than secrets. `host` and `database` are already in
+ * `target`. `username` is an account name. `secretRef` is the *name* of a secret and never its value,
+ * and it is withheld anyway when the secret is one this platform manages, because then it is not a
+ * thing the steward chose or can usefully change.
+ */
+export function editableView(source: SourceRegistration): SourceEdit & {
+  kind: SourceKind;
+  credential: SourceSummary['credential'];
+} {
+  const credential = credentialKind(source);
+  return {
+    name: source.name,
+    kind: source.kind,
+    host: source.host,
+    port: source.port,
+    database: source.database,
+    auth: source.auth,
+    username: source.username,
+    // A managed secret's generated name is not offered for editing — see `SourceEdit.secretRef`.
+    secretRef: credential === 'reference' ? source.secretRef : undefined,
+    schemas: [...source.schemas],
+    encrypt: source.encrypt,
+    trustServerCertificate: source.trustServerCertificate,
+    credential,
+  };
+}
+
+/** One field that differs between the stored registration and what an edit would store. */
+export interface FieldChange {
+  field: keyof SourceEdit;
+  /** Rendered for a person, not serialised — `schemas` as a list, `encrypt` as "clear text". */
+  from: string;
+  to: string;
+  /**
+   * True when the change means the next scan reads something the promoted baseline does not describe.
+   *
+   * See `materialChanges` for what follows from it. Not a severity: a material change is often exactly
+   * what the steward intends, and the consequence is to the *baseline*, not to the edit.
+   */
+  material: boolean;
+}
+
+/**
+ * Every comparable field, how to show it, and whether changing it invalidates the baseline.
+ *
+ * ── WHAT "MATERIAL" MEANS, AND WHY `secretRef` IS NOT ───────────────────────────────────
+ * Drift is a diff against the schema that was promoted. A field is material when changing it means the
+ * next scan reads a *different set of objects* — so the diff would attribute to the database a change
+ * that was really made to the registration.
+ *
+ * `host`, `port` and `database` point somewhere else. `schemas` changes what is in scope. `auth` and
+ * `username` change which login connects, and a scan sees only what its login has `VIEW DEFINITION` on
+ * — a different account genuinely returns a different schema.
+ *
+ * `secretRef` is not material, and the distinction is worth stating because it looks like it should be.
+ * It names *the password for the login in `username`*, not the login. Repointing it at a rotated secret
+ * for the same account changes nothing the probe can see, and treating it as material would reset the
+ * baseline every time a deployment rotated a credential in its own store — which is the one thing that
+ * is supposed to be invisible here.
+ *
+ * `name`, `encrypt` and `trustServerCertificate` are not material either: the first is a label, and the
+ * other two change how the connection is made rather than what it can read. They are not therefore
+ * unimportant — both are warnings, and `applyEdit` re-derives `acknowledged` so a steward who turns
+ * encryption off during an edit is recorded as having accepted that, exactly as at registration.
+ */
+const COMPARED_FIELDS: readonly {
+  field: keyof SourceEdit;
+  material: boolean;
+  show: (source: SourceRegistration) => string;
+}[] = [
+  { field: 'name', material: false, show: (s) => s.name },
+  { field: 'host', material: true, show: (s) => s.host },
+  { field: 'port', material: true, show: (s) => (s.port === undefined ? '' : String(s.port)) },
+  { field: 'database', material: true, show: (s) => s.database },
+  { field: 'schemas', material: true, show: (s) => s.schemas.join(', ') },
+  { field: 'auth', material: true, show: (s) => s.auth },
+  { field: 'username', material: true, show: (s) => s.username ?? '' },
+  { field: 'secretRef', material: false, show: (s) => s.secretRef ?? '' },
+  { field: 'encrypt', material: false, show: (s) => (s.encrypt ? 'encrypted' : 'clear text') },
+  {
+    field: 'trustServerCertificate',
+    material: false,
+    show: (s) => (s.trustServerCertificate ? 'certificate unverified' : 'certificate verified'),
+  },
+];
+
+/**
+ * What actually differs between two registrations.
+ *
+ * Takes two *registrations* rather than a registration and an edit, so the comparison is against what
+ * will really be stored: `applyEdit` trims, sorts the schemas, applies the default port and resolves
+ * the credential, and a diff taken before all that reports changes that are not changes — a steward who
+ * retyped `dq, vendor` as `vendor, dq` would be told they had altered the scan scope.
+ */
+export function changedFields(before: SourceRegistration, after: SourceRegistration): FieldChange[] {
+  const changes: FieldChange[] = [];
+  for (const { field, material, show } of COMPARED_FIELDS) {
+    const from = show(before);
+    const to = show(after);
+    if (from !== to) changes.push({ field, from, to, material });
+  }
+  return changes;
+}
+
+/** Only the changes that invalidate a promoted baseline. See `COMPARED_FIELDS`. */
+export function materialChanges(changes: readonly FieldChange[]): FieldChange[] {
+  return changes.filter((change) => change.material);
+}
+
+/**
+ * The edit, cleaned exactly as `normalise` cleans a registration.
+ *
+ * Shared by `checkEdit` and `applyEdit` so the thing checked is the thing stored. Two functions each
+ * trimming their own way is how a registration passes validation and then fails to connect.
+ */
+function cleanEdit(edit: SourceEdit, kind: SourceKind): Required<Pick<SourceEdit, 'name' | 'host' | 'database' | 'auth' | 'schemas' | 'encrypt' | 'trustServerCertificate'>> &
+  Pick<SourceEdit, 'port' | 'username' | 'secretRef'> {
+  const login = edit.auth === 'sqlLogin';
+  return {
+    name: edit.name.trim(),
+    host: edit.host.trim(),
+    port: edit.port ?? DEFAULT_PORTS[kind],
+    database: edit.database.trim(),
+    auth: edit.auth,
+    // Dropped outright when the source no longer uses a SQL login: a username belonging to no
+    // authentication mode is a field that survives on the record and misleads the next reader.
+    username: login ? edit.username?.trim() || undefined : undefined,
+    secretRef: login ? edit.secretRef?.trim() || undefined : undefined,
+    schemas: [...new Set(edit.schemas.map((schema) => schema.trim()))].sort(),
+    encrypt: edit.encrypt,
+    trustServerCertificate: edit.trustServerCertificate,
+  };
+}
+
+/**
+ * What checking an edit needs to know about the record being edited.
+ *
+ * ── WHY NOT JUST TAKE THE REGISTRATION ──────────────────────────────────────────────────
+ * Because the browser runs this check as the steward types, and the browser does not have a
+ * `SourceRegistration` — it has `editableView`, which withholds a managed secret's generated name on
+ * purpose. Demanding the full record here would mean either shipping that name to the client for no
+ * reason, or validating on the server only and finding out the edit was wrong after saving it.
+ *
+ * So the check asks for the three things it actually uses, and a `SourceRegistration` satisfies the
+ * shape anyway — the server passes one directly and gets the identical answer.
+ */
+export interface EditContext {
+  kind: SourceKind;
+  /** How the credential is held today. `managed` survives an edit that names no reference. */
+  credential: SourceSummary['credential'];
+  registeredBy: string;
+}
+
+/** The context a stored registration presents. Used by `applyEdit`, and by the server directly. */
+export function editContextOf(source: SourceRegistration): EditContext {
+  return { kind: source.kind, credential: credentialKind(source), registeredBy: source.registeredBy };
+}
+
+/**
+ * Which secret the edited registration ends up pointing at.
+ *
+ * Three cases, in the order they are decided:
+ *
+ *   1. **not a SQL login** — none. Whatever was there belonged to an authentication mode this source no
+ *      longer uses, and the server deletes the managed secret rather than leaving a password on disk
+ *      belonging to nothing (the same reasoning as deleting a source).
+ *   2. **a reference was typed** — that. The steward is naming a secret their deployment holds.
+ *   3. **nothing was typed** — keep a *managed* secret, drop a reference. Keeping the managed one is
+ *      what makes an edit to the host or the schemas not also a credential change; dropping the
+ *      reference is what makes clearing that field mean something, since it is the one the form shows.
+ */
+function resolveSecretRef(
+  current: SourceRegistration,
+  cleaned: ReturnType<typeof cleanEdit>,
+): string | undefined {
+  if (cleaned.auth !== 'sqlLogin') return undefined;
+  if (cleaned.secretRef) return cleaned.secretRef;
+  return current.secretRef?.startsWith(MANAGED_SECRET_PREFIX) ? current.secretRef : undefined;
+}
+
+/**
+ * Will the edited source have a credential at all?
+ *
+ * The same three cases as `resolveSecretRef`, decided without the secret's name — which is exactly what
+ * the browser can answer and what the check needs. The two are kept adjacent so a change to one is
+ * visibly a change to the other.
+ */
+function willHaveCredential(context: EditContext, cleaned: ReturnType<typeof cleanEdit>): boolean {
+  if (cleaned.auth !== 'sqlLogin') return false;
+  return !!cleaned.secretRef || context.credential === 'managed';
+}
+
+/**
+ * Check an edit the way `checkRegistration` checks a registration, with one deliberate difference.
+ *
+ * Everything about the shape of the fields is the same rule and is therefore the same code — a second
+ * host validator would drift from the first, and the first is the one the server runs on registration.
+ *
+ * The difference is the credential. `checkRegistration` refuses a SQL login with neither a password nor
+ * a secret, because registering one would create a source that cannot be used. On an edit that refusal
+ * would be a trap: switching from integrated auth to a SQL login is a legitimate edit, the password is
+ * set on a different route, and a *blocking* problem here would mean the steward can never reach that
+ * route — the form would refuse to save the state the credential screen exists to complete.
+ *
+ * So it is a warning instead. The edit saves, `credential` becomes `none`, Scan is already blocked with
+ * a sentence saying why, and the acceptance is recorded in `acknowledged` like every other warning.
+ */
+export function checkEdit(context: EditContext, edit: SourceEdit): RegistrationProblem[] {
+  const cleaned = cleanEdit(edit, context.kind);
+  const credentialHeld = willHaveCredential(context, cleaned);
+
+  const problems = checkRegistration({
+    ...cleaned,
+    kind: context.kind,
+    /*
+      A stand-in for the credential rule, not the real reference.
+
+      `checkRegistration` wants to see *a* credential for a SQL login, and a kept managed secret is one —
+      but its name is deliberately not available here. `MANAGED_SECRET_PREFIX` is a valid reference by
+      construction, so it satisfies the shape check without inventing a name that could be mistaken for
+      a real one. Nothing is stored from this object; `applyEdit` resolves the true reference separately.
+    */
+    secretRef: cleaned.secretRef ?? (credentialHeld ? MANAGED_SECRET_PREFIX : undefined),
+    registeredBy: context.registeredBy,
+  }).filter(
+    // Replaced below with the warning this function's comment explains.
+    (problem) => !(problem.field === 'password' && cleaned.auth === 'sqlLogin' && !credentialHeld),
+  );
+
+  if (cleaned.auth === 'sqlLogin' && !credentialHeld) {
+    problems.push({
+      field: 'secretRef',
+      message:
+        'This source will have no credential, so scanning stays blocked until one is set. Either name a secret your deployment holds, or save this and then use “Set a password”.',
+      severity: 'warning',
+    });
+  }
+
+  return problems;
+}
+
+/**
+ * The edited registration: cleaned, credential resolved, provenance extended, read-only re-asserted.
+ *
+ * Built field by field for the same reason `normalise` is — a spread would carry across whatever gets
+ * added to `SourceRegistration` next, and the field most likely to be added to that type is another
+ * credential. `id`, `kind`, `registeredBy` and `registeredAt` are copied from the current record rather
+ * than taken from the edit, because `SourceEdit` has no way to express them and that is the mechanism.
+ */
+export function applyEdit(
+  current: SourceRegistration,
+  edit: SourceEdit,
+  now: string,
+  updatedBy: string,
+): SourceRegistration {
+  const cleaned = cleanEdit(edit, current.kind);
+
+  return {
+    id: current.id,
+    name: cleaned.name,
+    kind: current.kind,
+    host: cleaned.host,
+    port: cleaned.port,
+    database: cleaned.database,
+    auth: cleaned.auth,
+    username: cleaned.username,
+    secretRef: resolveSecretRef(current, cleaned),
+    schemas: cleaned.schemas,
+    encrypt: cleaned.encrypt,
+    trustServerCertificate: cleaned.trustServerCertificate,
+    readOnly: true,
+    /*
+      Re-derived from the edit, not carried over.
+
+      Carrying the old list forward would record an acknowledgement of a risk that may no longer exist —
+      a source that had certificate checking turned back on would still read as "trustServerCertificate
+      accepted by whoever registered it". Derived, the list is always what is true of the stored record.
+    */
+    acknowledged: checkEdit(editContextOf(current), edit)
+      .filter((problem) => problem.severity === 'warning')
+      .map((problem) => problem.field),
+    registeredBy: current.registeredBy,
+    registeredAt: current.registeredAt,
+    updatedBy,
+    updatedAt: now,
+  };
 }
 
 /**

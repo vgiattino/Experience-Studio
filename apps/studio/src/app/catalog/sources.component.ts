@@ -32,12 +32,20 @@ import {
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { IconComponent, ListPanelComponent, type ListPanelItem } from '@opus/design-system';
-import type { DraftEntity, SourceKind } from '@opus/catalog-ingest';
+import type {
+  AuthMode,
+  DraftEntity,
+  EditContext,
+  FieldChange,
+  SourceEdit,
+  SourceKind,
+} from '@opus/catalog-ingest';
 import { SOURCE_KINDS } from '@opus/catalog-ingest';
 
 import { AUTHOR } from '../session';
 import { CatalogService } from '@opus/catalog';
 
+import type { EditableSource } from './ingest-api';
 import { IngestService, type SourceState } from './ingest.service';
 
 interface RegisterForm {
@@ -56,6 +64,43 @@ interface RegisterForm {
   schemas: string;
   encrypt: boolean;
   trustServerCertificate: boolean;
+}
+
+/**
+ * The edit form's fields — deliberately not `RegisterForm`.
+ *
+ * Three of that type's fields have no meaning here and sharing it would put all three on the screen:
+ * `kind` cannot change, and `credential`/`password` belong to the credential route. A form that renders
+ * a disabled password box beside an edit is a form that invites somebody to type a password into
+ * something that will not store it.
+ */
+interface EditForm {
+  name: string;
+  host: string;
+  port: number | null;
+  database: string;
+  auth: AuthMode;
+  username: string;
+  secretRef: string;
+  /** Comma separated as typed, like the register form. */
+  schemas: string;
+  encrypt: boolean;
+  trustServerCertificate: boolean;
+}
+
+/**
+ * An edit in progress.
+ *
+ * Holds the record's context beside the form because the check needs both: whether a SQL login still
+ * has a credential depends on what the source holds *today*, not only on what has been typed.
+ */
+interface EditSession {
+  id: string;
+  context: EditContext;
+  /** True when a promoted scan exists, so a material change has a baseline to cost. */
+  hasBaseline: boolean;
+  revisions: EditableSource['revisions'];
+  form: EditForm;
 }
 
 @Component({
@@ -176,7 +221,287 @@ interface RegisterForm {
         </div>
 
         <section class="src-detail">
-          @if (registering()) {
+          @if (editing(); as session) {
+            <h2 class="src-h2">Edit this source</h2>
+            <!--
+              What an edit is for, and what it deliberately is not.
+
+              Said here rather than in a tooltip because the two exclusions are the two things somebody
+              opening this screen is most likely to be looking for: the dialect, and the password.
+            -->
+            <p class="src-lead">
+              Where this source points and what it is allowed to read. The <b>kind</b> cannot change —
+              the introspection SQL, the type mapping and the identifier quoting are all dialect
+              specific, so a source that became another dialect would be a new registration, not this
+              one renamed. The <b>password</b> does not change here either; that is its own act, on its
+              own screen, and this form never carries one.
+            </p>
+
+            <dl class="src-facts">
+              <div>
+                <dt>Kind</dt>
+                <dd>{{ session.context.kind }} — fixed at registration</dd>
+              </div>
+              <div>
+                <dt>Credential</dt>
+                <dd>
+                  {{
+                    session.context.credential === 'managed'
+                      ? 'a password this platform stores'
+                      : session.context.credential === 'reference'
+                        ? 'a secret your deployment holds'
+                        : 'none'
+                  }}
+                </dd>
+              </div>
+              <div>
+                <dt>Baseline</dt>
+                <dd>
+                  {{
+                    session.hasBaseline
+                      ? 'a promoted scan drift is measured against'
+                      : 'none — nothing published yet to compare against'
+                  }}
+                </dd>
+              </div>
+            </dl>
+
+            <div class="src-form">
+              <label class="opus-field">
+                <span class="opus-field-label">Name</span>
+                <input
+                  class="opus-input"
+                  [ngModel]="session.form.name"
+                  (ngModelChange)="editField('name', $event)"
+                />
+                <span class="opus-field-help">A label. Changing it costs nothing.</span>
+              </label>
+
+              <label class="opus-field">
+                <span class="opus-field-label">Host</span>
+                <input
+                  class="opus-input"
+                  [ngModel]="session.form.host"
+                  (ngModelChange)="editField('host', $event)"
+                />
+                <span class="opus-field-help">A name, an address, or HOST\\INSTANCE.</span>
+              </label>
+
+              <label class="opus-field">
+                <span class="opus-field-label">Port</span>
+                <input
+                  class="opus-input"
+                  type="number"
+                  [ngModel]="session.form.port"
+                  (ngModelChange)="editField('port', $event)"
+                />
+              </label>
+
+              <label class="opus-field">
+                <span class="opus-field-label">Database</span>
+                <input
+                  class="opus-input"
+                  [ngModel]="session.form.database"
+                  (ngModelChange)="editField('database', $event)"
+                />
+              </label>
+
+              <label class="opus-field">
+                <span class="opus-field-label">Authentication</span>
+                <select
+                  class="opus-select"
+                  [ngModel]="session.form.auth"
+                  (ngModelChange)="editField('auth', $event)"
+                >
+                  <option value="integrated">Integrated — the host's own identity, no secret</option>
+                  <option value="managedIdentity">Managed identity — resolved by the host</option>
+                  <option value="sqlLogin">SQL login — a username and a password</option>
+                </select>
+                <span class="opus-field-help">
+                  Moving away from a SQL login deletes the password this platform stored for it.
+                </span>
+              </label>
+
+              @if (session.form.auth === 'sqlLogin') {
+                <label class="opus-field">
+                  <span class="opus-field-label">Username</span>
+                  <input
+                    class="opus-input"
+                    [ngModel]="session.form.username"
+                    (ngModelChange)="editField('username', $event)"
+                    autocomplete="off"
+                  />
+                </label>
+
+                <!--
+                  Only the *reference* route is editable here, and the field says which case it is in.
+
+                  A secret this platform wrote has a name this platform generated; showing it would
+                  invite somebody to retype it into something else, and the useful action on it is to
+                  store a new password rather than to rename it.
+                -->
+                <label class="opus-field">
+                  <span class="opus-field-label">Secret name</span>
+                  <input
+                    class="opus-input"
+                    [ngModel]="session.form.secretRef"
+                    (ngModelChange)="editField('secretRef', $event)"
+                    placeholder="kv/edm/reader"
+                    autocomplete="off"
+                  />
+                  <span class="opus-field-help">
+                    @if (session.context.credential === 'managed') {
+                      This source uses a password this platform stores, so this is blank. Naming a secret
+                      here switches it to your deployment's store and deletes the stored password.
+                    } @else {
+                      The name of a secret your deployment already holds — never the secret. Leave it
+                      blank to leave this source without a credential until you set a password.
+                    }
+                  </span>
+                </label>
+              }
+
+              <label class="opus-field src-wide">
+                <span class="opus-field-label">Schemas to scan</span>
+                <input
+                  class="opus-input"
+                  [ngModel]="session.form.schemas"
+                  (ngModelChange)="editField('schemas', $event)"
+                  placeholder="dq, master, processing, vendor"
+                />
+                <span class="opus-field-help">Comma separated.</span>
+              </label>
+
+              <label class="src-check">
+                <input
+                  type="checkbox"
+                  [ngModel]="session.form.encrypt"
+                  (ngModelChange)="editField('encrypt', $event)"
+                />
+                <span>Encrypt the transport</span>
+              </label>
+              <label class="src-check">
+                <input
+                  type="checkbox"
+                  [ngModel]="session.form.trustServerCertificate"
+                  (ngModelChange)="editField('trustServerCertificate', $event)"
+                />
+                <span>Trust an unverified certificate</span>
+              </label>
+            </div>
+
+            @if (editBlockedBy().length) {
+              <ul class="src-problems">
+                @for (problem of editBlockedBy(); track problem.field + problem.message) {
+                  <li>
+                    <code>{{ problem.field }}</code>
+                    {{ problem.message }}
+                  </li>
+                }
+              </ul>
+            }
+            @if (editRisks().length) {
+              <ul class="src-problems accepted">
+                @for (problem of editRisks(); track problem.field + problem.message) {
+                  <li>
+                    <code>{{ problem.field }}</code>
+                    {{ problem.message }}
+                    <b>Saving records that you accepted this.</b>
+                  </li>
+                }
+              </ul>
+            }
+
+            <!--
+              The second yes.
+
+              Rendered as a question with the fields in it, not as an error: the edit is valid, and what
+              the steward has not yet done is agree to what it costs. Listing the changes matters more
+              than the sentence — "host, database" is the part that tells them whether they meant it.
+            -->
+            @if (editConfirm(); as confirmation) {
+              <div class="src-confirm">
+                <h3 class="src-h3">
+                  <opus-icon name="warning" [size]="15" />
+                  This discards the drift baseline
+                </h3>
+                <ul class="src-changes">
+                  @for (change of confirmation.changed; track change.field) {
+                    <li>
+                      <code>{{ change.field }}</code>
+                      <span class="src-was">{{ change.from || '(none)' }}</span>
+                      →
+                      <b>{{ change.to || '(none)' }}</b>
+                    </li>
+                  }
+                </ul>
+                <p>{{ confirmation.detail }}</p>
+                <div class="src-actions">
+                  <button type="button" class="opus-btn primary" (click)="saveEdit(true)">
+                    <opus-icon name="check" [size]="14" />
+                    Save and discard the baseline
+                  </button>
+                  <button type="button" class="opus-btn" (click)="editConfirm.set(null)">
+                    <opus-icon name="close" [size]="14" />
+                    Keep editing
+                  </button>
+                </div>
+              </div>
+            }
+
+            @if (editError(); as detail) {
+              <p class="src-problems src-problems-solo">{{ detail }}</p>
+            }
+
+            @if (!editConfirm()) {
+              <div class="src-actions">
+                <button
+                  type="button"
+                  class="opus-btn primary"
+                  [disabled]="editBlockedBy().length > 0 || !!ingest.busy()"
+                  (click)="saveEdit()"
+                >
+                  <opus-icon name="check" [size]="14" />
+                  Save
+                </button>
+                <button type="button" class="opus-btn" (click)="cancelEdit()">
+                  <opus-icon name="close" [size]="14" />
+                  Cancel
+                </button>
+              </div>
+            }
+
+            <!--
+              What has been changed before, and whether it cost a baseline.
+
+              On the edit screen rather than the detail screen because this is where the question gets
+              asked: "has anybody moved this source before" is what somebody about to move it wants to
+              know.
+            -->
+            @if (session.revisions.length) {
+              <h3 class="src-h3">Previous edits</h3>
+              <ul class="src-revisions">
+                @for (revision of session.revisions; track revision.at) {
+                  <li>
+                    <span class="src-rev-when">{{ when(revision.at) }} · {{ revision.by }}</span>
+                    <ul class="src-changes">
+                      @for (change of revision.changed; track change.field) {
+                        <li>
+                          <code>{{ change.field }}</code>
+                          <span class="src-was">{{ change.from || '(none)' }}</span>
+                          →
+                          <b>{{ change.to || '(none)' }}</b>
+                        </li>
+                      }
+                    </ul>
+                    @if (revision.baselineCleared) {
+                      <span class="src-rev-note">The drift baseline was discarded by this edit.</span>
+                    }
+                  </li>
+                }
+              </ul>
+            }
+          } @else if (registering()) {
             <h2 class="src-h2">Register a source</h2>
             <!--
               Repeated here, because this is where somebody is standing when it matters.
@@ -461,6 +786,39 @@ interface RegisterForm {
               </button>
             </div>
           } @else if (ingest.selected(); as state) {
+            <!--
+              What the last save changed, once, on the record it changed.
+
+              A form that closes silently leaves the steward to compare the facts panel against their
+              memory of what they typed — and the one edit worth being certain about is the one that
+              discarded the baseline, which is invisible everywhere else on this screen.
+            -->
+            @if (editSaved(); as saved) {
+              <div class="src-saved">
+                <opus-icon name="check" [size]="14" />
+                <span>
+                  @if (saved.changed.length) {
+                    Saved:
+                    @for (change of saved.changed; track change.field) {
+                      <code>{{ change.field }}</code>
+                    }
+                    @if (saved.baselineCleared) {
+                      <b>
+                        The drift baseline was discarded — scan and publish again to establish a new
+                        one.
+                      </b>
+                    }
+                  } @else {
+                    Nothing changed, so nothing was saved.
+                  }
+                </span>
+                <button type="button" class="opus-btn sm" (click)="editSaved.set(null)">
+                  <opus-icon name="close" [size]="13" />
+                  Dismiss
+                </button>
+              </div>
+            }
+
             <div class="src-detail-h">
               <h2 class="src-h2">{{ state.summary.name }}</h2>
               <span class="src-chip">{{ state.summary.kind }}</span>
@@ -494,6 +852,18 @@ interface RegisterForm {
                 <dt>Registered by</dt>
                 <dd>{{ state.summary.registeredBy }}</dd>
               </div>
+              <!--
+                Shown beside the registrar rather than instead of it. "Who brought this database in" and
+                "who last changed where it points" are different questions, and a reviewer looking at a
+                source registered against a development instance needs to see that somebody has since
+                aimed it somewhere else.
+              -->
+              @if (state.summary.updatedBy) {
+                <div>
+                  <dt>Last edited by</dt>
+                  <dd>{{ state.summary.updatedBy }} · {{ when(state.summary.updatedAt) }}</dd>
+                </div>
+              }
               @if (state.reached) {
                 <div>
                   <dt>Reached</dt>
@@ -542,6 +912,23 @@ interface RegisterForm {
               @if (scanBlockedBecause(state); as reason) {
                 <span class="opus-field-help src-inline-help">{{ reason }}</span>
               }
+              <!--
+                Editing is offered in both modes, unlike Test and the credential form.
+
+                Those two need a network; changing where a registration points does not. Hiding it in
+                browser-only mode would make the screen untestable without a database for no reason
+                other than symmetry with the buttons beside it.
+              -->
+              <button
+                type="button"
+                class="opus-btn"
+                [disabled]="!!ingest.busy()"
+                title="Change where this source points and what it may read"
+                (click)="openEditForm()"
+              >
+                <opus-icon name="edit" [size]="14" />
+                Edit
+              </button>
               @if (ingest.mode() === 'api') {
                 <button
                   type="button"
@@ -553,11 +940,14 @@ interface RegisterForm {
                   Test the connection
                 </button>
                 <!--
-                  Offered only for a password this platform stored. A credential held in the deployment's
-                  own store is rotated there — the platform resolves the reference on every scan, so it
-                  picks the new value up without being told.
+                  Set or change, one button, because they are the same act on the same route — and a
+                  source can now arrive at "SQL login with no credential" by being edited, which is a
+                  state the old "only if a managed password exists" condition gave no way out of.
+
+                  A credential held in the deployment's own store is absent from this entirely: it is
+                  rotated there, and the platform resolves the reference on every scan.
                 -->
-                @if (state.summary.credential === 'managed') {
+                @if (credentialAction(state); as action) {
                   <button
                     type="button"
                     class="opus-btn"
@@ -565,7 +955,7 @@ interface RegisterForm {
                     (click)="rotating.set(!rotating())"
                   >
                     <opus-icon [name]="rotating() ? 'close' : 'shield'" [size]="14" />
-                    {{ rotating() ? 'Cancel' : 'Change the password' }}
+                    {{ rotating() ? 'Cancel' : action === 'set' ? 'Set a password' : 'Change the password' }}
                   </button>
                 }
               }
@@ -581,7 +971,9 @@ interface RegisterForm {
             @if (rotating()) {
               <div class="src-rotate">
                 <label class="opus-field">
-                  <span class="opus-field-label">New password</span>
+                  <span class="opus-field-label">
+                    {{ credentialAction(state) === 'set' ? 'Password' : 'New password' }}
+                  </span>
                   <input
                     class="opus-input"
                     type="password"
@@ -590,8 +982,13 @@ interface RegisterForm {
                     autocomplete="new-password"
                   />
                   <span class="opus-field-help">
-                    Replaces the stored secret. Any pooled connection is dropped, so the next scan proves
-                    the new password rather than continuing on the old one until it idles out.
+                    @if (credentialAction(state) === 'set') {
+                      This source has no credential — an edit changed its authentication, or it was
+                      registered without one. Storing a password here gives it one and unblocks the scan.
+                    } @else {
+                      Replaces the stored secret. Any pooled connection is dropped, so the next scan
+                      proves the new password rather than continuing on the old one until it idles out.
+                    }
                   </span>
                 </label>
                 <button
@@ -1119,6 +1516,123 @@ interface RegisterForm {
     .src-rotate .opus-field {
       flex: 1 1 18rem;
       margin-block-end: 0;
+    }
+
+    /*
+      The baseline question, styled as a decision rather than as an error.
+
+      The warning stripe is deliberately not reused: src-problems means "something is wrong", and this
+      is a valid edit with a cost. Given its own block, with the changes listed inside it, so the thing
+      being agreed to is on the screen next to the button that agrees.
+    */
+    .src-confirm {
+      margin-block-start: var(--opus-space-4);
+      padding: var(--opus-space-3) var(--opus-space-4);
+      border: 1px solid var(--opus-emphasis-warning);
+      border-radius: var(--opus-radius-md);
+      background: var(--opus-emphasis-warning-bg);
+      max-inline-size: 46rem;
+    }
+
+    .src-confirm .src-h3 {
+      margin-block-start: 0;
+    }
+
+    .src-confirm p {
+      margin: var(--opus-space-2) 0 0;
+      font-size: var(--opus-text-xs);
+      color: var(--opus-text-secondary);
+      line-height: var(--opus-leading-normal);
+    }
+
+    .src-confirm .src-actions {
+      margin-block-start: var(--opus-space-3);
+    }
+
+    /* from → to, one line per field. Monospace on the field so a list of them scans vertically. */
+    .src-changes {
+      margin: var(--opus-space-2) 0 0;
+      padding: 0;
+      list-style: none;
+      font-size: var(--opus-text-xs);
+      color: var(--opus-text-secondary);
+    }
+
+    .src-changes li {
+      display: flex;
+      align-items: baseline;
+      flex-wrap: wrap;
+      gap: var(--opus-space-2);
+      padding: 3px 0;
+    }
+
+    .src-changes code {
+      min-inline-size: 9rem;
+      color: var(--opus-text);
+    }
+
+    /* The old value, visibly the past tense of the pair. */
+    .src-was {
+      text-decoration: line-through;
+      color: var(--opus-text-muted);
+    }
+
+    .src-revisions {
+      margin: var(--opus-space-2) 0 0;
+      padding: 0;
+      list-style: none;
+      max-inline-size: 46rem;
+    }
+
+    .src-revisions > li {
+      padding: var(--opus-space-3) 0;
+      border-block-end: 1px solid var(--opus-border);
+    }
+
+    .src-revisions > li:last-child {
+      border-block-end: 0;
+    }
+
+    .src-rev-when {
+      font-size: var(--opus-text-xs);
+      color: var(--opus-text-muted);
+    }
+
+    .src-rev-note {
+      display: block;
+      margin-block-start: var(--opus-space-2);
+      font-size: var(--opus-text-xs);
+      color: var(--opus-emphasis-warning);
+    }
+
+    /* Confirmation of a save, dismissible. Informational, so it takes the info emphasis. */
+    .src-saved {
+      display: flex;
+      align-items: flex-start;
+      gap: var(--opus-space-2);
+      margin-block-end: var(--opus-space-3);
+      padding: 8px 11px;
+      border-inline-start: 2px solid var(--opus-emphasis-info);
+      background: var(--opus-emphasis-info-bg);
+      font-size: var(--opus-text-xs);
+      color: var(--opus-text-secondary);
+      line-height: var(--opus-leading-normal);
+    }
+
+    .src-saved code {
+      margin-inline-end: var(--opus-space-2);
+      color: var(--opus-text);
+    }
+
+    .src-saved b {
+      display: block;
+      margin-block-start: 4px;
+      color: var(--opus-text);
+    }
+
+    .src-saved .opus-btn {
+      margin-inline-start: auto;
+      flex-shrink: 0;
     }
 
     .src-blocked {
@@ -1827,6 +2341,180 @@ export class SourcesComponent {
     this.rotating.set(false);
   }
 
+  // ── editing a registration ───────────────────────────────────────────────────────────
+
+  protected readonly editing = signal<EditSession | null>(null);
+  protected readonly editError = signal<string | null>(null);
+  /** The server's question, when an edit would discard the drift baseline. Not an error. */
+  protected readonly editConfirm = signal<{ detail: string; changed: FieldChange[] } | null>(null);
+  /** What a save actually changed, shown once afterwards so the steward can see it landed. */
+  protected readonly editSaved = signal<{ changed: FieldChange[]; baselineCleared: boolean } | null>(null);
+
+  protected editField<K extends keyof EditForm>(key: K, value: EditForm[K]): void {
+    this.editing.update((session) =>
+      session ? { ...session, form: { ...session.form, [key]: value } } : session,
+    );
+    /*
+      Any keystroke retracts the confirmation.
+
+      Otherwise a steward answers "yes, discard the baseline" about one set of changes, then edits the
+      host again, and the second save goes through on the first answer — consent to a change they were
+      never shown.
+    */
+    this.editConfirm.set(null);
+  }
+
+  /** The edit form as the pipeline wants it. The counterpart of `asRegistration`. */
+  private asEdit(form: EditForm): SourceEdit {
+    return {
+      name: form.name,
+      host: form.host,
+      port: form.port === null || Number.isNaN(form.port) ? undefined : Number(form.port),
+      database: form.database,
+      auth: form.auth,
+      username: form.auth === 'sqlLogin' ? form.username || undefined : undefined,
+      secretRef: form.auth === 'sqlLogin' ? form.secretRef || undefined : undefined,
+      schemas: form.schemas
+        .split(',')
+        .map((schema) => schema.trim())
+        .filter(Boolean),
+      encrypt: form.encrypt,
+      trustServerCertificate: form.trustServerCertificate,
+    };
+  }
+
+  /** The edit's problems, live — the same function the server runs before storing. */
+  protected readonly editProblems = computed(() => {
+    const session = this.editing();
+    return session ? this.ingest.checkEdit(session.context, this.asEdit(session.form)) : [];
+  });
+
+  protected readonly editBlockedBy = computed(() =>
+    this.editProblems().filter((problem) => problem.severity === 'blocking'),
+  );
+
+  protected readonly editRisks = computed(() =>
+    this.editProblems().filter((problem) => problem.severity === 'warning'),
+  );
+
+  /**
+   * Open the edit form on the current values.
+   *
+   * The values are fetched rather than read from the roster, because the roster is redacted:
+   * `host:port/database` is one string there and the username is absent entirely. A form built from it
+   * would open with blanks in three fields and write those blanks back on save — which is how an edit
+   * screen silently erases a registration.
+   */
+  protected async openEditForm(): Promise<void> {
+    const state = this.ingest.selected();
+    if (!state) return;
+
+    this.editError.set(null);
+    this.editConfirm.set(null);
+    this.editSaved.set(null);
+
+    const loaded = await this.ingest.loadEditable(state.summary.id);
+    if (!loaded) {
+      this.editError.set('Could not read this source’s current values, so there is nothing safe to edit.');
+      return;
+    }
+
+    const { editable } = loaded;
+    this.editing.set({
+      id: state.summary.id,
+      context: {
+        kind: editable.kind,
+        credential: editable.credential,
+        registeredBy: state.summary.registeredBy,
+      },
+      hasBaseline: loaded.hasBaseline,
+      revisions: loaded.revisions,
+      form: {
+        name: editable.name,
+        host: editable.host,
+        port: editable.port ?? null,
+        database: editable.database,
+        auth: editable.auth,
+        username: editable.username ?? '',
+        secretRef: editable.secretRef ?? '',
+        schemas: editable.schemas.join(', '),
+        encrypt: editable.encrypt,
+        trustServerCertificate: editable.trustServerCertificate,
+      },
+    });
+  }
+
+  /**
+   * A timestamp as a business analyst reads one.
+   *
+   * The record holds ISO 8601 because that is what an audit trail should store — sortable, unambiguous,
+   * timezone-explicit. That is not what belongs on the screen: "2026-08-07T21:57:16.478Z" beside a
+   * person's name reads as a machine field somebody forgot to format, on a product whose audience is
+   * explicitly not developers. Rendered in the author's own locale and zone, so "when" is a question
+   * they can answer without doing arithmetic.
+   */
+  protected when(iso: string | undefined): string {
+    if (!iso) return '';
+    const at = new Date(iso);
+    if (Number.isNaN(at.getTime())) return iso;
+    return at.toLocaleString(AUTHOR.locale, {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+      timeZone: AUTHOR.timezone,
+    });
+  }
+
+  protected cancelEdit(): void {
+    this.editing.set(null);
+    this.editConfirm.set(null);
+    this.editError.set(null);
+  }
+
+  /**
+   * Save, or surface the question the server asked.
+   *
+   * `confirm` is passed straight through rather than remembered on the component: the server decides
+   * whether a second yes is needed, on each request, from the baseline it holds — so a stale flag here
+   * can never authorise a reset the steward was not shown.
+   */
+  protected async saveEdit(confirm = false): Promise<void> {
+    const session = this.editing();
+    if (!session) return;
+
+    this.editError.set(null);
+    const outcome = await this.ingest.updateSource(session.id, this.asEdit(session.form), confirm);
+
+    if (outcome.status === 'needs-confirmation') {
+      this.editConfirm.set({ detail: outcome.detail, changed: outcome.changed });
+      return;
+    }
+    if (outcome.status === 'failed') {
+      this.editError.set(outcome.detail);
+      return;
+    }
+
+    this.editSaved.set({ changed: outcome.changed, baselineCleared: outcome.baselineCleared });
+    this.editing.set(null);
+    this.editConfirm.set(null);
+  }
+
+  /**
+   * Whether the credential form should be offered, and as what.
+   *
+   * Widened from "a managed password exists" to "a SQL login without one is possible", because the edit
+   * form can now create exactly that state: switching a source from integrated auth to a SQL login
+   * leaves it with no credential, and under the old condition the button that sets one was hidden —
+   * so the screen offered a transition it then gave no way to complete.
+   */
+  protected credentialAction(state: SourceState): 'set' | 'change' | null {
+    if (this.ingest.mode() !== 'api') return null;
+    if (state.summary.auth !== 'sqlLogin') return null;
+    // A reference into the deployment's own store is rotated there; this platform resolves it each scan.
+    if (state.summary.credential === 'reference') return null;
+    if (!this.ingest.canStorePassword()) return null;
+    return state.summary.credential === 'managed' ? 'change' : 'set';
+  }
+
   /**
    * Open the register form on a credential route that is available.
    *
@@ -1840,11 +2528,16 @@ export class SourcesComponent {
       ...form,
       credential: this.ingest.canStorePassword() ? 'password' : 'secretRef',
     }));
+    this.cancelEdit();
     this.registering.set(true);
   }
 
   protected onPick(id: string): void {
     this.registering.set(false);
+    // Abandoned rather than carried across: an edit form holding one source's host over another
+    // source's record is a save waiting to point the wrong registration at the wrong database.
+    this.cancelEdit();
+    this.editSaved.set(null);
     this.ingest.selectedId.set(id);
   }
 

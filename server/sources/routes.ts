@@ -29,15 +29,23 @@
 import { Router, type Request, type Response } from 'express';
 import {
   MsSqlProbe,
+  applyEdit,
   blockingProblems,
+  changedFields,
+  checkEdit,
   checkRegistration,
   defaultDecisions,
   detectDrift,
+  editContextOf,
+  editableView,
   infer,
   managedSecretRefFor,
+  materialChanges,
   normalise,
   promote,
   redactForClient,
+  type AuthMode,
+  type SourceEdit,
   type SourceRegistration,
   type SourceRegistrationInput,
   type StewardDecisions,
@@ -187,6 +195,200 @@ sources.post('/', (req, res) => {
   store.save({ registration });
   // The accepted warnings go back with the summary, so the screen can show what it just waved through.
   res.status(201).json(summarise({ registration }));
+});
+
+// ── read a registration back, for an edit form ──────────────────────────────
+/**
+ * The editable values, for one source, to a caller holding `catalog.edit`.
+ *
+ * A separate route from the roster on purpose. `GET /` answers with `redactForClient`, which collapses
+ * the target into one string and withholds the username — right for a list, useless for a form that has
+ * to pre-fill what it is about to replace. This is the wider view, and keeping it here means the wider
+ * view is requested one source at a time, deliberately, rather than shipped with every roster load.
+ *
+ * The revision history rides along for the same reason it exists: an edit screen is where somebody asks
+ * "has anyone moved this before, and did that throw the baseline away".
+ */
+sources.get('/:id/editable', (req, res) => {
+  if (!requireSteward(req, res)) return;
+  const stored = store.get(String(req.params['id']));
+  if (!stored) {
+    problem(res, 404, 'semantic', `No source "${req.params['id']}" is registered.`);
+    return;
+  }
+  res.json({
+    editable: editableView(stored.registration),
+    hasBaseline: !!stored.promotedSchema,
+    revisions: stored.revisions ?? [],
+  });
+});
+
+// ── edit ────────────────────────────────────────────────────────────────────
+/**
+ * Change what a source is, without changing what it is authenticated with.
+ *
+ * ── WHY AN EDIT IS NOT A DELETE AND A RE-REGISTER ───────────────────────────────────────
+ * Because the id survives, and things point at it. `promote` writes `physical.sourceId` onto every
+ * published entity, and `promotedSchema` is the baseline drift is measured against — so deleting and
+ * re-registering a source that moved to a new host silently orphans a published catalog and resets its
+ * history, to accomplish what is really a two-field change.
+ *
+ * ── AND WHY A MATERIAL CHANGE NEEDS SAYING YES TWICE ────────────────────────────────────
+ * Drift is a diff against the promoted scan. Repoint the registration at another database, or widen the
+ * schemas, and the next re-scan attributes to the *database* a change that was really made to the
+ * *registration* — "42 tables added" about a database in which nothing happened. Worse is the quiet
+ * case: two environments whose schemas happen to match, and a drift report that says nothing changed
+ * while the catalog now describes somewhere else entirely.
+ *
+ * So an edit that would invalidate the baseline is refused once, with the fields that would do it, and
+ * accepted on a second request carrying `confirmBaselineReset`. The baseline is then dropped rather
+ * than kept — a stale baseline is worse than no baseline, because no baseline reports honestly that
+ * there is nothing to compare against. `promotedAt` and `promotedBy` stay: that publish did happen, and
+ * rewriting it would be a different kind of lie.
+ */
+sources.put('/:id', async (req, res) => {
+  const caller = requireSteward(req, res);
+  if (!caller) return;
+
+  const id = String(req.params['id']);
+  const stored = store.get(id);
+  if (!stored) {
+    problem(res, 404, 'semantic', `No source "${id}" is registered.`);
+    return;
+  }
+
+  const body = (req.body ?? {}) as Record<string, unknown>;
+
+  /*
+    A password is refused here rather than ignored.
+
+    Ignoring it would mean a client that posted one got a 200 and no error while the credential went
+    nowhere — the steward believes it is set, the next scan fails on the old password, and nothing on
+    the screen connects the two. Credentials have a route; this says so.
+  */
+  if ('password' in body) {
+    problem(
+      res,
+      422,
+      'validation',
+      'An edit does not carry a password. Change the credential with PUT /api/sources/:id/credential — a metadata edit and a credential change are separate acts, and only one of them may put a secret on the wire.',
+    );
+    return;
+  }
+
+  const auth = (body['auth'] ?? stored.registration.auth) as AuthMode;
+  if (!['integrated', 'sqlLogin', 'managedIdentity'].includes(auth)) {
+    problem(res, 422, 'validation', `"${String(auth)}" is not an authentication mode this platform knows.`);
+    return;
+  }
+
+  /*
+    A missing field is not a blank field, for the two booleans only.
+
+    Everything else is validated by `checkEdit` and fails loudly — an absent host is an empty host is
+    "A host is required". The booleans cannot fail that way: absent, they would read as `false`, and a
+    client that omitted `encrypt` would silently turn encryption off on a registration that had it on.
+    So absent means "as it is now", and any real change appears in the response's change list.
+  */
+  const edit: SourceEdit = {
+    name: String(body['name'] ?? ''),
+    host: String(body['host'] ?? ''),
+    port: body['port'] === undefined || body['port'] === null || body['port'] === '' ? undefined : Number(body['port']),
+    database: String(body['database'] ?? ''),
+    auth,
+    username: body['username'] === undefined ? undefined : String(body['username']),
+    secretRef: body['secretRef'] === undefined ? undefined : String(body['secretRef']),
+    schemas: Array.isArray(body['schemas']) ? body['schemas'].map((schema) => String(schema)) : [],
+    encrypt: body['encrypt'] === undefined ? stored.registration.encrypt : body['encrypt'] === true,
+    trustServerCertificate:
+      body['trustServerCertificate'] === undefined
+        ? stored.registration.trustServerCertificate
+        : body['trustServerCertificate'] === true,
+  };
+
+  // The same function the browser runs as the steward types. Warnings are theirs to accept.
+  const problems = checkEdit(editContextOf(stored.registration), edit);
+  if (blockingProblems(problems).length) {
+    res.status(422).json({
+      type: 'about:blank#validation',
+      title: 'validation',
+      status: 422,
+      category: 'validation',
+      code: 'validation',
+      detail: blockingProblems(problems)[0]!.message,
+      problems,
+    });
+    return;
+  }
+
+  const next = applyEdit(stored.registration, edit, new Date().toISOString(), caller.name);
+  const changes = changedFields(stored.registration, next);
+
+  // Nothing to do. Reported as success with an empty change list rather than as an error: opening a
+  // form, changing nothing and saving is not a mistake, and a 4xx for it is a screen that looks broken.
+  if (!changes.length) {
+    res.json({ ...summarise(stored), changed: [], baselineCleared: false });
+    return;
+  }
+
+  const material = materialChanges(changes);
+  const clearsBaseline = material.length > 0 && !!stored.promotedSchema;
+
+  if (clearsBaseline && body['confirmBaselineReset'] !== true) {
+    res.status(409).json({
+      type: 'about:blank#baseline-reset-required',
+      title: 'baseline-reset-required',
+      status: 409,
+      category: 'semantic',
+      code: 'baseline-reset-required',
+      detail:
+        `This changes what the next scan reads, so the promoted scan can no longer be used as a baseline: ` +
+        `${material.map((change) => `${change.field} ${change.from || '(none)'} → ${change.to || '(none)'}`).join('; ')}. ` +
+        `Saving discards the baseline — drift reports nothing until this source is scanned and published again. ` +
+        `The published catalog itself is untouched.`,
+      changes: material,
+    });
+    return;
+  }
+
+  /*
+    A managed secret whose registration no longer points at it.
+
+    Left behind, it is a password on disk belonging to nothing, that no screen will ever mention again —
+    the same failure `DELETE /:id` cleans up, reached by a different route. Only a *managed* secret: a
+    reference names something in the deployment's own store and is not this platform's to delete.
+  */
+  const hadManaged = summarise(stored).credential === 'managed';
+  if (hadManaged && stored.registration.secretRef !== next.secretRef) {
+    deleteSecret(stored.registration.secretRef!);
+  }
+
+  /*
+    The pool is dropped on every edit, not only on a host change.
+
+    A cached connection was opened with the previous host, database, login and transport settings, and it
+    keeps answering until it idles out — so an edit would appear to have taken effect while the next scan
+    still read the old target. Reconnecting costs one handshake; the alternative costs a steward their
+    confidence in the screen.
+  */
+  await releaseExecutor(id);
+
+  const revision = {
+    at: next.updatedAt!,
+    by: caller.name,
+    changed: changes,
+    baselineCleared: clearsBaseline,
+  };
+
+  const saved = store.save({
+    ...stored,
+    registration: next,
+    // Dropped, not kept: see the note above about a stale baseline being worse than no baseline.
+    promotedSchema: clearsBaseline ? undefined : stored.promotedSchema,
+    revisions: [...(stored.revisions ?? []), revision],
+  });
+
+  res.json({ ...summarise(saved), changed: changes, baselineCleared: clearsBaseline });
 });
 
 /**
