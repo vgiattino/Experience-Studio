@@ -24,13 +24,13 @@ import type { ModelRequest, ModelResponse } from '@opus/generation';
 
 import type { ServerModelProvider } from './index';
 
-const MODEL = process.env.OPENAI_MODEL ?? 'gpt-4.1';
+const MODEL = process.env['OPENAI_MODEL'] ?? 'gpt-4.1';
 
 export const openaiProvider: ServerModelProvider = {
   id: 'openai',
   version: MODEL,
   isExternal: true,
-  configured: Boolean(process.env.OPENAI_API_KEY),
+  configured: Boolean(process.env['OPENAI_API_KEY']),
 
   async complete(_request: ModelRequest): Promise<ModelResponse> {
     throw Object.assign(

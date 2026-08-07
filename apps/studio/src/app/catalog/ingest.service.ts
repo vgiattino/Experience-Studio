@@ -1,27 +1,31 @@
 /**
  * The ingestion session: registered sources, their scans, and the drafts under review.
  *
- * ── WHAT IS A SERVICE AND WHAT IS A LIBRARY ─────────────────────────────────────────────
- * `@opus/catalog-ingest` holds the pipeline and knows nothing about Angular. This service holds the
- * *session* — which sources exist, which one is open, what the last scan found, which decisions the
- * steward has made so far — and that split is the reason the pipeline is testable without a browser and
- * this screen is testable without a database.
+ * ── TWO TRANSPORTS, AND THE SCREEN ALWAYS SAYS WHICH ────────────────────────────────────
+ * When `/api/sources` answers, every scan is a real connection to a real database: the backend resolves
+ * the source's secret, opens a pooled TDS connection with the `mssql` driver, runs the introspection
+ * SQL, and returns what the server said about itself. Nothing about the schema is simulated.
  *
- * ── AND WHERE THE SCAN ACTUALLY RUNS, SAID PLAINLY ──────────────────────────────────────
- * Against a fixture, in the browser. A browser cannot open a TDS connection: SQL Server's wire protocol
- * is not HTTP, and no amount of client-side code changes that. So the executor here is
- * `FixtureExecutor`, answering the same statements a server would over a realistic Opus EDM schema.
+ * When it does not answer — the API is not running — the same pipeline runs in the browser over
+ * `FixtureExecutor`, which answers the same statements from a built-in Opus EDM schema. That is not a
+ * fallback for its own sake; it is what keeps this workspace demonstrable and testable without a
+ * database. But it is a materially different claim, so `mode` is a signal the screen renders rather
+ * than a detail: a scan that appears to have read production and did not is the worst thing this
+ * surface could imply.
  *
- * That is a milestone-one honesty, not a design: the deployment step is a route that resolves the
- * source's `secretRef`, opens a pooled connection with the `mssql` package, and implements the same
- * fifteen-line `SqlExecutor`. Everything above the port — the SQL, the type mapping, the inference, the
- * review, the promotion, the drift diff — is the code that will run in production, unchanged. The screen
- * says so where a steward will read it, because a scan that appears to have read a production database
- * and did not is the worst thing this surface could imply.
+ * A third state exists and is not a failure: `forbidden`. The API is running and refused this caller,
+ * because a draft carries physical table and column names and the routes require catalog stewardship.
+ * Reporting that as "offline" would send a steward to look at a server that is working.
+ *
+ * ── WHAT THIS HOLDS AND WHAT THE LIBRARY HOLDS ──────────────────────────────────────────
+ * `@opus/catalog-ingest` holds the pipeline and knows nothing about Angular or HTTP. This service holds
+ * the *session* — which sources exist, which one is open, what the last scan found, which decisions the
+ * steward has made so far. That split is why the pipeline is testable without a browser and this screen
+ * is testable without a database.
  */
 
 import { Injectable, computed, signal } from '@angular/core';
-import { CatalogService, type RawCatalog } from '@opus/catalog';
+import { CatalogService, type CatalogSnapshot } from '@opus/catalog';
 import {
   FIXTURE_SCHEMAS,
   FixtureExecutor,
@@ -29,10 +33,12 @@ import {
   type CatalogDraft,
   type DriftReport,
   type PhysicalSchema,
-  type PromotionResult,
+  type PromotionNote,
   type SourceRegistration,
   type SourceSummary,
   type SqlExecutor,
+  type StewardDecisions,
+  blockingProblems,
   checkRegistration,
   defaultDecisions,
   detectDrift,
@@ -40,37 +46,54 @@ import {
   normalise,
   promote,
   redactForClient,
-  type StewardDecisions,
 } from '@opus/catalog-ingest';
+
+import * as api from './ingest-api';
+import { PublishedCatalogService } from './published-catalog.service';
 
 /** What a source's ingestion has reached. Drives which pane the screen shows. */
 export type SourceStage = 'registered' | 'scanned' | 'promoted';
 
+/** Where scans come from. Rendered, not hidden — see the note at the top of the file. */
+export type Transport =
+  /** A real connection through the backend. */
+  | 'api'
+  /** The backend is not running; the pipeline runs in the browser over the built-in schema. */
+  | 'fixture'
+  /** The backend is running and refused this caller. */
+  | 'forbidden';
+
 export interface SourceState {
-  registration: SourceRegistration;
-  summary: SourceSummary;
+  summary: SourceSummary & { promotedAt?: string; promotedBy?: string; hasBaseline?: boolean };
   stage: SourceStage;
   /** The most recent scan. */
   schema?: PhysicalSchema;
   draft?: CatalogDraft;
   decisions?: StewardDecisions;
-  /** The scan that was promoted, kept so a re-scan has something to diff against. */
+  /** Only in fixture mode: the API keeps its own baseline on the server. */
   promotedSchema?: PhysicalSchema;
-  promotion?: PromotionResult;
+  promotion?: {
+    counts: { entities: number; attributes: number; measures: number; relationships: number };
+    notes: PromotionNote[];
+    catalogVersion: number;
+    /** Present over the API only: the server counts what this caller can see. */
+    visible?: number;
+  };
   drift?: DriftReport;
+  /** Set by a connection test, so the screen can show the server it actually reached. */
+  reached?: { target: string; serverVersion: string };
 }
 
 /**
- * The source this application ships pre-registered.
+ * The source the browser-only mode offers.
  *
- * Not a demo convenience: registering a source is a form with eleven fields and a set of decisions
- * about encryption and entitlement, and a steward evaluating this feature should be able to see what a
- * scan produces before filling one in. It is registered exactly as the form would register it, through
- * the same `normalise`.
+ * Registered exactly as the form would register it, through the same `normalise`, so fixture mode is
+ * the same code path with a different executor rather than a special case. It is absent in API mode:
+ * there, the roster is whatever the server has stored.
  */
-const SEEDED = normalise(
+const FIXTURE_SOURCE = normalise(
   {
-    name: 'Opus EDM — production',
+    name: 'Opus EDM — built-in schema',
     kind: 'mssql',
     host: 'sql-edm-prod-01',
     port: 1433,
@@ -79,48 +102,131 @@ const SEEDED = normalise(
     schemas: [...FIXTURE_SCHEMAS],
     encrypt: true,
     trustServerCertificate: false,
-    registeredBy: 'vincent.giattino@greshamtech.com',
+    registeredBy: 'built in',
   },
-  'opus-edm-prod',
+  'opus-edm-fixture',
   '2026-08-06T08:30:00.000Z',
 );
 
 @Injectable()
 export class IngestService {
-  private readonly states = signal<SourceState[]>([
-    { registration: SEEDED, summary: redactForClient(SEEDED), stage: 'registered' },
-  ]);
+  private readonly states = signal<SourceState[]>([]);
 
-  readonly selectedId = signal<string>(SEEDED.id);
+  readonly selectedId = signal<string>('');
   readonly busy = signal<string | null>(null);
   readonly problem = signal<string | null>(null);
+  readonly mode = signal<Transport>('fixture');
+  /** Why the API was refused, when it was. The server's own sentence. */
+  readonly refusal = signal<string | null>(null);
+  readonly ready = signal(false);
 
   readonly sources = computed(() => this.states());
   readonly selected = computed(
-    () => this.states().find((state) => state.registration.id === this.selectedId()) ?? null,
+    () => this.states().find((state) => state.summary.id === this.selectedId()) ?? null,
   );
 
-  /** The live catalog, so a promotion merges into what is already published rather than replacing it. */
-  constructor(private readonly catalog: CatalogService) {}
+  /** Fixture mode only: the registrations the browser holds, for its own executor. */
+  private readonly local = new Map<string, SourceRegistration>();
+
+  constructor(
+    private readonly catalog: CatalogService,
+    private readonly published: PublishedCatalogService,
+  ) {
+    void this.connect();
+  }
+
+  /**
+   * Decide the transport once, at construction, and load the roster.
+   *
+   * Once rather than per call: a screen whose mode flickers between requests is a screen that cannot
+   * label itself honestly, and re-probing on every scan would double the round trips to answer a
+   * question whose answer does not change while a page is open.
+   */
+  private async connect(): Promise<void> {
+    const result = await api.probe();
+
+    if (result.status === 'available') {
+      this.mode.set('api');
+      this.setSources(
+        result.sources.map((source) => ({
+          summary: source,
+          stage: source.promotedAt ? 'promoted' : 'registered',
+        })),
+      );
+    } else if (result.status === 'forbidden') {
+      this.mode.set('forbidden');
+      this.refusal.set(result.detail);
+      this.setSources([]);
+    } else {
+      this.mode.set('fixture');
+      this.local.set(FIXTURE_SOURCE.id, FIXTURE_SOURCE);
+      this.setSources([{ summary: redactForClient(FIXTURE_SOURCE), stage: 'registered' }]);
+    }
+    this.ready.set(true);
+  }
+
+  private setSources(states: SourceState[]): void {
+    this.states.set(states);
+    if (states.length && !states.some((state) => state.summary.id === this.selectedId())) {
+      this.selectedId.set(states[0]!.summary.id);
+    }
+  }
 
   // ── registration ─────────────────────────────────────────────────────────────────────
 
-  /** Validation as the steward types. The same function the server would call before storing. */
+  /** Validation as the steward types. The same function the server runs before storing. */
   check(input: Parameters<typeof checkRegistration>[0]) {
     return checkRegistration(input);
   }
 
-  register(input: Parameters<typeof checkRegistration>[0]): string | null {
-    const problems = this.check(input);
+  async register(input: Parameters<typeof checkRegistration>[0]): Promise<string | null> {
+    // Blocking only. A warning is a judgement this caller is allowed to make; the server agrees.
+    const problems = blockingProblems(this.check(input));
     if (problems.length) return problems[0]!.message;
 
+    if (this.mode() === 'api') {
+      try {
+        const created = await api.register(input as unknown as Record<string, unknown>);
+        this.states.update((states) => [...states, { summary: created, stage: 'registered' }]);
+        this.selectedId.set(created.id);
+        return null;
+      } catch (error) {
+        return asText(error);
+      }
+    }
+
     const registration = normalise(input, `src-${this.states().length + 1}`, new Date().toISOString());
+    this.local.set(registration.id, registration);
     this.states.update((states) => [
       ...states,
-      { registration, summary: redactForClient(registration), stage: 'registered' },
+      { summary: redactForClient(registration), stage: 'registered' },
     ]);
     this.selectedId.set(registration.id);
     return null;
+  }
+
+  // ── connection test ──────────────────────────────────────────────────────────────────
+
+  /**
+   * Ask whether the registration can connect at all.
+   *
+   * Only meaningful over the API, because that is the only mode with a network in it. In fixture mode
+   * the button is absent rather than answering "yes" about a connection nobody made.
+   */
+  async test(): Promise<void> {
+    const state = this.selected();
+    if (!state || this.mode() !== 'api') return;
+
+    this.busy.set('Connecting…');
+    this.problem.set(null);
+    try {
+      const reached = await api.test(state.summary.id);
+      this.patch(state.summary.id, { reached });
+    } catch (error) {
+      this.problem.set(asText(error));
+    } finally {
+      this.busy.set(null);
+    }
   }
 
   // ── scan and infer ───────────────────────────────────────────────────────────────────
@@ -129,30 +235,58 @@ export class IngestService {
     const state = this.selected();
     if (!state) return;
 
-    this.busy.set('Reading the schema…');
+    this.busy.set(this.mode() === 'api' ? 'Connecting and reading the schema…' : 'Reading the schema…');
     this.problem.set(null);
     try {
-      const probe = new MsSqlProbe(
-        state.registration.id,
-        state.registration.database,
-        state.registration.schemas,
-      );
-      const schema = await probe.scan(this.executorFor(state.registration), { sampleEnumerations });
-      const draft = infer(schema);
+      const result: api.ScanResult =
+        this.mode() === 'api'
+          ? await api.scan(state.summary.id, sampleEnumerations)
+          : await this.scanLocally(state, sampleEnumerations);
 
-      this.patch(state.registration.id, {
-        schema,
-        draft,
-        // Everything promotable, included, for the steward to remove from — never a path that promotes.
-        decisions: defaultDecisions(draft, state.registration.registeredBy),
+      this.patch(state.summary.id, {
+        schema: result.schema,
+        draft: result.draft,
+        decisions: result.decisions,
+        drift: result.drift,
         stage: 'scanned',
-        drift: state.promotedSchema ? detectDrift(state.promotedSchema, schema, this.raw()) : undefined,
       });
     } catch (error) {
-      this.problem.set(error instanceof Error ? error.message : String(error));
+      this.problem.set(asText(error));
     } finally {
       this.busy.set(null);
     }
+  }
+
+  /** Fixture mode: the same probe, the same inference, over an executor that needs no network. */
+  private async scanLocally(
+    state: SourceState,
+    sampleEnumerations: boolean,
+  ): Promise<api.ScanResult> {
+    const registration = this.local.get(state.summary.id);
+    if (!registration) throw new Error('That source is not held in this browser.');
+
+    const schema = await new MsSqlProbe(
+      registration.id,
+      registration.database,
+      registration.schemas,
+    ).scan(this.executorFor(registration), { sampleEnumerations });
+    const draft = infer(schema);
+
+    return {
+      schema,
+      draft,
+      decisions: defaultDecisions(draft, registration.registeredBy),
+      drift: state.promotedSchema
+        ? detectDrift(state.promotedSchema, schema, this.catalog.stored())
+        : undefined,
+    };
+  }
+
+  private executorFor(registration: SourceRegistration): SqlExecutor {
+    if (registration.kind !== 'mssql') {
+      throw new Error(`This platform has no probe for ${registration.kind} yet.`);
+    }
+    return new FixtureExecutor(undefined, { now: new Date().toISOString() });
   }
 
   // ── review ───────────────────────────────────────────────────────────────────────────
@@ -192,68 +326,70 @@ export class IngestService {
     });
   }
 
-  setEntityName(entityRef: string, businessName: string, pluralName: string): void {
-    this.editDecisions((decisions) => {
-      const entity = decisions.entities[entityRef];
-      if (!entity) return;
-      entity.businessName = businessName.trim() || undefined;
-      entity.pluralName = pluralName.trim() || undefined;
-    });
-  }
-
   // ── promotion ────────────────────────────────────────────────────────────────────────
 
   /**
-   * Promote, and install the result.
+   * Publish, and reload what this application can see.
    *
-   * Installed into the live `CatalogService` so the effect is the point rather than a report: the
-   * builder's entity picker, the AI's grounding pack and the validator all read the same service, so a
-   * promotion that worked is one where the next page an analyst builds can bind to what was promoted.
+   * Over the API the server re-scans, re-infers, promotes, writes the catalog and hydrates its own
+   * service — so the client's job afterwards is to fetch its *projection* again, which is the only
+   * catalog shape it is allowed. In fixture mode the promotion happens here and installs directly,
+   * because there is no server to hold it.
    */
-  promoteSelected(): void {
+  async promoteSelected(sampleEnumerations: boolean): Promise<void> {
     const state = this.selected();
-    if (!state?.draft || !state.decisions) return;
+    if (!state?.decisions) return;
 
-    const result = promote(state.draft, state.decisions, this.raw(), {
-      tenantId: this.raw()?.tenantId ?? 'gresham',
-      promotedAt: new Date().toISOString(),
-    });
+    this.busy.set('Publishing…');
+    this.problem.set(null);
+    try {
+      if (this.mode() === 'api') {
+        const summary = await api.promote(state.summary.id, state.decisions, sampleEnumerations);
+        this.patch(state.summary.id, { promotion: summary, stage: 'promoted', drift: undefined });
+        await this.reloadProjection();
+        return;
+      }
 
-    this.catalog.hydrate(result.catalog);
-    this.patch(state.registration.id, {
-      promotion: result,
-      promotedSchema: state.schema,
-      stage: 'promoted',
-      drift: undefined,
-    });
+      if (!state.draft) return;
+      const result = promote(state.draft, state.decisions, this.catalog.stored(), {
+        tenantId: this.catalog.stored()?.tenantId ?? 'demo-tenant',
+        promotedAt: new Date().toISOString(),
+      });
+      this.catalog.hydrate(result.catalog);
+      this.patch(state.summary.id, {
+        promotion: { ...result, catalogVersion: result.catalog.catalogVersion },
+        promotedSchema: state.schema,
+        stage: 'promoted',
+        drift: undefined,
+      });
+    } catch (error) {
+      this.problem.set(asText(error));
+    } finally {
+      this.busy.set(null);
+    }
+  }
+
+  /**
+   * Re-read the catalog from the server after a promotion.
+   *
+   * The projection, not the catalog — this browser gets what its entitlements permit and nothing
+   * physical, exactly as at bootstrap. It goes to `PublishedCatalogService` rather than into
+   * `CatalogService.hydrate`, for the reason that file gives: a projection is not a raw catalog, and
+   * hydrating one produces an empty physical map that nothing can tell is empty. This is what makes a
+   * publish visible in the Vocabulary tab one click away.
+   */
+  private async reloadProjection(): Promise<void> {
+    try {
+      const response = await fetch('/api/catalog', { headers: { 'x-persona': 'steward' } });
+      if (!response.ok) return;
+      const body = (await response.json()) as { snapshot?: CatalogSnapshot };
+      if (body?.snapshot) this.published.install(body.snapshot);
+    } catch {
+      // A failed reload leaves the previous projection, which is stale rather than wrong.
+    }
   }
 
   // ── plumbing ─────────────────────────────────────────────────────────────────────────
-
-  /**
-   * The executor. One place, so replacing it with a server route is one edit.
-   *
-   * A registration for a kind with no probe never reaches here — `SourceSummary.scannable` is false and
-   * the screen offers no scan button — so this throwing on an unimplemented kind is a guard, not a path.
-   */
-  private executorFor(registration: SourceRegistration): SqlExecutor {
-    if (registration.kind !== 'mssql') {
-      throw new Error(`This platform has no probe for ${registration.kind} yet.`);
-    }
-    return new FixtureExecutor(undefined, { now: new Date().toISOString() });
-  }
-
-  /**
-   * The catalog as stored, for a merge.
-   *
-   * The *live* one, not the last one this session produced. Promotion merges rather than replaces, and
-   * the thing it must not lose is the catalog the application booted with — so the base is whatever
-   * `CatalogService` currently holds, which after a promotion is the promoted result and before one is
-   * the published catalog.
-   */
-  private raw(): RawCatalog | undefined {
-    return this.catalog.stored();
-  }
 
   private editDecisions(edit: (decisions: StewardDecisions) => void): void {
     const state = this.selected();
@@ -262,12 +398,16 @@ export class IngestService {
     // panel would silently stop reflecting the steward's own clicks.
     const decisions = structuredClone(state.decisions) as StewardDecisions;
     edit(decisions);
-    this.patch(state.registration.id, { decisions });
+    this.patch(state.summary.id, { decisions });
   }
 
   private patch(id: string, changes: Partial<SourceState>): void {
     this.states.update((states) =>
-      states.map((state) => (state.registration.id === id ? { ...state, ...changes } : state)),
+      states.map((state) => (state.summary.id === id ? { ...state, ...changes } : state)),
     );
   }
+}
+
+function asText(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

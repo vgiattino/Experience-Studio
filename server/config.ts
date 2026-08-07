@@ -25,12 +25,29 @@ export const PATHS = {
    * catalog is that every consumer binds to the same governed vocabulary.
    */
   catalog: join(ROOT, 'apps/viewer/public/catalog/securities.catalog.json'),
+  /**
+   * The catalog as *published* — the seed above, plus whatever a scan promoted into it.
+   *
+   * Separate from the seed rather than overwriting it, because the seed is a checked-in fixture that
+   * the Viewer loads directly and a test asserts against. A promotion that edited it would make
+   * `git status` dirty as a side effect of using the product, and would leave no way back to a known
+   * starting point. This file is absent until the first promotion, and deleting it is the reset.
+   */
+  publishedCatalog: join(ROOT, 'server/data/catalog.json'),
   fixtures: join(ROOT, 'apps/viewer/public/data'),
   /** Seed definitions copied into the store on first boot if it is empty. */
   seed: join(ROOT, 'apps/viewer/public/definitions'),
+  /**
+   * Registered data sources, and the scan each one's catalog was promoted from.
+   *
+   * Beside the experiences rather than beside the catalog, because a registration is not part of the
+   * vocabulary — it is the record of where a part of the vocabulary came from, and it outlives any
+   * particular version of the catalog it produced.
+   */
+  sources: join(ROOT, 'server/data/sources'),
 } as const;
 
-export const PORT = Number(process.env.PORT ?? 4000);
+export const PORT = Number(process.env['PORT'] ?? 4000);
 
 /**
  * Which model provider serves `/api/ai/generate`.
@@ -40,7 +57,7 @@ export const PORT = Number(process.env.PORT ?? 4000);
  * `server/ai/providers/`. Switching is an environment variable, never a code change in the
  * pipeline.
  */
-export const AI_PROVIDER = (process.env.AI_PROVIDER ?? 'mock') as 'mock' | 'openai' | 'claude';
+export const AI_PROVIDER = (process.env['AI_PROVIDER'] ?? 'mock') as 'mock' | 'openai' | 'claude';
 
 /** Simulated gateway latency, so loading and skeleton states are visible rather than theoretical. */
-export const GATEWAY_LATENCY_MS = Number(process.env.GATEWAY_LATENCY_MS ?? 120);
+export const GATEWAY_LATENCY_MS = Number(process.env['GATEWAY_LATENCY_MS'] ?? 120);

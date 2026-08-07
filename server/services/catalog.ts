@@ -13,9 +13,10 @@
  *   physicalMaps()       → logical→physical. Never leaves this process.
  */
 
-import { readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { dirname } from 'node:path';
 
-import { CatalogService, type PhysicalMap } from '@opus/catalog';
+import { CatalogService, type PhysicalMap, type RawCatalog } from '@opus/catalog';
 import type { QualifiedRef, UserContext } from '@opus/contracts';
 
 import { PATHS } from '../config';
@@ -23,12 +24,42 @@ import { PATHS } from '../config';
 const service = new CatalogService();
 let loaded = false;
 
+/**
+ * The published catalog if a promotion has produced one, else the checked-in seed.
+ *
+ * The order matters and is the whole reason `publishedCatalog` is a separate path: the seed is a
+ * fixture, so a promotion writes beside it rather than over it. Deleting the published file is the
+ * documented way back to the starting point.
+ */
 function ensureLoaded(): CatalogService {
   if (!loaded) {
-    service.hydrate(JSON.parse(readFileSync(PATHS.catalog, 'utf8')));
+    const path = existsSync(PATHS.publishedCatalog) ? PATHS.publishedCatalog : PATHS.catalog;
+    service.hydrate(JSON.parse(readFileSync(path, 'utf8')) as RawCatalog);
     loaded = true;
   }
   return service;
+}
+
+/** SERVER-ONLY. The stored catalog, for a promotion that has to merge into what is published. */
+export function storedCatalog(): RawCatalog | undefined {
+  return ensureLoaded().stored();
+}
+
+/**
+ * Install a promoted catalog: written first, then hydrated.
+ *
+ * That order is deliberate. Hydrating first and writing second means a failed write leaves a process
+ * serving a catalog that does not survive its own restart — the promotion appears to have worked, and
+ * un-does itself hours later. Writing first makes the persisted state the truth.
+ */
+export function publish(raw: RawCatalog): void {
+  mkdirSync(dirname(PATHS.publishedCatalog), { recursive: true });
+  const temporary = `${PATHS.publishedCatalog}.tmp`;
+  writeFileSync(temporary, JSON.stringify(raw, null, 2), 'utf8');
+  renameSync(temporary, PATHS.publishedCatalog);
+
+  service.hydrate(raw);
+  loaded = true;
 }
 
 export function catalogVersion(): number {

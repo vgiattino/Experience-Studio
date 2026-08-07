@@ -17,7 +17,9 @@
 export {
   IMPLEMENTED_KINDS,
   SOURCE_KINDS,
+  blockingProblems,
   checkRegistration,
+  checkSecretRef,
   normalise,
   quoteIdentifier,
   redactForClient,

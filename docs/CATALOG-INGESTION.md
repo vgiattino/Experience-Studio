@@ -84,12 +84,64 @@ export async function executorFor(source: SourceRegistration): Promise<SqlExecut
 }
 ```
 
-### Where the scan runs today
+### Where the scan runs
 
-In the browser, against the fixture. A browser cannot open a TDS connection — SQL Server's wire
-protocol is not HTTP — so the Sources screen says so above anything that looks like a result. The
-deployment step is the route above; the SQL, the type mapping, the inference, the review and the
-diff are the code that runs in production, unchanged.
+**Against a real SQL Server, through the backend.** `server/sources/mssql-executor.ts` is the adapter
+above — a pool, a query, and four decisions made explicitly:
+
+1. **Read-only intent, and a read-only login.** `readOnlyIntent` routes to a secondary replica where
+   one exists, which is where a schema scan belongs. It is a hint, so the real protection is the login:
+   `db_datareader` plus `VIEW DEFINITION`, and `tools/fixture-ddl.mjs` emits exactly those grants for a
+   DBA to read.
+2. **Bounded time**, separately for the connection and the statement, because they are different
+   failures with the same symptom.
+3. **The credential is resolved in one place** (`server/sources/secrets.ts`), read once, passed to the
+   driver, never stored on the object, logged, or included in an error. Driver errors go through a
+   redaction pass in case a future version starts echoing its config.
+4. **Pools are cached per source and closed after each scan** — a held connection is one nobody can
+   drain when they take the database down.
+
+The browser talks to `/api/sources`. When that is not answering, the *same* pipeline runs in the
+browser over `FixtureExecutor`, and the screen says which — a green "Live" banner naming the driver, or
+a note saying the backend is not running and to start it with `npm run api`. The distinction is
+rendered rather than logged, because a scan that appears to have read production and did not is the
+worst thing this surface could imply.
+
+### The API
+
+| Route | Does |
+| --- | --- |
+| `GET /api/sources` | The roster, redacted |
+| `POST /api/sources` | Register. Refuses on blocking problems; records accepted warnings |
+| `DELETE /api/sources/:id` | Deregister, and close its pool |
+| `POST /api/sources/:id/test` | Connect, read the version, disconnect — the cheapest question worth asking, and the one a steward has when a scan fails |
+| `POST /api/sources/:id/scan` | Scan, infer, and diff against the promoted baseline |
+| `POST /api/sources/:id/promote` | **Re-scan**, re-infer, promote, publish |
+
+Every route requires `catalog.edit`, and that is not boilerplate. A draft carries physical table and
+column names, and the platform's standing rule is that `physical` never reaches a client. The review
+screen is the deliberate exception because it cannot do its job without them — a steward asked "is
+`EXCPTN_STS` the column you mean by Exception Status?" needs to see `EXCPTN_STS`. So the exception is
+scoped: a caller holding catalog stewardship, on a source they registered, in a payload that is a draft
+and not a catalog. An analyst calling the same routes gets a 403 that says so.
+
+**Promotion re-scans rather than trusting the schema the client holds.** This is the load-bearing
+decision of the API. Accepting a posted schema would let a client dictate the physical mapping the
+gateway then queries through, which is an injection with extra steps. It also closes a real race: a
+review that takes twenty minutes is twenty minutes in which a column can be dropped. The decisions are
+the steward's and come from the client; the *facts* are re-read from the database.
+
+### Storage
+
+Registrations and the promoted scan go to `server/data/sources/`, written atomically. The draft is not
+persisted — it is a pure function of a scan, so a second copy would only drift. The promoted scan is,
+because drift is a diff against it and a restart that silently reset the baseline would make the next
+re-scan report "nothing changed" about a database that changed.
+
+A promotion writes `server/data/catalog.json` and hydrates it, in that order: hydrating first would
+leave a process serving a catalog that does not survive its own restart. The checked-in seed at
+`apps/viewer/public/catalog/` is never touched, so using the product does not make `git status` dirty,
+and deleting the published file is the documented way back to a known starting point.
 
 ---
 
@@ -350,8 +402,35 @@ five result sets folded together, foreign keys paired by ordinal, `CHECK` defini
 sorted so two scans compare equal. The clock is fixed by default, which is what makes "the pipeline
 is deterministic" a test rather than a claim.
 
-What it does not do is stand in for a real server. A deployment's first scan against a real instance
-is still the moment the SQL is proven.
+What it does not do is stand in for a real server — which is why `tools/verify-real-scan.mjs` exists.
+
+### Proving the fixture against a real server
+
+`tools/fixture-ddl.mjs` emits the fixture as SQL Server DDL; `tools/verify-real-scan.mjs` scans the
+resulting database and diffs it against the fixture scan. Generated rather than hand-written, because
+the comparison only means something if both sides describe the same database — and generation
+guarantees the *logical* schema matches while deliberately not guaranteeing how SQL Server *reports*
+it, which is the part under test.
+
+```
+docker run -d --name opus-edm-sql -e ACCEPT_EULA=Y -e 'MSSQL_SA_PASSWORD=<password>' \
+  -e MSSQL_PID=Developer -p 11433:1433 mcr.microsoft.com/mssql/server:2022-latest
+node tools/fixture-ddl.mjs > /tmp/opus-edm.sql
+docker cp /tmp/opus-edm.sql opus-edm-sql:/tmp/ && docker exec opus-edm-sql \
+  /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P '<password>' -C -i /tmp/opus-edm.sql
+SCAN_PASSWORD='<password>' npx tsx tools/verify-real-scan.mjs
+```
+
+Against SQL Server 2022 CU26 it reports **0 substantive differences**, an identical inferred draft, and
+two consecutive real scans that are byte-identical. Row counts and the clock are excluded and the script
+prints that it excluded them: the DDL creates the schema and inserts nothing, and cost class, the
+unfiltered-query threshold and drift's proportional row-count test all key off `sys.partitions`.
+
+It earned its place immediately. `sys.columns` populates `max_length`, `precision` and `scale` for
+*every* column, not only where a length was declared — so a real `int` arrives with `max_length: 4` and
+a real `nvarchar(200)` with `400`. Drift's type label rendered those as "int(4)" and "nvarchar(400)",
+and `datetime2(3)` as "datetime2(23,3)". No fixture-based test could see it, because the fixture omitted
+the fields a real server always sends.
 
 ---
 
@@ -372,9 +451,10 @@ with no honest type, the foreign key pointing outside the scan, and the personal
 entitlement are all on the screen at the same size as the ten entities that worked. A scan reported
 as "10 entities found" is a scan whose gaps a steward discovers later, from a page that does not work.
 
-A promotion installs its result into the live `CatalogService`, so the effect is the point rather than
-a report: the builder's entity picker, the AI's grounding pack and the validator all read the same
-service.
+A promotion has an effect rather than producing a report. Over the API the server writes and hydrates
+the catalog and the client re-fetches its projection; in fixture mode the browser installs the result
+into its own `CatalogService`, which the builder's entity picker, the AI's grounding pack and the
+validator all read.
 
 ---
 
@@ -409,44 +489,104 @@ back off it. A catalog this produces has to be one the platform can actually use
 
 ---
 
-## Verified in a browser
+## Running it
 
-Driven in Chromium, assertions read out of the DOM rather than off a screenshot.
+```
+# 1. a SQL Server to scan
+docker run -d --name opus-edm-sql -e ACCEPT_EULA=Y -e 'MSSQL_SA_PASSWORD=<password>' \
+  -e MSSQL_PID=Developer -p 11433:1433 mcr.microsoft.com/mssql/server:2022-latest
+node tools/fixture-ddl.mjs > /tmp/opus-edm.sql
+docker cp /tmp/opus-edm.sql opus-edm-sql:/tmp/ && docker exec opus-edm-sql \
+  /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P '<password>' -C -i /tmp/opus-edm.sql
+
+# 2. the API, with the secret named rather than inlined
+OPUS_SECRET_KV_EDM_SA='<password>' npm run api
+
+# 3. the Studio, which proxies /api
+npm run studio
+```
+
+Then **Catalog → Sources → Register a source**: host `localhost`, port `11433`, database `OpusEDM`,
+SQL login `sa`, secret name `kv/edm/sa`, schemas `dq, master, processing, vendor`. Tick *Trust an
+unverified certificate* — a development container's certificate is self-signed, the form will tell you
+what accepting that means, and the registration records that you accepted it.
+
+Secrets reach the process as `OPUS_SECRET_<REFERENCE>` in the environment, or as a file under
+`SECRET_DIR`. A deployment with Key Vault or Secrets Manager replaces `resolveSecret` and nothing else,
+because nothing else in the codebase knows what a password is.
+
+---
+
+## Verified
+
+### Against SQL Server 2022 (CU26, 16.0.4265.3), through the API
 
 | Checked | Result |
 | --- | --- |
-| Scan | 12 objects, 11 tables and 1 view, server version and the server's clock reported |
-| Inference | 10 entities, 2 blocked with the two different messages, 7 relationships, 3 unmappable columns named |
-| Decisions rendered | every attribute shows its reason and confidence; `LIKELY`, `GUESS`, `CERTAIN` distinguished |
-| Personal columns | 6 refused at promotion, each naming what to do; typing a capability admits one and labels it `pii` |
-| Publish | installed into the live `CatalogService`; the physical map reads back for the gateway |
-| Entitlement consequence | "0 of 10 appear in Vocabulary for Priya Raman right now", with the four derived capabilities named on one line rather than ten |
-| Drift | re-scan with sampling on reports `master.PRODUCT.CATEGORY` as a new code list of 6, `additive` |
-| Register form | a connection string in the host field draws two problems and Register stays disabled; a SQL login demands a username and a secret *name* |
-| Credential rule | after registering with `kv/edm/reader`, neither the secret name nor the username appears anywhere in the DOM |
-| Dark theme | 0px page overflow, no errors |
-| 950px | 0px page overflow; the wide attribute table scrolls inside its own box |
+| Connection test | `mssql://localhost:11433/OpusEDM`, version reported |
+| Scan | 12 objects — 11 tables, 1 view — no warnings, timestamped from `SYSUTCDATETIME()` |
+| Inference | 10 entities, 2 blocked with their two different messages, 7 relationships |
+| Fixture fidelity | **0 substantive differences** from the fixture scan; inferred draft identical |
+| Determinism | two consecutive real scans byte-identical |
+| Promotion | 10 entities, 96 attributes, 25 measures, 7 relationships merged into the published catalog; the 3 entities from another source carried through untouched |
+| Projection | `dq.exception` visible to a caller holding `edm.dq.read`; the rest hidden behind derived entitlements; no physical name anywhere in the payload |
+| Entitlement gate | an analyst persona gets 403 with the reason; the steward persona proceeds |
+| Credential rule | the secret name and username never appear in the DOM or in any response |
+
+### In the browser, both transports
+
+| Checked | Result |
+| --- | --- |
+| Live banner | names the driver and says nothing is simulated |
+| Fixture banner | says the backend is not running and how to start it; the Test button is absent, not answering about a connection nobody made |
+| Register form | a connection string in the host field blocks; an unverified certificate warns and records; `../../etc/shadow` as a secret name blocks |
+| Accepted risk | shown on the source detail afterwards, beside who accepted it |
+| Publish | 10 of 10 published, 0 visible to this author, with the four derived capabilities named on one line |
+| Drift | a re-scan with sampling on reports `master.PRODUCT.CATEGORY` as a new code list |
 | Console | no errors on any path |
 
-Gate: metadata validation passed, 494 unit tests passed (up from 405), all three apps build with no
-budget warnings.
+Gate: `npm run typecheck` (new — see below), metadata validation, 499 unit tests, all three apps build
+with no budget warnings.
 
-**Known limitation, pre-existing:** below 900px the shell hides the nav rail
-(`chrome.scss`, from the CODA port), so every workspace behind it — Catalog, and the EDM Page Builder —
-is unreachable on a phone. Not introduced here and not fixed here: the rail needs a narrow-viewport
-affordance of its own, which affects every workspace rather than this one.
+### The typecheck that was checking nothing
+
+`tsc -p tsconfig.json --noEmit` compiled **zero files**: the root config is a solution file with
+`"files": []` and two project references, so the command always passed. The apps and libraries were
+genuinely checked by `ng build` and `ng test`, but `server/` was never type-checked at all — it runs
+under `tsx`, which transpiles and does not check.
+
+That was tolerable while the backend was four small files over local JSON. It stops being tolerable the
+moment the backend opens connections to somebody's production database. `tsconfig.server.json` and
+`npm run typecheck` now cover both halves, and the first run found two real defects:
+
+- `problem(res, status, category, detail, code)` defaulted `code` to `category`, which gave it the
+  closed category type by accident — so all six callers passing a real code (`notFound`,
+  `providerFailed`, `fanOutExceeded`) were type errors nobody saw.
+- the experience store declared its own copy of the provenance origin union and had lost `import`,
+  `migration` and `copy` — so saving an imported definition stored an origin its own type said was
+  impossible. `ProvenanceOrigin` is now named in `@opus/contracts` and derived from there.
+
+### Known limitation, pre-existing
+
+Below 900px the shell hides the nav rail (`chrome.scss`, from the CODA port), so every workspace behind
+it — Catalog, and the EDM Page Builder — is unreachable on a phone. Not introduced here and not fixed
+here: the rail needs a narrow-viewport affordance of its own, which affects every workspace.
 
 ---
 
 ## Next
 
-1. **The server route.** The fifteen lines above, plus a source store, so a scan reads a real
-   instance. Everything above the port is done.
-2. **Synonyms and AI hints from the review.** `RawAttribute.synonyms` and `aiHints` are what make
+1. **Synonyms and AI hints from the review.** `RawAttribute.synonyms` and `aiHints` are what make
    natural-language generation find a concept, and a steward reviewing ninety attributes is exactly
    the person who knows that "break" means `dq.exception`. The decision shape already carries
    `synonyms`; the screen does not yet offer it.
-3. **Drift on a schedule.** Nothing yet re-scans on its own. A nightly scan that diffs and reports
+2. **Drift on a schedule.** Nothing yet re-scans on its own. A nightly scan that diffs and reports
    `breaking` changes is the difference between finding out from this screen and finding out from a
    page.
-4. **Second dialect.** PostgreSQL, to prove the seam is where it claims to be.
+3. **Second dialect.** PostgreSQL, to prove the seam is where it claims to be.
+4. **Integrated auth against a real domain.** `ntlm` and managed identity are wired and untested — this
+   verification used a SQL login, which is the one mode with a secret to resolve.
+5. **The Vocabulary tab in API mode.** It reads the catalog this browser hydrated at start-up; after an
+   API promotion the server's projection is fetched into `PublishedCatalogService`, but the builder's
+   own binding path still uses the locally-hydrated catalog and its fixture gateway. Moving the whole
+   studio onto the server's projection is a data-path change beyond this work.

@@ -72,6 +72,14 @@ export interface SourceRegistration {
   trustServerCertificate: boolean;
   /** Read-only is not a suggestion: the scanner issues SELECT only, and this records the intent. */
   readOnly: true;
+  /**
+   * The warnings the registering steward accepted, by field.
+   *
+   * A risk somebody chose to run is worth more than a risk nobody was told about, and the difference
+   * between them is a record. Six months later "why is production registered with certificate checking
+   * off" has an answer: this list, next to who registered it and when.
+   */
+  acknowledged: string[];
   registeredBy: string;
   registeredAt: string;
 }
@@ -91,11 +99,29 @@ export interface SourceSummary {
   registeredAt: string;
   /** True when this platform has a probe for the kind. */
   scannable: boolean;
+  /** Warnings accepted at registration, so the detail view can show what was waved through. */
+  acknowledged: string[];
 }
 
 export interface RegistrationProblem {
   field: string;
   message: string;
+  /**
+   * `blocking` cannot be registered. `warning` can, once a steward has read it.
+   *
+   * ── WHY THIS DISTINCTION EXISTS ─────────────────────────────────────────────────────────
+   * Because without it the check contradicted itself. Trusting an unverified certificate was refused
+   * outright, with a message that read "acceptable against a development instance, never against one
+   * holding real data" — which describes a judgement, and then took it away. The result was that a
+   * development SQL Server with a self-signed certificate, which is what every deployment starts
+   * against, could not be registered at all.
+   *
+   * A malformed host is blocking: there is nothing to accept, the registration is simply wrong. An
+   * unverified certificate is a risk somebody with authority may decide to run, and the useful thing
+   * to do about it is to make them read it and then record that they did — which is what
+   * `acknowledged` on the registration is for.
+   */
+  severity: 'blocking' | 'warning';
 }
 
 /** Default ports, so a steward who leaves it blank gets the right one rather than a failure. */
@@ -125,40 +151,50 @@ const IDENTIFIER_PATTERN = /^[A-Za-z_][A-Za-z0-9_$#@]{0,127}$/;
  * registered with certificate checking off.
  */
 export function checkRegistration(
-  input: Omit<SourceRegistration, 'id' | 'registeredAt' | 'readOnly'>,
+  input: Omit<SourceRegistration, 'id' | 'registeredAt' | 'readOnly' | 'acknowledged'>,
 ): RegistrationProblem[] {
   const problems: RegistrationProblem[] = [];
 
-  if (!input.name.trim()) problems.push({ field: 'name', message: 'Give the source a name.' });
+  if (!input.name.trim()) problems.push({ field: 'name', message: 'Give the source a name.', severity: 'blocking' });
 
   if (!SOURCE_KINDS.includes(input.kind)) {
-    problems.push({ field: 'kind', message: `"${input.kind}" is not a source kind this platform knows.` });
+    problems.push({
+      field: 'kind',
+      message: `"${input.kind}" is not a source kind this platform knows.`,
+      severity: 'blocking',
+    });
   }
 
   if (!input.host.trim()) {
-    problems.push({ field: 'host', message: 'A host is required.' });
+    problems.push({ field: 'host', message: 'A host is required.', severity: 'blocking' });
   } else if (!HOST_PATTERN.test(input.host.trim())) {
     problems.push({
       field: 'host',
       message:
         'That is not a host name. A host is a name, an address, or HOST\\INSTANCE — never a connection string, and never anything containing ";" or "=".',
+      severity: 'blocking',
     });
   }
 
   if (input.port !== undefined && (!Number.isInteger(input.port) || input.port < 1 || input.port > 65535)) {
-    problems.push({ field: 'port', message: 'A port is a whole number between 1 and 65535.' });
+    problems.push({ field: 'port', message: 'A port is a whole number between 1 and 65535.', severity: 'blocking' });
   }
 
   if (!IDENTIFIER_PATTERN.test(input.database.trim())) {
     problems.push({
       field: 'database',
       message: 'A database name must be a plain identifier — letters, digits and underscores.',
+      severity: 'blocking',
     });
   }
 
   for (const schema of input.schemas) {
     if (!IDENTIFIER_PATTERN.test(schema)) {
-      problems.push({ field: 'schemas', message: `"${schema}" is not a valid schema name.` });
+      problems.push({
+        field: 'schemas',
+        message: `"${schema}" is not a valid schema name.`,
+        severity: 'blocking',
+      });
     }
   }
   if (!input.schemas.length) {
@@ -166,18 +202,27 @@ export function checkRegistration(
       field: 'schemas',
       message:
         'Name at least one schema. Scanning everything a login can see finds system catalogs and other applications’ tables, and a steward then has to reject them one at a time.',
+      severity: 'blocking',
     });
   }
 
   if (input.auth === 'sqlLogin') {
     if (!input.username?.trim()) {
-      problems.push({ field: 'username', message: 'A SQL login needs a username.' });
+      problems.push({ field: 'username', message: 'A SQL login needs a username.', severity: 'blocking' });
     }
-    if (!input.secretRef?.trim()) {
+    const reference = input.secretRef?.trim();
+    if (reference) {
+      const checked = checkSecretRef(reference);
+      if (!checked.ok) {
+        problems.push({ field: 'secretRef', message: checked.reason, severity: 'blocking' });
+      }
+    }
+    if (!reference) {
       problems.push({
         field: 'secretRef',
         message:
           'Name the secret holding the password. This platform stores a reference, never the password itself.',
+        severity: 'blocking',
       });
     }
   }
@@ -189,6 +234,7 @@ export function checkRegistration(
       problems.push({
         field,
         message: 'That looks like a password. Store it in your secret store and register its name here.',
+        severity: 'blocking',
       });
     }
   }
@@ -196,7 +242,9 @@ export function checkRegistration(
   if (!input.encrypt) {
     problems.push({
       field: 'encrypt',
-      message: 'Encryption off means credentials and rows cross the network in clear text.',
+      message:
+        'Encryption is off, so credentials and rows cross the network in clear text. Acceptable only on a network you control end to end.',
+      severity: 'warning',
     });
   }
   if (input.trustServerCertificate) {
@@ -204,6 +252,7 @@ export function checkRegistration(
       field: 'trustServerCertificate',
       message:
         'Trusting an unverified certificate defeats the encryption above it. Acceptable against a development instance, never against one holding real data.',
+      severity: 'warning',
     });
   }
 
@@ -212,12 +261,11 @@ export function checkRegistration(
 
 /** The registration as stored: defaults applied, whitespace gone, read-only asserted. */
 export function normalise(
-  input: Omit<SourceRegistration, 'id' | 'registeredAt' | 'readOnly'>,
+  input: Omit<SourceRegistration, 'id' | 'registeredAt' | 'readOnly' | 'acknowledged'>,
   id: string,
   now: string,
 ): SourceRegistration {
-  return {
-    id,
+  const cleaned = {
     name: input.name.trim(),
     kind: input.kind,
     host: input.host.trim(),
@@ -229,8 +277,24 @@ export function normalise(
     schemas: [...new Set(input.schemas.map((schema) => schema.trim()))].sort(),
     encrypt: input.encrypt,
     trustServerCertificate: input.trustServerCertificate,
-    readOnly: true,
     registeredBy: input.registeredBy,
+  };
+
+  return {
+    id,
+    ...cleaned,
+    readOnly: true,
+    /*
+      The warnings this registration carries, derived from the check rather than taken from the caller.
+
+      Derived, so the list is what is actually true of the stored record: a caller cannot claim to have
+      acknowledged something that is not a warning, and cannot omit one that is. Six months later, "why
+      is production registered with certificate checking off" has an answer — this list, beside who
+      registered it and when.
+    */
+    acknowledged: checkRegistration(cleaned)
+      .filter((problem) => problem.severity === 'warning')
+      .map((problem) => problem.field),
     registeredAt: now,
   };
 }
@@ -254,7 +318,38 @@ export function redactForClient(source: SourceRegistration): SourceSummary {
     registeredBy: source.registeredBy,
     registeredAt: source.registeredAt,
     scannable: IMPLEMENTED_KINDS.includes(source.kind),
+    acknowledged: [...source.acknowledged],
   };
+}
+
+/**
+ * A secret *reference* is a name, not a path expression.
+ *
+ * ── WHY THIS LIVES HERE AND NOT BESIDE THE FILE READ ────────────────────────────────────
+ * Because it is a rule about what a registration may contain, and the registration is this file's
+ * subject. Keeping it here also makes it testable: the code that resolves a reference to a secret is
+ * necessarily bound to a filesystem and an environment, and a check buried in it would be a check
+ * nothing exercised — which is a poor place for the only thing standing between `secretRef` and a
+ * `readFile` of `../../etc/shadow`.
+ *
+ * Letters, digits, and the three separators a secret store actually uses in its own naming:
+ * `kv/edm/reader`, `edm-scanner`, `opus.edm.prod`. Everything that composes a traversal is absent, and
+ * a leading separator is refused so a reference cannot be an absolute path.
+ */
+const SECRET_REFERENCE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$/;
+
+export function checkSecretRef(reference: string): { ok: true } | { ok: false; reason: string } {
+  if (!SECRET_REFERENCE_PATTERN.test(reference)) {
+    return {
+      ok: false,
+      reason: `"${reference}" is not a secret name. A name is letters, digits, and the separators "._/-" — never a path.`,
+    };
+  }
+  // Belt and braces: the pattern admits `/` and a dot, so `a/../b` matches it and is still a traversal.
+  if (reference.split('/').includes('..')) {
+    return { ok: false, reason: `"${reference}" contains a path segment. A secret name is not a path.` };
+  }
+  return { ok: true };
 }
 
 /**
@@ -271,4 +366,9 @@ export function quoteIdentifier(name: string): string {
     throw new Error(`Refusing to build SQL around "${name}": that is not an identifier.`);
   }
   return `[${name.replace(/]/g, ']]')}]`;
+}
+
+/** Only the problems that stop a registration. Warnings are for a steward to read and accept. */
+export function blockingProblems(problems: readonly RegistrationProblem[]): RegistrationProblem[] {
+  return problems.filter((problem) => problem.severity === 'blocking');
 }

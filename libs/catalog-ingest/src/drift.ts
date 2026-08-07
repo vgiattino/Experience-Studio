@@ -30,6 +30,7 @@
 import type { RawCatalog, RawEntity } from '@opus/catalog';
 
 import type { PhysicalColumn, PhysicalSchema, PhysicalTable } from './physical';
+import { declaredLength } from './mssql-probe';
 import { mapType } from './type-map';
 
 export type DriftKind =
@@ -410,14 +411,44 @@ function quoted(values: readonly string[]): string {
   return values.map((value) => `"${value}"`).join(', ');
 }
 
+/**
+ * A column type as a DBA would write it.
+ *
+ * ── WHY THIS IS A FAMILY TABLE AND NOT A CHAIN OF "IF IT HAS A LENGTH" ──────────────────
+ * Because SQL Server populates all three of `max_length`, `precision` and `scale` for *every* column,
+ * and which of them is the declared one depends on the type. The first version of this asked "does it
+ * have a precision and scale? then print those; does it have a max_length? then print that" — which is
+ * right for `decimal(19,4)` and wrong for everything else once the numbers are real:
+ *
+ *   · `int` reports max_length 4, so it printed "int(4)";
+ *   · `nvarchar(200)` reports max_length 400 — bytes — so it printed "nvarchar(400)";
+ *   · `datetime2(3)` reports precision 23 and scale 3, so it printed "datetime2(23,3)".
+ *
+ * The fixture hid all three by omitting the fields a real server always sends. This was found by
+ * scanning a real SQL Server, and it is the reason that comparison is in the test suite.
+ */
 function sqlLabel(column: PhysicalColumn): string {
-  if (column.precision !== undefined && column.scale !== undefined && column.scale > 0) {
-    return `${column.sqlType}(${column.precision},${column.scale})`;
+  const type = column.sqlType.toLowerCase();
+
+  // Character and binary types: a declared length, in characters.
+  if (['char', 'nchar', 'varchar', 'nvarchar', 'binary', 'varbinary'].includes(type)) {
+    const length = declaredLength(column);
+    if (length === Number.POSITIVE_INFINITY) return `${type}(max)`;
+    return length > 0 ? `${type}(${length})` : type;
   }
-  if (column.maxLength !== undefined && column.maxLength > 0) {
-    return `${column.sqlType}(${column.maxLength})`;
+
+  // Exact numerics: precision and scale are both declared.
+  if (['decimal', 'numeric'].includes(type)) {
+    return `${type}(${column.precision ?? '?'},${column.scale ?? 0})`;
   }
-  return column.sqlType;
+
+  // Time types: the scale is the fractional-seconds precision, and the precision is derived from it.
+  if (['datetime2', 'datetimeoffset', 'time'].includes(type)) {
+    return column.scale === undefined ? type : `${type}(${column.scale})`;
+  }
+
+  // Everything else has a fixed width the server reports and nobody declares.
+  return type;
 }
 
 function valueList(column: PhysicalColumn): string[] | null {

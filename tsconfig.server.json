@@ -1,0 +1,41 @@
+{
+  /*
+    Type-check the backend: npx tsc -p tsconfig.server.json --noEmit
+
+    ── WHY THIS FILE EXISTS ────────────────────────────────────────────────────────────────
+    Nothing was checking `server/`. It runs under `tsx`, which transpiles and does not type-check, and
+    the whole-repo config next door covers each app's sources and the libraries only — so a type error in a route
+    was found at runtime, by whoever called it, if they called it.
+
+    That went unnoticed for as long as the backend was four small files over local JSON. It stops being
+    acceptable at the point the backend opens connections to somebody's production database.
+
+    ── AND WHY IT IS NOT JUST ADDED TO tsconfig.app.json ───────────────────────────────────
+    That config sets `"types": []`, which is right for browser code — an app that can see Node's globals
+    can accidentally use them, and `process.env` in a component is a build that works and a page that
+    breaks. Server code needs exactly those globals. Two configs, two type environments, one command in
+    `npm run typecheck` that runs both.
+  */
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "./out-tsc/server",
+    "types": ["node"],
+    // The backend is ESM (`import.meta.url` in config.ts) and tsx transpiles it to CJS at run time.
+    "module": "preserve",
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "noEmit": true
+  },
+  "include": ["server/**/*.ts"],
+  "exclude": ["**/*.spec.ts"],
+  /*
+    Both overridden explicitly, because `extends` inherits them.
+
+    The root config is a solution file: `"files": []` and two `references`. Inheriting those made this
+    project compile the Angular apps through the reference graph, with this file's server-flavoured
+    compiler options — which reports every Material import as missing and is nothing to do with the
+    backend. It is also why `tsc -p tsconfig.json --noEmit` silently checks NOTHING and always passes.
+  */
+  "files": [],
+  "references": []
+}

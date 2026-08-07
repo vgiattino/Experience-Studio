@@ -6,6 +6,7 @@
  *   /api/experiences   Definition Service   — authoring and storage
  *   /api/ai/*          Generation Service   — the model seam
  *   /api/data/batch    Data Gateway         — the single path to data
+ *   /api/sources       Catalog Ingestion    — register, scan and publish a database's vocabulary
  *
  * Conventions kept from §3.4 because calling code branches on them: one batch per render, a
  * machine-readable error category on every failure, and a correlation id threaded through.
@@ -20,17 +21,26 @@ import { activeProvider, providerCatalogue, type MockSimulationInput } from './a
 import { catalogVersion, projectionFor } from './services/catalog';
 import { executeBatch, servedEntities } from './services/gateway';
 import { PERSONAS, personaById } from './personas';
+import { sources } from './sources/routes';
 import * as store from './store/experience-store';
 
 export const api = Router();
 
-/** RFC 9457-shaped. The category is closed and load-bearing: the client branches on it. */
+/**
+ * RFC 9457-shaped. The category is closed and load-bearing: the client branches on it.
+ *
+ * `code` is deliberately *not* the same type. It is the specific reason — `notFound`,
+ * `providerFailed`, `fanOutExceeded` — which a client may log, show or match on but must not need in
+ * order to behave correctly. Defaulting it to `category` was a shortcut that gave it the closed type
+ * by accident, so every caller passing a real code was a type error nobody saw: this file was never
+ * type-checked. See `tsconfig.server.json`.
+ */
 function problem(
   res: Response,
   status: number,
   category: 'validation' | 'semantic' | 'entitlement' | 'cost' | 'concurrency' | 'upstream' | 'provider' | 'capability',
   detail: string,
-  code = category,
+  code: string = category,
 ): void {
   res.status(status).json({ type: `about:blank#${code}`, title: code, status, category, code, detail });
 }
@@ -43,6 +53,11 @@ function callerFrom(req: Request): { user: UserContext; dataCapabilities: readon
   const persona = personaById(id);
   return { user: persona.user, dataCapabilities: persona.dataCapabilities };
 }
+
+// ── sources (catalog ingestion) ─────────────────────────────────────────────
+// Its own router because it is its own service boundary: it is the only thing in this process that
+// opens a connection to somebody else's database, and the only one gated on catalog stewardship.
+api.use('/sources', sources);
 
 // ── health ──────────────────────────────────────────────────────────────────
 api.get('/health', async (_req, res) => {

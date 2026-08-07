@@ -30,7 +30,7 @@
  * These are not follow-ups. Shipping the call without them is the failure mode the security
  * architecture is written to prevent (§7):
  *
- *  - **Credentials server-side only.** `process.env.ANTHROPIC_API_KEY`, from a managed vault, never
+ *  - **Credentials server-side only.** `process.env['ANTHROPIC_API_KEY']`, from a managed vault, never
  *    in a client bundle, never in a log line.
  *  - **Egress policy.** Catalog *metadata* only by default. Sample values require a per-tenant
  *    opt-in and are never permitted for PII or restricted classifications. `PolicyEnforcingProvider`
@@ -51,13 +51,13 @@ import type { ModelRequest, ModelResponse } from '@opus/generation';
 
 import type { ServerModelProvider } from './index';
 
-const MODEL = process.env.ANTHROPIC_MODEL ?? 'claude-sonnet-4-5';
+const MODEL = process.env['ANTHROPIC_MODEL'] ?? 'claude-sonnet-4-5';
 
 export const claudeProvider: ServerModelProvider = {
   id: 'claude',
   version: MODEL,
   isExternal: true,
-  configured: Boolean(process.env.ANTHROPIC_API_KEY),
+  configured: Boolean(process.env['ANTHROPIC_API_KEY']),
 
   async complete(_request: ModelRequest): Promise<ModelResponse> {
     throw Object.assign(

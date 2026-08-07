@@ -18,10 +18,20 @@ export const AUTHOR: UserContext = {
   tenantId: 'demo-tenant',
   locale: 'en-GB',
   timezone: 'Europe/London',
-  roles: ['experienceAuthor'],
+  roles: ['experienceAuthor', 'catalogSteward'],
   capabilities: [
     'experience.view',
     'experience.author',
+    /*
+      Catalog stewardship, because this application has one persona and the Catalog workspace is where
+      stewardship happens: registering a database and publishing its vocabulary.
+
+      It is a real capability, not decoration — `/api/sources` refuses every call without it, and an
+      analyst persona calling the same routes gets a 403 explaining that a scan exposes physical table
+      and column names the catalog projection withholds. Granting it here says what this author is
+      allowed to do; it does not weaken the check.
+    */
+    'catalog.edit',
     // Data capabilities, resolved from EDM in production and simulated here.
     'edm.processing.read',
     'edm.security.read',

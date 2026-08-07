@@ -27,7 +27,7 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 
-import type { ExperienceDefinition } from '@opus/contracts';
+import type { ExperienceDefinition, ProvenanceOrigin } from '@opus/contracts';
 
 import { PATHS } from '../config';
 
@@ -36,7 +36,15 @@ export interface StoredExperience {
   definition: ExperienceDefinition;
   updatedAt: string;
   updatedBy: string;
-  origin: 'human' | 'ai' | 'aiRefined' | 'template' | 'seed';
+  /**
+   * Every provenance the contract allows, plus `seed`.
+   *
+   * Derived from the contract rather than restated, because a restated copy is a copy that drifts —
+   * this one had already lost `import`, `migration` and `copy`, so a record saved from an imported
+   * definition carried an origin this type declared impossible. `seed` is added here and not in the
+   * contract because being seeded is a fact about the store, not about the definition.
+   */
+  origin: ProvenanceOrigin | 'seed';
 }
 
 export interface ExperienceSummary {

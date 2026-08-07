@@ -15,6 +15,12 @@
  * foreign key points outside the scan, and three columns have no honest business type. All of that is on
  * the screen at the same size as the ten entities that worked. A scan reported as "10 entities found" is
  * a scan whose gaps a steward discovers later, from a page that does not work.
+ *
+ * ── AND THE BANNER IS NOT DECORATION ────────────────────────────────────────────────────
+ * A scan is either a real connection to a real database through the backend, or the same pipeline run in
+ * this browser over a built-in schema. Those are materially different claims and the screen leads with
+ * which one it is making. Everything below the banner looks identical either way — which is the point of
+ * the port, and exactly why the difference has to be stated rather than inferred.
  */
 
 import {
@@ -30,6 +36,8 @@ import type { DraftEntity, SourceKind } from '@opus/catalog-ingest';
 import { SOURCE_KINDS } from '@opus/catalog-ingest';
 
 import { AUTHOR } from '../session';
+import { CatalogService } from '@opus/catalog';
+
 import { IngestService } from './ingest.service';
 
 interface RegisterForm {
@@ -55,18 +63,41 @@ interface RegisterForm {
     <div class="src">
       <!--
         Said once, at the top, before anything that looks like a result.
-        A scan that appears to have read a production database and did not is the worst thing this
-        surface could imply, so the sentence is not in a tooltip.
+
+        Three different claims, and the difference between them matters more than anything else on the
+        screen: a scan that appears to have read a production database and did not is the worst thing
+        this surface could imply. So the transport is rendered, not logged.
       -->
-      <p class="src-note">
-        <opus-icon name="info" [size]="14" />
-        <span>
-          A browser cannot open a SQL Server connection — TDS is not HTTP — so the scan below runs
-          against a built-in Opus EDM schema and reads it with the same T-SQL a server would. The
-          deployment step is one route that resolves the source's secret and opens a pooled connection;
-          the SQL, the type mapping, the inference and the review are the code that runs in production.
-        </span>
-      </p>
+      @switch (ingest.mode()) {
+        @case ('api') {
+          <p class="src-note live">
+            <opus-icon name="server" [size]="14" />
+            <span>
+              <b>Live.</b> Every scan below opens a real connection: the backend resolves the source's
+              secret, connects with the <code>mssql</code> driver and runs the introspection SQL against
+              the server. Nothing about the schema is simulated, and nothing is written — the scanner
+              issues SELECT only.
+            </span>
+          </p>
+        }
+        @case ('forbidden') {
+          <p class="src-note warn">
+            <opus-icon name="shield" [size]="14" />
+            <span>{{ ingest.refusal() }}</span>
+          </p>
+        }
+        @default {
+          <p class="src-note">
+            <opus-icon name="info" [size]="14" />
+            <span>
+              <b>The backend is not running,</b> so the scan below reads a built-in Opus EDM schema with
+              the same T-SQL a server would, in this browser. A browser cannot open a SQL Server
+              connection — TDS is not HTTP. Start the API with <code>npm run api</code> to scan a real
+              database; everything above the driver is the same code either way.
+            </span>
+          </p>
+        }
+      }
 
       <div class="src-body">
         <div class="src-list">
@@ -224,9 +255,17 @@ interface RegisterForm {
               </label>
             </div>
 
-            @if (formProblems().length) {
+            <!--
+              Blocked and accepted, told apart.
+
+              A malformed host is a mistake and stops the form; an unverified certificate is a risk with
+              an owner. Rendering both the same way meant the button stayed disabled on a judgement the
+              steward was entitled to make — which made a development instance impossible to register
+              using a message that said it was acceptable.
+            -->
+            @if (blockedBy().length) {
               <ul class="src-problems">
-                @for (problem of formProblems(); track problem.field + problem.message) {
+                @for (problem of blockedBy(); track problem.field + problem.message) {
                   <li>
                     <code>{{ problem.field }}</code>
                     {{ problem.message }}
@@ -234,12 +273,27 @@ interface RegisterForm {
                 }
               </ul>
             }
+            @if (acceptedRisks().length) {
+              <ul class="src-problems accepted">
+                @for (problem of acceptedRisks(); track problem.field + problem.message) {
+                  <li>
+                    <code>{{ problem.field }}</code>
+                    {{ problem.message }}
+                    <b>Registering records that you accepted this.</b>
+                  </li>
+                }
+              </ul>
+            }
+
+            @if (submitError(); as detail) {
+              <p class="src-problems src-problems-solo">{{ detail }}</p>
+            }
 
             <div class="src-actions">
               <button
                 type="button"
                 class="opus-btn primary"
-                [disabled]="formProblems().length > 0"
+                [disabled]="blockedBy().length > 0"
                 (click)="submit()"
               >
                 <opus-icon name="check" [size]="14" />
@@ -280,7 +334,32 @@ interface RegisterForm {
                 <dt>Registered by</dt>
                 <dd>{{ state.summary.registeredBy }}</dd>
               </div>
+              @if (state.reached) {
+                <div>
+                  <dt>Reached</dt>
+                  <dd>{{ state.reached.serverVersion }}</dd>
+                </div>
+              }
             </dl>
+
+            <!--
+              Risks the registering steward accepted, shown on the record rather than only at the moment
+              of registering. Six months later "why is this registered with certificate checking off" has
+              an answer, and it is here beside who registered it.
+            -->
+            @if (state.summary.acknowledged.length) {
+              <ul class="src-warnings">
+                @for (field of state.summary.acknowledged; track field) {
+                  <li>
+                    <opus-icon name="warning" [size]="13" />
+                    <span>
+                      <code>{{ field }}</code> — accepted by {{ state.summary.registeredBy }} when this
+                      source was registered.
+                    </span>
+                  </li>
+                }
+              </ul>
+            }
 
             <div class="src-actions">
               <button
@@ -292,6 +371,17 @@ interface RegisterForm {
                 <opus-icon name="refresh" [size]="14" />
                 {{ state.schema ? 'Re-scan' : 'Scan' }}
               </button>
+              @if (ingest.mode() === 'api') {
+                <button
+                  type="button"
+                  class="opus-btn"
+                  [disabled]="!!ingest.busy()"
+                  (click)="ingest.test()"
+                >
+                  <opus-icon name="check" [size]="14" />
+                  Test the connection
+                </button>
+              }
               <label class="src-check">
                 <input type="checkbox" [ngModel]="sample()" (ngModelChange)="sample.set($event)" />
                 <span>Sample values to find code lists</span>
@@ -617,7 +707,7 @@ interface RegisterForm {
               }
 
               <div class="src-actions src-promote">
-                <button type="button" class="opus-btn primary" (click)="ingest.promoteSelected()">
+                <button type="button" class="opus-btn primary" (click)="ingest.promoteSelected(sample())">
                   <opus-icon name="check" [size]="14" />
                   Publish {{ includedCount() }} entities to the catalog
                 </button>
@@ -754,6 +844,20 @@ interface RegisterForm {
       color: var(--opus-text-secondary);
       line-height: var(--opus-leading-normal);
       flex-shrink: 0;
+    }
+
+    .src-note.live {
+      border-inline-start-color: var(--opus-emphasis-positive);
+      background: var(--opus-emphasis-positive-bg);
+    }
+
+    .src-note.warn {
+      border-inline-start-color: var(--opus-emphasis-warning);
+      background: var(--opus-emphasis-warning-bg);
+    }
+
+    .src-note code {
+      font-family: var(--opus-font-mono);
     }
 
     .src-note .opus-icon {
@@ -970,6 +1074,16 @@ interface RegisterForm {
       font-size: var(--opus-text-xs);
       color: var(--opus-text-secondary);
       line-height: var(--opus-leading-normal);
+    }
+
+    /* A risk, not a mistake: informational rather than the warning stripe used for a blocked field. */
+    .src-problems.accepted {
+      border-inline-start-color: var(--opus-emphasis-info);
+      background: var(--opus-emphasis-info-bg);
+    }
+
+    .src-problems.accepted b {
+      color: var(--opus-text);
     }
 
     .src-problems-solo {
@@ -1232,6 +1346,7 @@ interface RegisterForm {
 })
 export class SourcesComponent {
   protected readonly ingest = inject(IngestService);
+  private readonly catalog = inject(CatalogService);
 
   protected readonly author = AUTHOR;
   protected readonly kinds: readonly SourceKind[] = SOURCE_KINDS;
@@ -1267,7 +1382,7 @@ export class SourcesComponent {
 
   protected readonly listItems = computed<ListPanelItem[]>(() =>
     this.ingest.sources().map((state) => ({
-      id: state.registration.id,
+      id: state.summary.id,
       label: state.summary.name,
       hint: state.stage === 'promoted' ? 'published' : state.stage === 'scanned' ? 'in review' : 'not scanned',
       icon: 'database',
@@ -1299,16 +1414,20 @@ export class SourcesComponent {
   /**
    * How many of the entities this promotion published this author can actually see.
    *
-   * Counted off `physical.sourceId` rather than the promotion's own entity list, because the question
-   * is about what this source contributed and the merged catalog holds other sources' entities too.
+   * The server answers it over the API, because only that process holds both the catalog and the
+   * caller's capabilities. In fixture mode the browser holds the promoted catalog itself and can count.
    */
   protected readonly visibleNow = computed(() => {
     const state = this.ingest.selected();
-    if (!state?.promotion) return 0;
+    const promotion = state?.promotion;
+    if (!promotion) return 0;
+    if ('visible' in promotion && typeof promotion.visible === 'number') return promotion.visible;
+
+    const stored = this.catalog.stored();
     const held = new Set(AUTHOR.capabilities);
-    return Object.values(state.promotion.catalog.entities).filter(
+    return Object.values(stored?.entities ?? {}).filter(
       (entity) =>
-        entity.physical?.sourceId === state.registration.id &&
+        entity.physical?.sourceId === state!.summary.id &&
         (!entity.rowEntitlementDomain || held.has(entity.rowEntitlementDomain)),
     ).length;
   });
@@ -1340,6 +1459,16 @@ export class SourcesComponent {
     this.registering() ? this.ingest.check(this.asRegistration()) : [],
   );
 
+  /** What stops the registration. Only these disable the button. */
+  protected readonly blockedBy = computed(() =>
+    this.formProblems().filter((problem) => problem.severity === 'blocking'),
+  );
+
+  /** Risks the steward is allowed to accept, and which the registration will record. */
+  protected readonly acceptedRisks = computed(() =>
+    this.formProblems().filter((problem) => problem.severity === 'warning'),
+  );
+
   /** The form as the pipeline wants it: schemas split, blanks as undefined. One place, used twice. */
   private asRegistration() {
     const form = this.form();
@@ -1367,8 +1496,20 @@ export class SourcesComponent {
     this.ingest.selectedId.set(id);
   }
 
-  protected submit(): void {
-    if (!this.ingest.register(this.asRegistration())) this.registering.set(false);
+  /** The server's refusal, when it had one. Registration is a round trip now, so it can fail. */
+  protected readonly submitError = signal<string | null>(null);
+
+  protected async submit(): Promise<void> {
+    /*
+      Awaited, which the first version of this was not.
+
+      `register` returns a promise since it became a request, so `if (!this.ingest.register(...))` tested
+      a promise for truthiness — always true — and the form neither closed on success nor showed the
+      server's message on failure. It looked like a button that did nothing.
+    */
+    const problem = await this.ingest.register(this.asRegistration());
+    this.submitError.set(problem);
+    if (!problem) this.registering.set(false);
   }
 
   protected toggleOpen(ref: string): void {

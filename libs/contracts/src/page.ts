@@ -79,6 +79,23 @@ export interface ArtifactSecurity {
   };
 }
 
+/**
+ * Where a definition came from.
+ *
+ * Named rather than inline because a second copy of the list had already drifted from it: the server's
+ * experience store declared its own narrower union, so a definition whose provenance was `import`
+ * produced a stored record with an origin its own type said was impossible. Nothing type-checked the
+ * server, so the lie was invisible — see `tsconfig.server.json`.
+ */
+export type ProvenanceOrigin =
+  | 'human'
+  | 'ai'
+  | 'aiRefined'
+  | 'template'
+  | 'import'
+  | 'migration'
+  | 'copy';
+
 export interface VersionEnvelope {
   schemaVersion: string;
   artifactVersion: number;
@@ -87,7 +104,7 @@ export interface VersionEnvelope {
   pins: { catalogVersion: number; registryVersion: string };
   lineage?: Record<string, unknown>;
   provenance?: {
-    origin: 'human' | 'ai' | 'aiRefined' | 'template' | 'import' | 'migration' | 'copy';
+    origin: ProvenanceOrigin;
     actorId: string;
     createdAt: string;
     generation?: {

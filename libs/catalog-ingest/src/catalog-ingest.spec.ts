@@ -26,7 +26,9 @@ import type { PhysicalSchema } from './physical';
 import { defaultDecisions, promote } from './promote';
 import {
   IMPLEMENTED_KINDS,
+  blockingProblems,
   checkRegistration,
+  checkSecretRef,
   normalise,
   quoteIdentifier,
   redactForClient,
@@ -36,9 +38,12 @@ import { isCodeSemantic, looksPersonal, mapType, semanticTypeFor } from './type-
 
 // ── helpers ────────────────────────────────────────────────────────────────────────────
 
+/** What a steward supplies. `id`, `registeredAt`, `readOnly` and `acknowledged` are derived. */
+type RegistrationInput = Parameters<typeof checkRegistration>[0];
+
 function registration(
-  overrides: Partial<Omit<SourceRegistration, 'id' | 'registeredAt' | 'readOnly'>> = {},
-): Omit<SourceRegistration, 'id' | 'registeredAt' | 'readOnly'> {
+  overrides: Partial<RegistrationInput> = {},
+): RegistrationInput {
   return {
     name: 'Opus EDM — production',
     kind: 'mssql',
@@ -130,11 +135,39 @@ describe('source registration', () => {
   });
 
   it('objects out loud to unencrypted transport and to trusting an unverified certificate', () => {
-    const fields = checkRegistration(
+    const problems = checkRegistration(registration({ encrypt: false, trustServerCertificate: true }));
+    expect(problems.map((problem) => problem.field)).toContain('encrypt');
+    expect(problems.map((problem) => problem.field)).toContain('trustServerCertificate');
+  });
+
+  it('lets a steward accept a transport risk, and refuses a malformed registration outright', () => {
+    /*
+      The distinction the severity split exists for. Trusting a self-signed certificate is what every
+      deployment does against its first development instance; refusing it outright made that instance
+      impossible to register, using a message that said it was acceptable.
+    */
+    const risky = checkRegistration(registration({ trustServerCertificate: true }));
+    expect(risky).toHaveLength(1);
+    expect(risky[0]!.severity).toBe('warning');
+    expect(blockingProblems(risky)).toEqual([]);
+
+    // A host that is a connection string is not a judgement anybody gets to make.
+    const malformed = checkRegistration(registration({ host: 'db;Integrated Security=true' }));
+    expect(blockingProblems(malformed)).toHaveLength(1);
+    expect(malformed[0]!.severity).toBe('blocking');
+  });
+
+  it('records which risks were accepted, on the registration itself', () => {
+    const stored = normalise(
       registration({ encrypt: false, trustServerCertificate: true }),
-    ).map((problem) => problem.field);
-    expect(fields).toContain('encrypt');
-    expect(fields).toContain('trustServerCertificate');
+      'src-3',
+      '2026-08-06T09:00:00.000Z',
+    );
+    // Derived from the check rather than taken from the caller: a registration cannot understate what
+    // it is running, and cannot claim to have accepted something that is not a risk.
+    expect(stored.acknowledged).toEqual(['encrypt', 'trustServerCertificate']);
+    expect(redactForClient(stored).acknowledged).toEqual(['encrypt', 'trustServerCertificate']);
+    expect(normalise(registration(), 'src-4', '2026-08-06T09:00:00.000Z').acknowledged).toEqual([]);
   });
 
   it('applies the dialect’s default port and asserts read-only when storing', () => {
@@ -163,6 +196,30 @@ describe('source registration', () => {
     const stored = normalise(registration({ kind: 'oracle' }), 'src-2', '2026-08-06T09:00:00.000Z');
     expect(redactForClient(stored).scannable).toBe(false);
     expect(IMPLEMENTED_KINDS).toEqual(['mssql']);
+  });
+});
+
+describe('secret references', () => {
+  it('accepts the names a secret store actually uses', () => {
+    for (const reference of ['kv/edm/reader', 'edm-scanner', 'opus.edm.prod', 'SECRET1']) {
+      expect(checkSecretRef(reference).ok).toBe(true);
+    }
+  });
+
+  it('refuses anything that is a path rather than a name', () => {
+    // Each of these reaches a file the process was never meant to read.
+    for (const reference of ['../../etc/shadow', '/etc/shadow', 'kv/../../secret', './x', '', 'a b']) {
+      const checked = checkSecretRef(reference);
+      expect(checked.ok).toBe(false);
+      if (!checked.ok) expect(checked.reason.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('catches a bad reference at registration, before anything tries to resolve it', () => {
+    const problems = checkRegistration(
+      registration({ auth: 'sqlLogin', username: 'edm_reader', secretRef: '../../etc/shadow' }),
+    );
+    expect(blockingProblems(problems).map((problem) => problem.field)).toContain('secretRef');
   });
 });
 
