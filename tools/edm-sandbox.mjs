@@ -78,14 +78,24 @@ async function containerState() {
   }
 }
 
-/** Run a SQL file inside the container. `-C` trusts the container's self-signed certificate. */
+/**
+ * Run a SQL file inside the container. `-C` trusts the container's self-signed certificate.
+ *
+ * `-b` makes sqlcmd exit non-zero on error, which makes `execFile` throw — and the thrown error carries
+ * the output on its own fields rather than in its message. Returning it either way is the difference
+ * between "the schema did not apply cleanly" and a message naming the statement that failed.
+ */
 async function sqlFile(localPath, label) {
   const inContainer = `/tmp/${label}.sql`;
   await docker(['cp', localPath, `${CONTAINER}:${inContainer}`]);
-  const { stdout, stderr } = await docker([
-    'exec', CONTAINER, SQLCMD, '-S', 'localhost', '-U', 'sa', '-P', PASSWORD, '-C', '-b', '-i', inContainer,
-  ]);
-  return `${stdout}${stderr}`;
+  try {
+    const { stdout, stderr } = await docker([
+      'exec', CONTAINER, SQLCMD, '-S', 'localhost', '-U', 'sa', '-P', PASSWORD, '-C', '-b', '-i', inContainer,
+    ]);
+    return `${stdout}${stderr}`;
+  } catch (error) {
+    return `${error.stdout ?? ''}${error.stderr ?? ''}${error.stdout || error.stderr ? '' : String(error.message ?? error)}`;
+  }
 }
 
 /**
@@ -115,8 +125,25 @@ async function waitForServer(timeoutMs = 180_000) {
   let announced = false;
   while (Date.now() - started < timeoutMs) {
     try {
-      await sqlQuery('SELECT 1');
-      return;
+      /*
+        Two questions, not one.
+
+        `SELECT 1` proves the server accepts connections. It does not prove `OpusEDM` is usable: after a
+        container restart the database goes through recovery and is briefly offline, so a script that
+        waits only for the first answer then runs `USE [OpusEDM]` fails intermittently — which is exactly
+        the class of first-run failure this whole function exists to prevent. The second clause asks
+        whether the database is online *if it exists at all*, so a first boot with no database still
+        passes.
+      */
+      const state = await sqlQuery(
+        "SET NOCOUNT ON; SELECT ISNULL((SELECT CAST(state_desc AS nvarchar(30)) FROM sys.databases WHERE name = N'OpusEDM'), N'ABSENT')",
+      );
+      if (state === 'ONLINE' || state === 'ABSENT') return;
+      if (!announced) {
+        say(`  waiting for the OpusEDM database to come online (currently ${state})…`);
+        announced = true;
+      }
+      await new Promise((wake) => setTimeout(wake, 3000));
     } catch {
       if (!announced) {
         say('  waiting for SQL Server to accept connections (a first boot takes about a minute)…');

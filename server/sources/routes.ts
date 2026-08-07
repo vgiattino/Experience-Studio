@@ -34,16 +34,25 @@ import {
   defaultDecisions,
   detectDrift,
   infer,
+  managedSecretRefFor,
   normalise,
   promote,
   redactForClient,
   type SourceRegistration,
+  type SourceRegistrationInput,
   type StewardDecisions,
 } from '@opus/catalog-ingest';
 
 import { personaById } from '../personas';
 import { projectionFor, publish, storedCatalog } from '../services/catalog';
 import { executorFor, releaseExecutor } from './mssql-executor';
+import {
+  canStoreSecrets,
+  deleteSecret,
+  managedSecretExists,
+  storeUnavailableReason,
+  writeSecret,
+} from './secret-store';
 import { secretIsAvailable } from './secrets';
 import * as store from './source-store';
 
@@ -103,7 +112,18 @@ function probeFor(registration: SourceRegistration): MsSqlProbe {
 // ── the roster ──────────────────────────────────────────────────────────────
 sources.get('/', (req, res) => {
   if (!requireSteward(req, res)) return;
-  res.json({ sources: store.list().map(summarise) });
+  res.json({
+    sources: store.list().map(summarise),
+    /*
+      Whether this deployment can store a typed password, and why not if it cannot.
+
+      Sent with the roster so the register form knows before it renders: offering a password field that
+      the server will refuse is worse than not offering it, because the steward types a real credential
+      into it first.
+    */
+    canStorePassword: canStoreSecrets(),
+    passwordUnavailableReason: storeUnavailableReason(),
+  });
 });
 
 // ── register ────────────────────────────────────────────────────────────────
@@ -111,9 +131,10 @@ sources.post('/', (req, res) => {
   const caller = requireSteward(req, res);
   if (!caller) return;
 
-  const input = { ...(req.body as Record<string, unknown>), registeredBy: caller.name } as Parameters<
-    typeof checkRegistration
-  >[0];
+  const input = {
+    ...(req.body as Record<string, unknown>),
+    registeredBy: caller.name,
+  } as SourceRegistrationInput;
 
   /*
     The same function the browser runs as the steward types, run again here — a client-side check is a
@@ -137,20 +158,122 @@ sources.post('/', (req, res) => {
     return;
   }
 
-  const registration = normalise(input, store.nextId(input.name), new Date().toISOString());
+  const id = store.nextId(input.name);
+
+  /*
+    The typed password's whole journey, in one place.
+
+    It arrived in the request body, it is written to the encrypted store under a name this platform
+    generates, and `normalise` is handed the *name*. Nothing below this point has the password: not the
+    registration, not the response, not the audit record — `input` goes out of scope with the request.
+  */
+  let managedRef: string | undefined;
+  const typedPassword = input.password;
+  if (typedPassword) {
+    if (!canStoreSecrets()) {
+      problem(res, 422, 'validation', storeUnavailableReason() ?? 'This platform cannot store a password.');
+      return;
+    }
+    managedRef = managedSecretRefFor(id);
+    try {
+      writeSecret(managedRef, typedPassword, caller.name);
+    } catch (error) {
+      problem(res, 500, 'upstream', asText(error));
+      return;
+    }
+  }
+
+  const registration = normalise(input, id, new Date().toISOString(), managedRef);
   store.save({ registration });
   // The accepted warnings go back with the summary, so the screen can show what it just waved through.
   res.status(201).json(summarise({ registration }));
 });
 
+/**
+ * Rotate the credential on an existing source.
+ *
+ * A separate route because it is a separate act, and because passwords expire: without it a rotation
+ * means deleting the registration and re-creating it, which loses the promoted-scan baseline that drift
+ * is measured against — so the first password expiry would quietly cost the source its history.
+ *
+ * Only a *managed* credential is rotated here. One held in the deployment's own store is changed there,
+ * and the platform picks the new value up on the next scan because it resolves the reference every time
+ * rather than caching it.
+ */
+sources.put('/:id/credential', async (req, res) => {
+  const caller = requireSteward(req, res);
+  if (!caller) return;
+
+  const stored = store.get(String(req.params['id']));
+  if (!stored) {
+    problem(res, 404, 'semantic', `No source "${req.params['id']}" is registered.`);
+    return;
+  }
+
+  const body = req.body as { username?: string; password?: string };
+  const password = body?.password ?? '';
+
+  if (!password.trim()) {
+    problem(res, 422, 'validation', 'Give the new password.');
+    return;
+  }
+  if (stored.registration.auth !== 'sqlLogin') {
+    problem(
+      res,
+      422,
+      'validation',
+      `This source authenticates with ${stored.registration.auth}, which has no password to rotate.`,
+    );
+    return;
+  }
+  if (!canStoreSecrets()) {
+    problem(res, 422, 'validation', storeUnavailableReason() ?? 'This platform cannot store a password.');
+    return;
+  }
+
+  const reference = managedSecretRefFor(stored.registration.id);
+  try {
+    writeSecret(reference, password, caller.name);
+  } catch (error) {
+    problem(res, 500, 'upstream', asText(error));
+    return;
+  }
+
+  /*
+    The pool is dropped rather than reused.
+
+    A cached connection was opened with the old password and keeps working until it idles out, so a
+    rotation would appear to have taken effect while the next scan still used the credential that was
+    just replaced. Dropping it makes the next scan prove the new one.
+  */
+  await releaseExecutor(stored.registration.id);
+
+  const registration: SourceRegistration = {
+    ...stored.registration,
+    username: body.username?.trim() || stored.registration.username,
+    secretRef: reference,
+  };
+  store.save({ ...stored, registration });
+  res.json(summarise({ ...stored, registration }));
+});
+
 sources.delete('/:id', async (req, res) => {
   if (!requireSteward(req, res)) return;
   const id = String(req.params['id']);
+  const stored = store.get(id);
   await releaseExecutor(id);
   if (!store.remove(id)) {
     problem(res, 404, 'semantic', `No source "${id}" is registered.`);
     return;
   }
+  /*
+    The password goes with the registration.
+
+    Otherwise removing a source leaves its credential on disk indefinitely, belonging to nothing, with
+    no screen that would ever mention it again — which is how a decommissioned database's password
+    outlives the database.
+  */
+  if (stored?.registration.secretRef) deleteSecret(stored.registration.secretRef);
   res.status(204).end();
 });
 
@@ -172,11 +295,18 @@ sources.post('/:id/test', async (req, res) => {
 
   const { registration } = stored;
   if (registration.auth === 'sqlLogin' && !(await secretIsAvailable(registration.secretRef))) {
+    // Two different problems, two different fixes: a password this platform stored and can no longer
+    // read, versus a reference into a store that does not hold it.
+    const managed = summarise(stored).credential === 'managed';
     problem(
       res,
       422,
       'validation',
-      `The secret named "${registration.secretRef}" is not available to this process, so no connection was attempted.`,
+      managed
+        ? managedSecretExists(registration.secretRef!)
+          ? `The stored password for this source could not be decrypted. OPUS_SECRET_KEY has probably changed since it was saved — re-enter the password to replace it.`
+          : `This source's password is no longer stored. Re-enter it.`
+        : `The secret named "${registration.secretRef}" is not available to this process, so no connection was attempted.`,
     );
     return;
   }

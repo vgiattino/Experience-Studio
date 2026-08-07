@@ -29,10 +29,12 @@ import {
   blockingProblems,
   checkRegistration,
   checkSecretRef,
+  managedSecretRefFor,
   normalise,
   quoteIdentifier,
   redactForClient,
   type SourceRegistration,
+  type SourceRegistrationInput,
 } from './source';
 import { isCodeSemantic, looksPersonal, mapType, semanticTypeFor } from './type-map';
 
@@ -114,7 +116,9 @@ describe('source registration', () => {
 
   it('spots a password pasted into any field, not just the password one', () => {
     const problems = checkRegistration(registration({ name: 'edm user=sa;password=Sup3rSecret' }));
-    expect(problems.some((problem) => problem.message.includes('looks like a password'))).toBe(true);
+    expect(problems.some((problem) => problem.message.includes('connection string with a password'))).toBe(
+      true,
+    );
   });
 
   it('requires a named schema rather than scanning whatever the login can see', () => {
@@ -127,11 +131,73 @@ describe('source registration', () => {
     expect(problems.map((problem) => problem.field)).toContain('schemas');
   });
 
-  it('makes a SQL login name its secret rather than carry one', () => {
-    const problems = checkRegistration(
-      registration({ auth: 'sqlLogin', username: 'edm_reader', secretRef: undefined }),
+  it('makes a SQL login supply a credential one way or the other', () => {
+    const problems = blockingProblems(
+      checkRegistration(registration({ auth: 'sqlLogin', username: 'edm_reader' })),
     );
-    expect(problems.map((problem) => problem.field)).toContain('secretRef');
+    expect(problems.map((problem) => problem.field)).toContain('password');
+    expect(problems[0]!.message).toMatch(/type the password, or name a secret/);
+  });
+
+  it('accepts a typed password, which is how somebody with no vault registers a database', () => {
+    expect(
+      blockingProblems(
+        checkRegistration(
+          registration({ auth: 'sqlLogin', username: 'edm_reader', password: 'Sup3r!Secret' }),
+        ),
+      ),
+    ).toEqual([]);
+  });
+
+  it('accepts the name of a secret, which is how somebody with a vault does it', () => {
+    expect(
+      blockingProblems(
+        checkRegistration(
+          registration({ auth: 'sqlLogin', username: 'edm_reader', secretRef: 'kv/edm/reader' }),
+        ),
+      ),
+    ).toEqual([]);
+  });
+
+  it('refuses both at once rather than picking one', () => {
+    // Two credentials with no rule about which wins is a failed login against a production account,
+    // and a failed login against a production account is a locked-out production account.
+    const problems = blockingProblems(
+      checkRegistration(
+        registration({
+          auth: 'sqlLogin',
+          username: 'edm_reader',
+          password: 'Sup3r!Secret',
+          secretRef: 'kv/edm/reader',
+        }),
+      ),
+    );
+    expect(problems.map((problem) => problem.field)).toContain('password');
+  });
+
+  it('refuses a blank password and warns about a padded one', () => {
+    expect(
+      blockingProblems(
+        checkRegistration(registration({ auth: 'sqlLogin', username: 'u', password: '   ' })),
+      ).map((problem) => problem.field),
+    ).toContain('password');
+
+    // Legal, so not silently corrected — but a copy-and-paste artefact often enough to mention.
+    const padded = checkRegistration(
+      registration({ auth: 'sqlLogin', username: 'u', password: 'secret ' }),
+    ).filter((problem) => problem.field === 'password');
+    expect(padded[0]!.severity).toBe('warning');
+    expect(blockingProblems(padded)).toEqual([]);
+  });
+
+  it('does not apply a strength rule to somebody else’s account', () => {
+    // A platform that refuses a working password for lacking a symbol is a platform that cannot
+    // connect to a working database.
+    expect(
+      blockingProblems(
+        checkRegistration(registration({ auth: 'sqlLogin', username: 'u', password: 'abc' })),
+      ),
+    ).toEqual([]);
   });
 
   it('objects out loud to unencrypted transport and to trusting an unverified certificate', () => {
@@ -175,6 +241,41 @@ describe('source registration', () => {
     expect(stored.port).toBe(1433);
     expect(stored.readOnly).toBe(true);
     expect(stored.schemas).toEqual(['dq', 'vendor']);
+  });
+
+  it('turns a typed password into a stored reference, and cannot carry the password across', () => {
+    const stored = normalise(
+      registration({ auth: 'sqlLogin', username: 'edm_reader', password: 'Sup3r!Secret' }),
+      'edm-prod',
+      '2026-08-06T09:00:00.000Z',
+      managedSecretRefFor('edm-prod'),
+    );
+
+    expect(stored.secretRef).toBe('opus/sources/edm-prod/password');
+    // The stored record has nowhere to put a password, and the JSON proves it.
+    expect(JSON.stringify(stored)).not.toContain('Sup3r!Secret');
+    expect((stored as unknown as Record<string, unknown>)['password']).toBeUndefined();
+  });
+
+  it('tells the client how the credential is held, so it can offer the right action', () => {
+    const managed = normalise(
+      registration({ auth: 'sqlLogin', username: 'u', password: 'p' }),
+      'src-1',
+      'now',
+      managedSecretRefFor('src-1'),
+    );
+    const referenced = normalise(
+      registration({ auth: 'sqlLogin', username: 'u', secretRef: 'kv/edm/reader' }),
+      'src-2',
+      'now',
+    );
+    const none = normalise(registration({ auth: 'integrated' }), 'src-3', 'now');
+
+    expect(redactForClient(managed).credential).toBe('managed');
+    expect(redactForClient(referenced).credential).toBe('reference');
+    expect(redactForClient(none).credential).toBe('none');
+    // Which, never what — and not the name either.
+    expect(JSON.stringify(redactForClient(referenced))).not.toContain('kv/edm/reader');
   });
 
   it('never lets a secret reference or a username reach the client', () => {

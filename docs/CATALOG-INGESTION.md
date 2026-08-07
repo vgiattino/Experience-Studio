@@ -104,19 +104,20 @@ above — a pool, a query, and four decisions made explicitly:
 4. **Pools are cached per source and closed after each scan** — a held connection is one nobody can
    drain when they take the database down.
 
-The browser talks to `/api/sources`. When that is not answering, the *same* pipeline runs in the
-browser over `FixtureExecutor`, and the screen says which — a green "Live" banner naming the driver, or
-a note saying the backend is not running and to start it with `npm run api`. The distinction is
-rendered rather than logged, because a scan that appears to have read production and did not is the
-worst thing this surface could imply.
+The browser talks to `/api/sources`. When that is not answering, what happens depends on the build — a
+development build runs the *same* pipeline over `FixtureExecutor` and says so; a production build
+refuses and reports the cause. The distinction is rendered rather than logged, because a scan that
+appears to have read production and did not is the worst thing this surface could imply. See
+[What a production build will not do](#what-a-production-build-will-not-do).
 
 ### The API
 
 | Route | Does |
 | --- | --- |
 | `GET /api/sources` | The roster, redacted |
-| `POST /api/sources` | Register. Refuses on blocking problems; records accepted warnings |
-| `DELETE /api/sources/:id` | Deregister, and close its pool |
+| `POST /api/sources` | Register. Refuses on blocking problems; records accepted warnings. Accepts a typed password and stores it encrypted |
+| `PUT /api/sources/:id/credential` | Rotate a stored password, and drop the pool so the next scan proves it |
+| `DELETE /api/sources/:id` | Deregister, close its pool, and delete its managed secret |
 | `POST /api/sources/:id/test` | Connect, read the version, disconnect — the cheapest question worth asking, and the one a steward has when a scan fails |
 | `POST /api/sources/:id/scan` | Scan, infer, and diff against the promoted baseline |
 | `POST /api/sources/:id/promote` | **Re-scan**, re-infer, promote, publish |
@@ -136,7 +137,15 @@ the steward's and come from the client; the *facts* are re-read from the databas
 
 ### Storage
 
-Registrations and the promoted scan go to `server/data/sources/`, written atomically. The draft is not
+Passwords a steward typed go to `server/data/secrets/`, one AES-256-GCM file each at 0600, keyed by
+`OPUS_SECRET_KEY`. Its own directory rather than a field on the registration, because the two have
+different privileges: a registration is metadata anybody reviewing the platform may read, and this is
+not. A deployment with a vault replaces two functions in `server/sources/secret-store.ts` and nothing
+else in the codebase knows what a password is.
+
+Registrations and the promoted scan go to `server/data/sources/`, written atomically. `store.save`
+inspects the record for anything credential-shaped before writing — not a type check, because a value
+that arrived as JSON from an HTTP body does not respect the type. The draft is not
 persisted — it is a pure function of a scan, so a second copy would only drift. The promoted scan is,
 because drift is a diff against it and a restart that silently reset the baseline would make the next
 re-scan report "nothing changed" about a database that changed.
@@ -150,27 +159,93 @@ and deleting the published file is the documented way back to a known starting p
 
 ## 1. Register — the credential rule
 
-**A credential never reaches the client.** A registration is split in two: what the source *is*
-(kind, host, database, schemas — metadata a reviewer reads and an audit log records) and how the
-platform *authenticates* to it (`secretRef`, the name of a secret the server resolves).
+**A credential never reaches the client, and is never stored on a registration.** A registration is
+split in two: the part that describes the source, and the part that authenticates to it. The first is
+metadata a steward reviews and an audit log records; the second is a *reference* to a secret.
 
-They are kept apart because a connection string with a password in it, sent to a browser once, is a
-password in that browser's memory, in its devtools, and in every error report it uploads.
-`redactForClient` is the only function that produces the shape a UI receives, and it is written
-field by field rather than as a spread with deletions — a spread that forgets a new field ships it,
-and the field most likely to be added to `SourceRegistration` later is another credential.
+A password travels in exactly one direction, once: from the steward's browser to the catalog service,
+over TLS, when they register or rotate it. There is no way around that — somebody has to type the
+password somewhere. What must never happen is the return journey or the persistence:
 
-`checkRegistration` refuses, before anything is stored or connected:
+- **server → browser: never.** `redactForClient` is the only function producing the shape a UI receives,
+  and it is written field by field rather than as a spread with deletions — a spread that forgets a new
+  field ships it, and the field most likely to be added later is another credential.
+- **stored on the registration: never.** `SourceRegistration` has no password field. The two shapes are
+  different types, which is the mechanism rather than a convention: `SourceRegistrationInput` is what a
+  steward submits and may carry a password; `SourceRegistration` is what exists afterwards and cannot.
+
+### Two ways to give a SQL login its password
+
+Both are first-class, and the steward picks explicitly rather than the code inferring it from which box
+has text in it:
+
+**Type the password.** It crosses once, the service encrypts it with AES-256-GCM under
+`OPUS_SECRET_KEY`, and the registration keeps only the generated name
+(`opus/sources/<id>/password`). This is the ordinary path for somebody who has credentials for a
+database and no vault to put them in first.
+
+**Name a secret the deployment already holds.** Nothing sensitive crosses the wire at all. The
+reference is resolved on *every* scan rather than cached, so rotating the value in Key Vault or Secrets
+Manager takes effect without touching the registration.
+
+Submitting both is refused rather than resolved. Two credentials with no rule about which wins is a
+failed login against a production account, and a failed login against a production account is a
+locked-out production account.
+
+### No encryption key means no stored password
+
+`GET /api/sources` reports `canStorePassword`, and the form asks before rendering the field — offering
+one the server will refuse is worse than not offering it, because the steward types a real credential
+into it first. With no `OPUS_SECRET_KEY` the answer is false and the message names the variable to set
+(`openssl rand -base64 32`) and the alternative flow that needs no key.
+
+It does not fall back to plaintext, and it does not invent a key and store it beside the ciphertext — a
+key kept next to the data it protects is obfuscation with a ceremony. GCM rather than CBC because it
+authenticates: an edited ciphertext fails to open rather than decrypting to rubbish that then goes to a
+database as a password. Files are written 0600 at creation, not chmodded afterwards.
+
+### Rotation is its own route
+
+`PUT /api/sources/:id/credential`. Separate because passwords expire, and without it a rotation would
+mean deleting the registration and re-creating it — losing the promoted-scan baseline drift is measured
+against, so the first expiry would quietly cost the source its history.
+
+It drops the connection pool. A cached connection was opened with the old password and keeps working
+until it idles out, so without that the rotation would appear to have taken effect while the next scan
+still used the credential just replaced.
+
+Deleting a source deletes its managed secret, which is otherwise how a decommissioned database's
+password outlives the database.
+
+### What `checkRegistration` refuses, and what it merely warns about
+
+The distinction exists because the check contradicted itself without it: trusting an unverified
+certificate was refused outright, with a message reading "acceptable against a development instance" —
+so the case it described was impossible to register.
+
+**Blocking** — there is nothing to accept, the registration is simply wrong:
 
 | Refusal | Why |
 | --- | --- |
 | A host containing `;` or `=` | `db;Initial Catalog=other;Integrated Security=true` is a connection-string injection, and the driver would honour it |
-| `password=` in any field | However it got there |
+| `password=` in a field that is not the password | The signature of a whole connection string pasted into the host or the name |
 | An empty schema list | Scanning everything a login can see finds system catalogs and other applications' tables |
 | A schema or database that is not an identifier | It is interpolated into SQL, so it is validated first |
-| A SQL login with no `secretRef` | The platform stores a reference, never a password |
-| `encrypt: false` | Credentials and rows in clear text |
-| `trustServerCertificate: true` | Defeats the encryption above it |
+| A SQL login with neither a password nor a secret name, or with both | See above |
+| A blank password | An empty password is a login attempt, and a failed one on a production account locks it out |
+
+**Warning** — a risk somebody with this capability may decide to run, recorded on the registration in
+`acknowledged` beside who registered it and when:
+
+| Warning | Why it is not blocking |
+| --- | --- |
+| `encrypt: false` | Defensible on a network you control end to end |
+| `trustServerCertificate: true` | Every deployment starts against a self-signed development certificate |
+| A password with leading or trailing whitespace | Legal, so not corrected silently — but a copy-and-paste artefact often enough to mention |
+
+There is deliberately **no password strength rule**. It is somebody else's account under somebody
+else's policy, and a platform that refuses a working password for lacking a symbol is a platform that
+cannot connect to a working database.
 
 `HOST\INSTANCE` is accepted, because that is a host on SQL Server and not an injection.
 
@@ -512,9 +587,13 @@ Then open <http://localhost:4300/> → **Catalog → Sources → Register a sour
 | Database | `OpusEDM` |
 | Authentication | SQL login |
 | Username | `sa` |
-| Secret name | `kv/edm/sa` |
+| Credential | either — **Type the password** `Opus!Edm2026Scan`, or **Name a secret** `kv/edm/sa` |
 | Schemas to scan | `dq, master, processing, vendor` |
 | Trust an unverified certificate | tick — the container's certificate is self-signed |
+
+Both credential routes work in the demo: `npm run demo` puts the sandbox password in the environment as
+`kv/edm/sa` for the reference route, and supplies a development `OPUS_SECRET_KEY` so the typed-password
+route has somewhere to store it.
 
 **Register** → **Test the connection** → **Scan** → expand an entity → **Publish**.
 

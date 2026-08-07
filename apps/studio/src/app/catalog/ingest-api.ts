@@ -116,7 +116,14 @@ export interface ApiUnreachable {
 }
 
 export type ProbeResult =
-  | { status: 'available'; sources: ApiSource[] }
+  | {
+      status: 'available';
+      sources: ApiSource[];
+      /** Whether this deployment can store a password the steward types. */
+      canStorePassword: boolean;
+      /** Why not, when it cannot — shown in place of the password field. */
+      passwordUnavailableReason?: string;
+    }
   | { status: 'forbidden'; detail: string }
   | ApiUnreachable;
 
@@ -177,7 +184,9 @@ export async function probe(): Promise<ProbeResult> {
     exactly what a built Studio deployed without an API proxy does. Checking the *shape* is the only way
     to tell that apart from a real response.
   */
-  const body = (await response.json().catch(() => null)) as { sources?: ApiSource[] } | null;
+  const body = (await response.json().catch(() => null)) as
+    | { sources?: ApiSource[]; canStorePassword?: boolean; passwordUnavailableReason?: string }
+    | null;
   if (!body || !Array.isArray(body.sources)) {
     return {
       status: 'unreachable',
@@ -191,7 +200,32 @@ export async function probe(): Promise<ProbeResult> {
     };
   }
 
-  return { status: 'available', sources: body.sources };
+  return {
+    status: 'available',
+    sources: body.sources,
+    // Absent from an older server: treat that as "cannot", which fails towards not offering a field
+    // the server would refuse after the steward had typed a real credential into it.
+    canStorePassword: body.canStorePassword === true,
+    passwordUnavailableReason: body.passwordUnavailableReason,
+  };
+}
+
+/**
+ * Replace a source's password.
+ *
+ * The password goes up and nothing comes back but the summary — which by construction cannot contain it.
+ */
+export async function rotateCredential(
+  id: string,
+  credential: { username?: string; password: string },
+): Promise<ApiSource> {
+  return json(
+    await fetch(`${base()}/${encodeURIComponent(id)}/credential`, {
+      method: 'PUT',
+      headers: headers(),
+      body: JSON.stringify(credential),
+    }),
+  );
 }
 
 export async function register(input: Record<string, unknown>): Promise<ApiSource> {

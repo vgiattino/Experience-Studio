@@ -28,6 +28,8 @@
 import { readFile } from 'node:fs/promises';
 import { join, normalize } from 'node:path';
 
+import { readManagedSecret } from './secret-store';
+
 import { checkSecretRef } from '@opus/catalog-ingest';
 
 /** Where the secret directory is mounted, when one is. */
@@ -46,6 +48,19 @@ function envKey(reference: string): string {
 type SecretSource = { readonly name: string; read(reference: string): Promise<string | undefined> };
 
 const SECRET_SOURCES: readonly SecretSource[] = [
+  {
+    /*
+      This platform's own store, first.
+
+      First because it is the most specific: a managed reference names a secret this platform wrote for
+      one source, so an environment variable that happened to collide with it should not shadow it. The
+      other two sources are the deployment's, and a deployment's own secret is reached by its own name.
+    */
+    name: 'this platform’s encrypted store',
+    async read(reference) {
+      return readManagedSecret(reference);
+    },
+  },
   {
     name: 'the environment',
     async read(reference) {

@@ -1,17 +1,27 @@
 /**
  * A registered data source, and what may be said about it in the browser.
  *
- * ── THE ONE RULE THIS FILE EXISTS TO ENFORCE ────────────────────────────────────────────
- * **A credential never reaches the client.** A registration is split in two: the part that describes
- * the source — its kind, host, database, which schemas to scan — and the part that authenticates to it.
- * The first is metadata a steward reviews and an audit log records. The second is a reference to a
- * secret the server resolves, and it is not optional to keep them apart: a connection string with a
- * password in it, sent to a browser once, is a password in a browser's memory, in its devtools, and in
- * every error report it ever uploads.
+ * ── THE RULE THIS FILE EXISTS TO ENFORCE, AND ITS ONE PERMITTED DIRECTION ────────────────
+ * **A credential never reaches the client, and is never stored on a registration.** A registration is
+ * split in two: the part that describes the source — its kind, host, database, which schemas to scan —
+ * and the part that authenticates to it. The first is metadata a steward reviews and an audit log
+ * records. The second is a *reference* to a secret the server resolves.
  *
- * So `SourceRegistration` carries `secretRef` — the *name* of a secret in the deployment's store — and
- * never a password. `redactForClient` is the only function that produces the shape a UI receives, and
- * it is deliberately not the identity function even though the type would allow it.
+ * A password may travel in exactly one direction, once: from the steward's browser to the server, over
+ * TLS, at the moment they register or rotate it. That is how every database tool works and there is no
+ * way around it — somebody has to type the password somewhere. What must never happen is the return
+ * journey, or the persistence:
+ *
+ *   · **server → browser: never.** `redactForClient` is the only function that produces the shape a UI
+ *     receives, and it is deliberately not the identity function even though the type would allow it.
+ *   · **stored on the registration: never.** The server writes the password into its own secret store
+ *     under a generated name and keeps only that name. `SourceRegistration` has no password field, and
+ *     `normalise` builds its result field by field so a future field cannot be carried across by
+ *     accident.
+ *
+ * The two shapes are therefore different types, and that separation is the mechanism rather than a
+ * convention: `SourceRegistrationInput` is what a steward submits and may carry a password;
+ * `SourceRegistration` is what exists afterwards and cannot.
  *
  * ── AND WHY MS SQL SERVER IS A KIND, NOT AN ASSUMPTION ──────────────────────────────────
  * `kind` exists from the first driver rather than after the second. The introspection SQL, the type
@@ -36,10 +46,45 @@ export const IMPLEMENTED_KINDS: readonly SourceKind[] = ['mssql'];
 export type AuthMode =
   /** Windows / Entra integrated auth. No secret to hold, which is the reason to prefer it. */
   | 'integrated'
-  /** SQL login. `secretRef` names the password in the deployment's secret store. */
+  /** SQL login: a username, and a password held either by this platform or by the deployment. */
   | 'sqlLogin'
   /** A managed identity resolved by the host. Also no secret in this process. */
   | 'managedIdentity';
+
+/**
+ * What a steward submits. May carry a credential; is never what gets stored.
+ *
+ * `secretRef` and `password` are alternatives, and exactly one is expected for a SQL login:
+ *
+ *   · **`secretRef`** — the deployment already holds the password in its own store (Key Vault, Secrets
+ *     Manager, a mounted file) and the platform is told its name. Nothing sensitive crosses the wire.
+ *   · **`password`** — the steward types it. It crosses once, over TLS, and the server puts it in its
+ *     secret store under a name it generates. This is the ordinary path for somebody registering a
+ *     database they have credentials for and no vault to put them in first.
+ */
+export interface SourceRegistrationInput {
+  name: string;
+  kind: SourceKind;
+  host: string;
+  port?: number;
+  database: string;
+  auth: AuthMode;
+  username?: string;
+  /** The name of a secret the deployment already holds. Mutually exclusive with `password`. */
+  secretRef?: string;
+  /**
+   * The password itself, typed by the steward.
+   *
+   * The only field in this codebase that may hold one, and it exists on the *input* type alone. It is
+   * read by the server, written to the secret store, and dropped: `normalise` cannot copy it because
+   * `SourceRegistration` has nowhere to put it.
+   */
+  password?: string;
+  schemas: string[];
+  encrypt: boolean;
+  trustServerCertificate: boolean;
+  registeredBy: string;
+}
 
 export interface SourceRegistration {
   id: string;
@@ -101,6 +146,15 @@ export interface SourceSummary {
   scannable: boolean;
   /** Warnings accepted at registration, so the detail view can show what was waved through. */
   acknowledged: string[];
+  /**
+   * How the credential is held — never what it is.
+   *
+   * The client needs this to offer the right action: a `managed` password can be rotated in place, a
+   * `reference` is changed in the deployment's own store, and `none` is integrated or managed-identity
+   * auth with no secret to rotate at all. Saying which is not a disclosure; saying the name of a secret
+   * a caller has no need for would be, so `secretRef` still does not cross.
+   */
+  credential: 'none' | 'managed' | 'reference';
 }
 
 export interface RegistrationProblem {
@@ -150,9 +204,7 @@ const IDENTIFIER_PATTERN = /^[A-Za-z_][A-Za-z0-9_$#@]{0,127}$/;
  * pasted into the host field, a scan of every schema on a shared server, a production database
  * registered with certificate checking off.
  */
-export function checkRegistration(
-  input: Omit<SourceRegistration, 'id' | 'registeredAt' | 'readOnly' | 'acknowledged'>,
-): RegistrationProblem[] {
+export function checkRegistration(input: SourceRegistrationInput): RegistrationProblem[] {
   const problems: RegistrationProblem[] = [];
 
   if (!input.name.trim()) problems.push({ field: 'name', message: 'Give the source a name.', severity: 'blocking' });
@@ -210,30 +262,72 @@ export function checkRegistration(
     if (!input.username?.trim()) {
       problems.push({ field: 'username', message: 'A SQL login needs a username.', severity: 'blocking' });
     }
+    /*
+      Exactly one of the two ways to supply a credential.
+
+      Both are legitimate and they are not interchangeable, so "either" is not the same as "both". A
+      registration carrying a password *and* the name of a secret is ambiguous about which one is
+      authoritative, and the wrong answer is a login failure against a production account — which locks
+      it out. Refusing the ambiguity is cheaper than guessing.
+    */
     const reference = input.secretRef?.trim();
-    if (reference) {
+    const typed = input.password ?? '';
+
+    if (reference && typed) {
+      problems.push({
+        field: 'password',
+        message:
+          'Give a password or the name of a secret, not both. Two credentials with no rule about which wins is a login failure against the account you are least able to afford one on.',
+        severity: 'blocking',
+      });
+    } else if (reference) {
       const checked = checkSecretRef(reference);
       if (!checked.ok) {
         problems.push({ field: 'secretRef', message: checked.reason, severity: 'blocking' });
       }
-    }
-    if (!reference) {
+    } else if (typed) {
+      /*
+        Only two checks, and neither is a strength rule.
+
+        The password belongs to somebody else's account under somebody else's policy; a platform that
+        refuses it for not having a symbol in it is a platform that cannot connect to a database that
+        works. What *is* worth catching is a value that cannot possibly be right: empty, or padded with
+        whitespace that a copy-and-paste added and the server will not strip for you.
+      */
+      if (!typed.trim()) {
+        problems.push({ field: 'password', message: 'The password is blank.', severity: 'blocking' });
+      } else if (typed !== typed.trim()) {
+        problems.push({
+          field: 'password',
+          message:
+            'The password starts or ends with a space. That is legal, so it is not corrected silently — remove it if it was a copy-and-paste artefact.',
+          severity: 'warning',
+        });
+      }
+    } else {
       problems.push({
-        field: 'secretRef',
+        field: 'password',
         message:
-          'Name the secret holding the password. This platform stores a reference, never the password itself.',
+          'A SQL login needs a credential: type the password, or name a secret your deployment already holds.',
         severity: 'blocking',
       });
     }
   }
 
-  // A password in any field, however it got there.
+  /*
+    A password pasted into a field that is not for one.
+
+    `password` is skipped, obviously — it is the one field that may hold a credential. The scan looks
+    for a `password=` fragment rather than for anything secret-looking, because that fragment is the
+    signature of the mistake this catches: a whole connection string pasted into the host or the name.
+  */
   for (const [field, value] of Object.entries(input)) {
-    if (typeof value !== 'string') continue;
+    if (field === 'password' || typeof value !== 'string') continue;
     if (/\b(password|pwd)\s*=/i.test(value)) {
       problems.push({
         field,
-        message: 'That looks like a password. Store it in your secret store and register its name here.',
+        message:
+          'That looks like a connection string with a password in it. Put the host here, and the password in the password field.',
         severity: 'blocking',
       });
     }
@@ -259,11 +353,18 @@ export function checkRegistration(
   return problems;
 }
 
-/** The registration as stored: defaults applied, whitespace gone, read-only asserted. */
+/**
+ * The registration as stored: defaults applied, whitespace gone, read-only asserted, credential gone.
+ *
+ * `managedSecretRef` is where the server put a password the steward typed. Passing it is what turns a
+ * submitted credential into a stored *reference* — and there is no path by which `input.password`
+ * reaches the result, because the result is built field by field and has nowhere to put one.
+ */
 export function normalise(
-  input: Omit<SourceRegistration, 'id' | 'registeredAt' | 'readOnly' | 'acknowledged'>,
+  input: SourceRegistrationInput,
   id: string,
   now: string,
+  managedSecretRef?: string,
 ): SourceRegistration {
   const cleaned = {
     name: input.name.trim(),
@@ -273,7 +374,7 @@ export function normalise(
     database: input.database.trim(),
     auth: input.auth,
     username: input.username?.trim() || undefined,
-    secretRef: input.secretRef?.trim() || undefined,
+    secretRef: managedSecretRef?.trim() || input.secretRef?.trim() || undefined,
     schemas: [...new Set(input.schemas.map((schema) => schema.trim()))].sort(),
     encrypt: input.encrypt,
     trustServerCertificate: input.trustServerCertificate,
@@ -292,7 +393,7 @@ export function normalise(
       is production registered with certificate checking off" has an answer — this list, beside who
       registered it and when.
     */
-    acknowledged: checkRegistration(cleaned)
+    acknowledged: checkRegistration({ ...cleaned, password: input.password })
       .filter((problem) => problem.severity === 'warning')
       .map((problem) => problem.field),
     registeredAt: now,
@@ -319,7 +420,33 @@ export function redactForClient(source: SourceRegistration): SourceSummary {
     registeredAt: source.registeredAt,
     scannable: IMPLEMENTED_KINDS.includes(source.kind),
     acknowledged: [...source.acknowledged],
+    credential: credentialKind(source),
   };
+}
+
+/**
+ * Which of the three the stored reference is, from its shape.
+ *
+ * A managed secret is one this platform wrote, and it is recognisable because this platform is what
+ * named it — `MANAGED_SECRET_PREFIX`. Anything else came from the deployment's own store and is theirs
+ * to rotate. Derived rather than stored as a fourth field, so the two cannot disagree.
+ */
+function credentialKind(source: SourceRegistration): SourceSummary['credential'] {
+  if (!source.secretRef) return 'none';
+  return source.secretRef.startsWith(MANAGED_SECRET_PREFIX) ? 'managed' : 'reference';
+}
+
+/**
+ * The prefix on every secret this platform writes for itself.
+ *
+ * A namespace, so a managed secret can never collide with one a deployment created, and so
+ * `credentialKind` can tell them apart without a flag that could drift out of step with the reference.
+ */
+export const MANAGED_SECRET_PREFIX = 'opus/sources/';
+
+/** Where a source's own password lives, when the steward typed one. */
+export function managedSecretRefFor(sourceId: string): string {
+  return `${MANAGED_SECRET_PREFIX}${sourceId}/password`;
 }
 
 /**

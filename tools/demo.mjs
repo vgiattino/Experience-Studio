@@ -26,6 +26,15 @@ import { promisify } from 'node:util';
 const run = promisify(execFile);
 
 const PASSWORD = process.env['EDM_SA_PASSWORD'] ?? 'Opus!Edm2026Scan';
+
+/**
+ * A development encryption key for the secret store: 32 bytes, base64.
+ *
+ * Fixed so that a password stored in one `npm run demo` still opens in the next — a key that changed
+ * per run would make every stored credential undecryptable on restart, which looks exactly like a bug.
+ * Overridden by `OPUS_SECRET_KEY` if the environment sets one.
+ */
+const DEV_ENCRYPTION_KEY = 'b3B1cy1leHBlcmllbmNlLXN0dWRpby1kZXYta2V5ISE=';
 const PORT = process.env['EDM_PORT'] ?? '11433';
 const API_PORT = process.env['PORT'] ?? '4000';
 const STUDIO_PORT = '4300';
@@ -104,6 +113,19 @@ process.on('SIGINT', () => {
   process.exit(0);
 });
 
-// The secret reaches the API as a named secret, which is the only way the platform accepts one.
-start('api', 'npm', ['run', 'api'], { OPUS_SECRET_KV_EDM_SA: PASSWORD });
+/*
+  Two secrets go to the API, and they do different jobs.
+
+  `OPUS_SECRET_KV_EDM_SA` is the sandbox's password under the name a registration can refer to — that is
+  the "name a secret my deployment already holds" route working without a vault.
+
+  `OPUS_SECRET_KEY` is the key the API encrypts *typed* passwords with. Without it the password field is
+  not offered at all, which is correct but makes half the feature invisible in a demo. A fixed
+  development key here is the same bargain as the sandbox password: a throwaway container, on loopback,
+  with nothing real in it. A deployment supplies its own from its platform's secret manager.
+*/
+start('api', 'npm', ['run', 'api'], {
+  OPUS_SECRET_KV_EDM_SA: PASSWORD,
+  OPUS_SECRET_KEY: process.env['OPUS_SECRET_KEY'] ?? DEV_ENCRYPTION_KEY,
+});
 start('studio', 'npm', ['run', 'studio'], {});

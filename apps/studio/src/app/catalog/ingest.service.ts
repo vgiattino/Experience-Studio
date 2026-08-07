@@ -132,6 +132,15 @@ export class IngestService {
   readonly refusal = signal<string | null>(null);
   /** Why the API could not be reached, when it could not. The cause, not a guess. */
   readonly unreachable = signal<api.ApiUnreachable | null>(null);
+  /**
+   * Whether this deployment can store a password the steward types.
+   *
+   * From the server, because only the server knows whether it has an encryption key. The form asks
+   * before rendering the field: offering one the server will refuse is worse than not offering it, since
+   * the steward types a real credential in first.
+   */
+  readonly canStorePassword = signal(false);
+  readonly passwordUnavailableReason = signal<string | undefined>(undefined);
   readonly ready = signal(false);
 
   readonly sources = computed(() => this.states());
@@ -166,6 +175,8 @@ export class IngestService {
 
     if (result.status === 'available') {
       this.mode.set('api');
+      this.canStorePassword.set(result.canStorePassword);
+      this.passwordUnavailableReason.set(result.passwordUnavailableReason);
       this.setSources(
         result.sources.map((source) => ({
           summary: source,
@@ -260,6 +271,28 @@ export class IngestService {
   }
 
   // ── scan and infer ───────────────────────────────────────────────────────────────────
+
+  /**
+   * Replace a source's password.
+   *
+   * Returns the server's message on failure and nothing on success, the same shape as `register` — and
+   * like `register` it holds the password only as an argument. Nothing on this service stores it.
+   */
+  async rotateCredential(id: string, credential: { username?: string; password: string }): Promise<string | null> {
+    if (this.mode() !== 'api') {
+      return 'Rotating a credential needs the catalog service; this is the built-in schema.';
+    }
+    this.busy.set('Storing the new password…');
+    try {
+      const updated = await api.rotateCredential(id, credential);
+      this.patch(id, { summary: updated });
+      return null;
+    } catch (error) {
+      return error instanceof Error ? error.message : String(error);
+    } finally {
+      this.busy.set(null);
+    }
+  }
 
   async scan(sampleEnumerations: boolean): Promise<void> {
     const state = this.selected();

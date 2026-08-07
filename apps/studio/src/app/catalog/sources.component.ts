@@ -48,7 +48,10 @@ interface RegisterForm {
   database: string;
   auth: 'integrated' | 'sqlLogin' | 'managedIdentity';
   username: string;
+  /** Which of the two credential routes the steward chose. Explicit, never inferred. */
+  credential: 'password' | 'secretRef';
   secretRef: string;
+  password: string;
   /** Comma separated as typed; split when the form is read. */
   schemas: string;
   encrypt: boolean;
@@ -172,10 +175,12 @@ interface RegisterForm {
           @if (registering()) {
             <h2 class="src-h2">Register a source</h2>
             <p class="src-lead">
-              Two halves, kept apart on purpose: what the source <b>is</b>, which a reviewer reads and an
-              audit log records, and how the platform <b>authenticates</b> to it, which is the name of a
-              secret and never a secret. A password sent to a browser once is a password in that
-              browser's memory, its devtools, and every error report it uploads.
+              Two halves: what the source <b>is</b> — read by a reviewer, recorded in an audit log — and
+              how the platform <b>authenticates</b> to it. The second never becomes part of the first. A
+              password may travel from here to the catalog service, once; it does not travel back, and it
+              is not stored on the registration. What is stored is the name of a secret, which is why this
+              record can be logged, diffed and shown to a reviewer without any of those being a
+              disclosure.
             </p>
 
             <div class="src-form">
@@ -246,9 +251,9 @@ interface RegisterForm {
                   [ngModel]="form().auth"
                   (ngModelChange)="edit('auth', $event)"
                 >
-                  <option value="integrated">Integrated — no secret to hold</option>
+                  <option value="integrated">Integrated — the host's own identity, no secret</option>
                   <option value="managedIdentity">Managed identity — resolved by the host</option>
-                  <option value="sqlLogin">SQL login — names a secret</option>
+                  <option value="sqlLogin">SQL login — a username and a password</option>
                 </select>
               </label>
 
@@ -260,20 +265,78 @@ interface RegisterForm {
                     [ngModel]="form().username"
                     (ngModelChange)="edit('username', $event)"
                     placeholder="edm_reader"
+                    autocomplete="off"
                   />
                 </label>
-                <label class="opus-field">
-                  <span class="opus-field-label">Secret name</span>
-                  <input
-                    class="opus-input"
-                    [ngModel]="form().secretRef"
-                    (ngModelChange)="edit('secretRef', $event)"
-                    placeholder="kv/edm/reader"
-                  />
-                  <span class="opus-field-help">
-                    The name of the secret in your store — not the password.
-                  </span>
-                </label>
+
+                <!--
+                  Two ways to give the credential, and the choice is explicit rather than inferred from
+                  which box has text in it. Inferring it means a steward who fills in both gets whichever
+                  the code happens to prefer — and a wrong credential against a production account locks
+                  it out, so the ambiguity is refused rather than resolved.
+                -->
+                <div class="opus-field src-wide">
+                  <span class="opus-field-label">Credential</span>
+                  <div class="src-choice">
+                    <label class="src-check">
+                      <input
+                        type="radio"
+                        name="credential"
+                        [checked]="form().credential === 'password'"
+                        [disabled]="!ingest.canStorePassword()"
+                        (change)="edit('credential', 'password')"
+                      />
+                      <span>Type the password</span>
+                    </label>
+                    <label class="src-check">
+                      <input
+                        type="radio"
+                        name="credential"
+                        [checked]="form().credential === 'secretRef'"
+                        (change)="edit('credential', 'secretRef')"
+                      />
+                      <span>Name a secret my deployment already holds</span>
+                    </label>
+                  </div>
+
+                  @if (form().credential === 'password') {
+                    @if (ingest.canStorePassword()) {
+                      <input
+                        class="opus-input"
+                        type="password"
+                        [ngModel]="form().password"
+                        (ngModelChange)="edit('password', $event)"
+                        placeholder="the password for this login"
+                        autocomplete="new-password"
+                      />
+                      <!--
+                        Said where it is typed, not in a help centre. Somebody entering a production
+                        credential into a browser is entitled to know exactly what becomes of it.
+                      -->
+                      <span class="opus-field-help">
+                        Sent once to the catalog service, encrypted there with AES-256-GCM, and never
+                        returned. The registration stores only the name of the stored secret, so nothing
+                        that is logged, exported or shown to a reviewer contains it.
+                      </span>
+                    } @else {
+                      <p class="src-problems src-problems-solo">
+                        {{ ingest.passwordUnavailableReason() }}
+                      </p>
+                    }
+                  } @else {
+                    <input
+                      class="opus-input"
+                      [ngModel]="form().secretRef"
+                      (ngModelChange)="edit('secretRef', $event)"
+                      placeholder="kv/edm/reader"
+                      autocomplete="off"
+                    />
+                    <span class="opus-field-help">
+                      The name of the secret, not the password. The platform resolves it on every scan, so
+                      rotating it in your own store takes effect without touching this registration.
+                    </span>
+                  }
+                </div>
               }
 
               <label class="opus-field src-wide">
@@ -434,6 +497,22 @@ interface RegisterForm {
                   <opus-icon name="check" [size]="14" />
                   Test the connection
                 </button>
+                <!--
+                  Offered only for a password this platform stored. A credential held in the deployment's
+                  own store is rotated there — the platform resolves the reference on every scan, so it
+                  picks the new value up without being told.
+                -->
+                @if (state.summary.credential === 'managed') {
+                  <button
+                    type="button"
+                    class="opus-btn"
+                    [disabled]="!!ingest.busy()"
+                    (click)="rotating.set(!rotating())"
+                  >
+                    <opus-icon [name]="rotating() ? 'close' : 'shield'" [size]="14" />
+                    {{ rotating() ? 'Cancel' : 'Change the password' }}
+                  </button>
+                }
               }
               <label class="src-check">
                 <input type="checkbox" [ngModel]="sample()" (ngModelChange)="sample.set($event)" />
@@ -443,6 +522,34 @@ interface RegisterForm {
                 The one part of a scan that reads data rather than metadata, so it is off unless you ask.
               </span>
             </div>
+
+            @if (rotating()) {
+              <div class="src-rotate">
+                <label class="opus-field">
+                  <span class="opus-field-label">New password</span>
+                  <input
+                    class="opus-input"
+                    type="password"
+                    [ngModel]="newPassword()"
+                    (ngModelChange)="newPassword.set($event)"
+                    autocomplete="new-password"
+                  />
+                  <span class="opus-field-help">
+                    Replaces the stored secret. Any pooled connection is dropped, so the next scan proves
+                    the new password rather than continuing on the old one until it idles out.
+                  </span>
+                </label>
+                <button
+                  type="button"
+                  class="opus-btn primary"
+                  [disabled]="!newPassword().trim() || !!ingest.busy()"
+                  (click)="rotate(state.summary.id)"
+                >
+                  <opus-icon name="check" [size]="14" />
+                  Store it
+                </button>
+              </div>
+            }
 
             @if (ingest.busy(); as busy) {
               <p class="src-status">{{ busy }}</p>
@@ -940,6 +1047,25 @@ interface RegisterForm {
       margin-block-start: 6px;
     }
 
+    /* The rotation form: one field and a button, inline rather than a dialogue. */
+    .src-rotate {
+      display: flex;
+      align-items: flex-start;
+      gap: var(--opus-space-3);
+      flex-wrap: wrap;
+      margin-block-start: var(--opus-space-4);
+      padding: var(--opus-space-3);
+      border: 1px solid var(--opus-border);
+      border-radius: var(--opus-radius-md);
+      background: var(--opus-surface);
+      max-inline-size: 40rem;
+    }
+
+    .src-rotate .opus-field {
+      flex: 1 1 18rem;
+      margin-block-end: 0;
+    }
+
     .src-blocked {
       margin: 0 20px;
       padding-block: var(--opus-space-4);
@@ -1114,6 +1240,18 @@ interface RegisterForm {
 
     .src-wide {
       grid-column: 1 / -1;
+    }
+
+    /* The two credential routes, side by side above the field they choose between. */
+    .src-choice {
+      display: flex;
+      gap: var(--opus-space-4);
+      flex-wrap: wrap;
+      margin-block-end: 6px;
+    }
+
+    .src-choice .src-check {
+      margin-block-end: 0;
     }
 
     .src-check {
@@ -1440,6 +1578,14 @@ export class SourcesComponent {
   protected readonly author = AUTHOR;
   protected readonly kinds: readonly SourceKind[] = SOURCE_KINDS;
   protected readonly registering = signal(false);
+  protected readonly rotating = signal(false);
+  /**
+   * The new password, while it is being typed.
+   *
+   * Cleared the moment it is submitted, successfully or not. A component field is not a secret store,
+   * and a value left on one outlives the form: it survives a tab switch, and it is in a heap snapshot.
+   */
+  protected readonly newPassword = signal('');
   protected readonly sample = signal(false);
   protected readonly open = signal(new Set<string>());
 
@@ -1459,7 +1605,9 @@ export class SourcesComponent {
     database: '',
     auth: 'integrated',
     username: '',
+    credential: 'password',
     secretRef: '',
+    password: '',
     schemas: '',
     encrypt: true,
     trustServerCertificate: false,
@@ -1569,7 +1717,9 @@ export class SourcesComponent {
       database: form.database,
       auth: form.auth,
       username: form.username || undefined,
-      secretRef: form.secretRef || undefined,
+      // Exactly one, decided by the radio rather than by which field has content.
+      secretRef: form.credential === 'secretRef' ? form.secretRef || undefined : undefined,
+      password: form.credential === 'password' ? form.password || undefined : undefined,
       schemas: form.schemas
         .split(',')
         .map((schema) => schema.trim())
@@ -1578,6 +1728,19 @@ export class SourcesComponent {
       trustServerCertificate: form.trustServerCertificate,
       registeredBy: AUTHOR.displayName,
     };
+  }
+
+  protected async rotate(id: string): Promise<void> {
+    const password = this.newPassword();
+    // Cleared before the await, not after: an in-flight request must not leave it recoverable if the
+    // component is destroyed while waiting.
+    this.newPassword.set('');
+    const failure = await this.ingest.rotateCredential(id, { password });
+    if (failure) {
+      this.ingest.problem.set(failure);
+      return;
+    }
+    this.rotating.set(false);
   }
 
   protected onPick(id: string): void {

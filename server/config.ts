@@ -45,6 +45,14 @@ export const PATHS = {
    * particular version of the catalog it produced.
    */
   sources: join(ROOT, 'server/data/sources'),
+  /**
+   * Passwords a steward typed, encrypted at rest.
+   *
+   * Its own directory rather than a field on the registration, because the two have different
+   * lifetimes and different privileges: a registration is metadata anybody reviewing the platform may
+   * read, and this is not.
+   */
+  secrets: join(ROOT, 'server/data/secrets'),
 } as const;
 
 export const PORT = Number(process.env['PORT'] ?? 4000);

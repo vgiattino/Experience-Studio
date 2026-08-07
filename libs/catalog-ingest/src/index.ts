@@ -16,10 +16,12 @@
 
 export {
   IMPLEMENTED_KINDS,
+  MANAGED_SECRET_PREFIX,
   SOURCE_KINDS,
   blockingProblems,
   checkRegistration,
   checkSecretRef,
+  managedSecretRefFor,
   normalise,
   quoteIdentifier,
   redactForClient,
@@ -27,6 +29,7 @@ export {
   type RegistrationProblem,
   type SourceKind,
   type SourceRegistration,
+  type SourceRegistrationInput,
   type SourceSummary,
 } from './source';
 
