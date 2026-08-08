@@ -66,9 +66,10 @@ export async function executorFor(source: SourceRegistration): Promise<SqlExecut
     port: source.port,
     database: source.database,
     // Resolved server-side from the *name* held in the registration. The secret never travels.
+    // (A trusted connection takes a different driver entirely — see Windows authentication below.)
     ...(source.auth === 'sqlLogin'
       ? { user: source.username, password: await secrets.get(source.secretRef!) }
-      : { authentication: { type: 'ntlm' } }),
+      : { authentication: { type: 'azure-active-directory-msi-app-service', options: {} } }),
     options: {
       encrypt: source.encrypt,
       trustServerCertificate: source.trustServerCertificate,
@@ -175,6 +176,65 @@ password somewhere. What must never happen is the return journey or the persiste
 - **stored on the registration: never.** `SourceRegistration` has no password field. The two shapes are
   different types, which is the mechanism rather than a convention: `SourceRegistrationInput` is what a
   steward submits and may carry a password; `SourceRegistration` is what exists afterwards and cannot.
+
+### Windows authentication: two modes, and why they are not one
+
+They were one, and it could not work. `integrated` promised "the host's own identity, so there is no
+secret in it" and was implemented as the `mssql` driver's NTLM option with an empty options object — but
+that option is not integrated auth. It is NTLM with an **explicit** domain, username and password, and
+`tedious` validates those before opening a socket:
+
+```
+The "config.authentication.options.domain" property must be of type string.
+```
+
+So the mode threw on every attempt, on every platform, and had never connected. The `as sql.config`
+cast on that line is what let it compile; removing the cast also exposed the same shape defect sitting
+in `managedIdentity`.
+
+| Mode | What it presents | Driver | Secret |
+| --- | --- | --- | --- |
+| `integrated` | the Windows account **the API process runs as** | `msnodesqlv8` | none |
+| `ntlm` | a Windows domain account, `DOMAIN\user` | `tedious` (the default) | a password |
+| `sqlLogin` | a SQL Server login | `tedious` | a password |
+| `managedIdentity` | the host's managed identity | `tedious` | none |
+
+**`integrated` needs a second driver, and there is no way around it.** `mssql` runs on `tedious` by
+default, and `tedious` has no SSPI path at all — it cannot present the token of the account the process
+is running as. Only `msnodesqlv8` can, and it is a native binding over the Microsoft ODBC driver, so in
+practice Windows-only.
+
+It is loaded on demand and its absence is a sentence rather than a crash. Not a dependency, because
+**npm cannot satisfy the actual prerequisite anyway**: `msnodesqlv8` binds to the Microsoft ODBC Driver
+for SQL Server, which the operating system installs. A deployment that needs a trusted connection has an
+OS-level step regardless, and pretending the package alone were enough would move the failure from a
+sentence in the UI to an ODBC error nobody can read.
+
+The ODBC driver name is `ODBC Driver 18 for SQL Server`, overridable with `OPUS_ODBC_DRIVER`. Named
+rather than left to the driver's own default, which is `SQL Server Native Client 11.0` on Windows —
+deprecated since 2011 and absent from any machine built this decade. Taking that default yields
+`IM002: data source name not found`, which reads as a mistake in the registration and is really a driver
+nobody installed, so that error carries the fix.
+
+The connection string is built here rather than by `mssql`, because its builder emits no
+`TrustServerCertificate` — and against the self-signed certificate every non-production SQL Server has,
+with ODBC Driver 18 defaulting `Encrypt` to on, that cannot connect and the registration's own "trust an
+unverified certificate" tick would do nothing.
+
+**`ntlm` is the escape hatch, and it is a real one.** It works on the default driver from any platform,
+which matters because the API is not always on Windows and the ODBC driver is not always installable on
+a locked-down one. Its password travels the same route as a SQL login's.
+
+The domain is required and **blocking, not a warning**: it is parsed out of `DOMAIN\user` because that
+is the only form anybody types, and a blank domain fails against the domain controller exactly like a
+wrong password does. A handful of those locks the account out, so the cheapest moment to catch it is
+before the first attempt. A login failure on this mode also reports which domain was tried, because a
+wrong domain and a wrong password are indistinguishable to a reader who knows their password.
+
+`needsCredential(auth)` is a function rather than `auth === 'sqlLogin'` repeated. That comparison was in
+the check, the edit check, the executor, the rotation route, the scan guard and the screen — six places
+that all had to learn about a second credential-bearing mode, and hand-editing six is how one gets
+missed and a source silently becomes unscannable.
 
 ### Two ways to give a SQL login its password
 
@@ -914,7 +974,27 @@ numbers CTE — so 3.7 million rows take about a minute rather than an afternoon
 | Edit with the API down entirely | opens on the built-in source's own values, in browser-only mode |
 | Try again after a 502 | recovers into the filled form with no reload |
 
-Gate: `npm run typecheck` (new — see below), metadata validation, 547 unit tests, all three apps build
+### Windows authentication
+
+Two of these cannot be proved on this machine and are marked as such: a *successful* trusted connection
+needs Windows with the ODBC driver, and a *successful* domain login needs a domain controller. What is
+proved is that the config the driver receives is now valid, that the handshake is attempted, and that
+every refusal names its own fix.
+
+| Checked | Result |
+| --- | --- |
+| The old `integrated` config, against the live server | `The "config.authentication.options.domain" property must be of type string.` — thrown by config validation, **before any socket**. The mode had never worked |
+| The new `ntlm` config, same server | connects, starts the NTLM handshake, and SQL Server answers `Login failed. The login is from an untrusted domain` — a real login attempt, which is the correct answer from a container with no domain |
+| `integrated` registered | accepted with **no username and no secret** — `credential: none` |
+| `integrated` tested | names the real prerequisite: msnodesqlv8, the ODBC driver, Windows, and the domain-login alternative. A scan hits the same message rather than a stack trace |
+| `ntlm` without a domain | 422 at registration, quoting the lockout risk — never attempted |
+| `ntlm` with `GRESHAM\vincent.giattino` | registers, stores the password, attempts the login, and the failure **names the domain it used** |
+| Rotation | now offered for `ntlm` as well as `sqlLogin`, and still refused for `integrated` ("no password to rotate") |
+| `sqlLogin` regression | connects to 16.0.4265.3 and scans 12 tables into 10 entities, unchanged |
+| In the browser | four options in the right order; `integrated` shows no credential fields; `ntlm` shows `GRESHAM\vincent.giattino` as the placeholder and the lockout note; a domain-less username disables **Register** and a domain plus password enables it |
+| Unverifiable here | a successful trusted connection, and a successful domain login. Both need Windows |
+
+Gate: `npm run typecheck` (new — see below), metadata validation, 554 unit tests, all three apps build
 with no budget warnings.
 
 ### The typecheck that was checking nothing

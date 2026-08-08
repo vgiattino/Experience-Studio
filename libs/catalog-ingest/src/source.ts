@@ -43,13 +43,64 @@ export const SOURCE_KINDS: readonly SourceKind[] = [
 /** Which kinds can actually be scanned today. Anything else registers and reports "no probe". */
 export const IMPLEMENTED_KINDS: readonly SourceKind[] = ['mssql'];
 
+/**
+ * How the platform authenticates to a source.
+ *
+ * ── WHY `integrated` AND `ntlm` ARE TWO MODES AND NOT ONE ───────────────────────────────
+ * They were one, and it did not work. `integrated` promised "the host's own identity, so there is no
+ * secret in it" and was implemented as the `mssql` driver's NTLM option — but that option is not
+ * integrated auth at all. It is NTLM with an *explicit* domain, username and password, and handing it
+ * an empty options object throws before a socket is opened. The mode could never have connected on any
+ * platform.
+ *
+ * The two are genuinely different and the difference is the credential:
+ *
+ *   · **`integrated`** is a trusted connection: the API process's own Windows token. Nothing is typed
+ *     and nothing is stored. It needs the `msnodesqlv8` driver, because `tedious` — what `mssql` uses
+ *     by default — has no SSPI support whatsoever.
+ *   · **`ntlm`** is a domain account: `DOMAIN\user` and a password. That password is a secret and
+ *     travels the same route as a SQL login's. It works on `tedious`, so it works wherever the API
+ *     runs, which matters because the API is not always on Windows and the ODBC driver is not always
+ *     installable on a locked-down one.
+ *
+ * Conflating them produced a mode that advertised no secret and then required three.
+ */
 export type AuthMode =
-  /** Windows / Entra integrated auth. No secret to hold, which is the reason to prefer it. */
+  /** A trusted connection — the API process's own Windows identity. No secret. Needs `msnodesqlv8`. */
   | 'integrated'
+  /** A Windows domain account: `DOMAIN\user` plus a password. Works on the default driver. */
+  | 'ntlm'
   /** SQL login: a username, and a password held either by this platform or by the deployment. */
   | 'sqlLogin'
   /** A managed identity resolved by the host. Also no secret in this process. */
   | 'managedIdentity';
+
+/**
+ * Which modes need a password, and therefore all of the credential machinery.
+ *
+ * A function rather than a comparison repeated at eight call sites, because it *was* repeated — as
+ * `auth === 'sqlLogin'` — in the check, the edit check, the executor, the rotation route, the scan
+ * guard and the screen. Adding a second credential-bearing mode to those by hand is how one of them
+ * gets missed and a source silently becomes unscannable.
+ */
+export function needsCredential(auth: AuthMode): boolean {
+  return auth === 'sqlLogin' || auth === 'ntlm';
+}
+
+/**
+ * `DOMAIN\user`, split.
+ *
+ * The driver wants the domain as its own field. Nobody types it that way: Windows shows an account as
+ * `GRESHAM\vincent.giattino` everywhere a person ever sees one, so that is what the form accepts and
+ * this is where it becomes two values. Parsing rather than adding a `domain` field also means a
+ * registration that switches between SQL and NTLM does not carry a field that means nothing in one of
+ * them.
+ */
+export function splitWindowsLogin(username: string): { domain?: string; user: string } {
+  const at = username.indexOf('\\');
+  if (at < 0) return { user: username };
+  return { domain: username.slice(0, at), user: username.slice(at + 1) };
+}
 
 /**
  * What a steward submits. May carry a credential; is never what gets stored.
@@ -95,7 +146,7 @@ export interface SourceRegistration {
   port?: number;
   database: string;
   auth: AuthMode;
-  /** For `sqlLogin`. */
+  /** For `sqlLogin` and `ntlm`. The latter holds `DOMAIN\user`. */
   username?: string;
   /**
    * The *name* of a secret in the deployment's store — never the secret.
@@ -271,9 +322,30 @@ export function checkRegistration(input: SourceRegistrationInput): RegistrationP
     });
   }
 
-  if (input.auth === 'sqlLogin') {
+  if (needsCredential(input.auth)) {
     if (!input.username?.trim()) {
-      problems.push({ field: 'username', message: 'A SQL login needs a username.', severity: 'blocking' });
+      problems.push({
+        field: 'username',
+        message:
+          input.auth === 'ntlm'
+            ? 'A Windows domain login needs a username, as DOMAIN\\user.'
+            : 'A SQL login needs a username.',
+        severity: 'blocking',
+      });
+    } else if (input.auth === 'ntlm' && !splitWindowsLogin(input.username.trim()).domain) {
+      /*
+        The domain is required by the driver and cannot be guessed.
+
+        Blocking rather than a warning because the alternative is a login attempt against a domain
+        controller with a blank domain, and a run of those locks the account out — which is the most
+        expensive failure this whole file exists to prevent.
+      */
+      problems.push({
+        field: 'username',
+        message:
+          'A Windows domain login is DOMAIN\\user — the domain cannot be guessed, and attempts without it fail against the domain controller and count towards a lockout.',
+        severity: 'blocking',
+      });
     }
     /*
       Exactly one of the two ways to supply a credential.
@@ -321,7 +393,7 @@ export function checkRegistration(input: SourceRegistrationInput): RegistrationP
       problems.push({
         field: 'password',
         message:
-          'A SQL login needs a credential: type the password, or name a secret your deployment already holds.',
+          'This login needs a credential: type the password, or name a secret your deployment already holds.',
         severity: 'blocking',
       });
     }
@@ -619,7 +691,7 @@ export function materialChanges(changes: readonly FieldChange[]): FieldChange[] 
  */
 function cleanEdit(edit: SourceEdit, kind: SourceKind): Required<Pick<SourceEdit, 'name' | 'host' | 'database' | 'auth' | 'schemas' | 'encrypt' | 'trustServerCertificate'>> &
   Pick<SourceEdit, 'port' | 'username' | 'secretRef'> {
-  const login = edit.auth === 'sqlLogin';
+  const login = needsCredential(edit.auth);
   return {
     name: edit.name.trim(),
     host: edit.host.trim(),
@@ -677,7 +749,7 @@ function resolveSecretRef(
   current: SourceRegistration,
   cleaned: ReturnType<typeof cleanEdit>,
 ): string | undefined {
-  if (cleaned.auth !== 'sqlLogin') return undefined;
+  if (!needsCredential(cleaned.auth)) return undefined;
   if (cleaned.secretRef) return cleaned.secretRef;
   return current.secretRef?.startsWith(MANAGED_SECRET_PREFIX) ? current.secretRef : undefined;
 }
@@ -690,7 +762,7 @@ function resolveSecretRef(
  * visibly a change to the other.
  */
 function willHaveCredential(context: EditContext, cleaned: ReturnType<typeof cleanEdit>): boolean {
-  if (cleaned.auth !== 'sqlLogin') return false;
+  if (!needsCredential(cleaned.auth)) return false;
   return !!cleaned.secretRef || context.credential === 'managed';
 }
 
@@ -728,10 +800,10 @@ export function checkEdit(context: EditContext, edit: SourceEdit): RegistrationP
     registeredBy: context.registeredBy,
   }).filter(
     // Replaced below with the warning this function's comment explains.
-    (problem) => !(problem.field === 'password' && cleaned.auth === 'sqlLogin' && !credentialHeld),
+    (problem) => !(problem.field === 'password' && needsCredential(cleaned.auth) && !credentialHeld),
   );
 
-  if (cleaned.auth === 'sqlLogin' && !credentialHeld) {
+  if (needsCredential(cleaned.auth) && !credentialHeld) {
     problems.push({
       field: 'secretRef',
       message:

@@ -40,7 +40,7 @@ import type {
   SourceEdit,
   SourceKind,
 } from '@opus/catalog-ingest';
-import { SOURCE_KINDS } from '@opus/catalog-ingest';
+import { SOURCE_KINDS, needsCredential } from '@opus/catalog-ingest';
 
 import { AUTHOR } from '../session';
 import { CatalogService } from '@opus/catalog';
@@ -54,7 +54,7 @@ interface RegisterForm {
   host: string;
   port: number;
   database: string;
-  auth: 'integrated' | 'sqlLogin' | 'managedIdentity';
+  auth: AuthMode;
   username: string;
   /** Which of the two credential routes the steward chose. Explicit, never inferred. */
   credential: 'password' | 'secretRef';
@@ -358,24 +358,40 @@ interface EditSession {
                     [ngModel]="form.auth"
                     (ngModelChange)="editField('auth', $event)"
                   >
-                    <option value="integrated">Integrated — the host's own identity, no secret</option>
-                    <option value="managedIdentity">Managed identity — resolved by the host</option>
+                    <option value="integrated">
+                      Windows integrated — the account this API runs as, no secret
+                    </option>
+                    <option value="ntlm">Windows domain login — DOMAIN\\user and a password</option>
                     <option value="sqlLogin">SQL login — a username and a password</option>
+                    <option value="managedIdentity">Managed identity — resolved by the host</option>
                   </select>
                   <span class="opus-field-help">
-                    Moving away from a SQL login deletes the password this platform stored for it.
+                    @if (form.auth === 'integrated') {
+                      A trusted connection uses the Windows account the catalog service is running as —
+                      not yours, unless you started it. It needs the msnodesqlv8 driver on a Windows
+                      host; the connection test says so plainly if it is missing.
+                    } @else {
+                      Moving away from a login with a password deletes the one this platform stored.
+                    }
                   </span>
                 </label>
 
-                @if (form.auth === 'sqlLogin') {
+                @if (needsCredential(form.auth)) {
                   <label class="opus-field">
                     <span class="opus-field-label">Username</span>
                     <input
                       class="opus-input"
                       [ngModel]="form.username"
                       (ngModelChange)="editField('username', $event)"
+                      [placeholder]="form.auth === 'ntlm' ? 'GRESHAM\\\\vincent.giattino' : 'edm_reader'"
                       autocomplete="off"
                     />
+                    @if (form.auth === 'ntlm') {
+                      <span class="opus-field-help">
+                        The domain is required and cannot be guessed — a blank one fails exactly like a
+                        wrong password, and repeated attempts count towards a lockout.
+                      </span>
+                    }
                   </label>
 
                   <!--
@@ -648,22 +664,47 @@ interface EditSession {
                   [ngModel]="form().auth"
                   (ngModelChange)="edit('auth', $event)"
                 >
-                  <option value="integrated">Integrated — the host's own identity, no secret</option>
-                  <option value="managedIdentity">Managed identity — resolved by the host</option>
+                  <option value="integrated">
+                    Windows integrated — the account this API runs as, no secret
+                  </option>
+                  <option value="ntlm">Windows domain login — DOMAIN\\user and a password</option>
                   <option value="sqlLogin">SQL login — a username and a password</option>
+                  <option value="managedIdentity">Managed identity — resolved by the host</option>
                 </select>
+                <!--
+                  Said at the moment of choosing, because "Windows integrated" is read as "my Windows
+                  login" and it is not — it is the *service account's*. On a laptop running npm run demo
+                  those are the same identity; on a deployed API they are emphatically not, and finding
+                  that out from a login failure is finding it out late.
+                -->
+                <span class="opus-field-help">
+                  @if (form().auth === 'integrated') {
+                    A trusted connection presents the Windows account the catalog service runs as. That
+                    is you when you started it yourself, and a service account when somebody deployed
+                    it. It needs the msnodesqlv8 driver on a Windows host — if that is not available,
+                    the domain login below does the same job from anywhere.
+                  } @else {
+                    How the platform authenticates. Nothing typed here is stored on the registration.
+                  }
+                </span>
               </label>
 
-              @if (form().auth === 'sqlLogin') {
+              @if (needsCredential(form().auth)) {
                 <label class="opus-field">
                   <span class="opus-field-label">Username</span>
                   <input
                     class="opus-input"
                     [ngModel]="form().username"
                     (ngModelChange)="edit('username', $event)"
-                    placeholder="edm_reader"
+                    [placeholder]="form().auth === 'ntlm' ? 'GRESHAM\\\\vincent.giattino' : 'edm_reader'"
                     autocomplete="off"
                   />
+                  @if (form().auth === 'ntlm') {
+                    <span class="opus-field-help">
+                      The domain is required and cannot be guessed — a blank one fails exactly like a
+                      wrong password, and repeated attempts count towards a lockout.
+                    </span>
+                  }
                 </label>
 
                 <!--
@@ -2208,6 +2249,8 @@ export class SourcesComponent {
 
   protected readonly author = AUTHOR;
   protected readonly kinds: readonly SourceKind[] = SOURCE_KINDS;
+  /** The library's own rule, reachable from the template — see `needsCredential`. */
+  protected readonly needsCredential = needsCredential;
   protected readonly registering = signal(false);
   protected readonly rotating = signal(false);
   /**
@@ -2372,7 +2415,7 @@ export class SourcesComponent {
     if (!state.summary.scannable) {
       return `This platform has no probe for ${state.summary.kind} yet, so its schema cannot be read. MS SQL Server is the dialect implemented today.`;
     }
-    if (state.summary.auth === 'sqlLogin' && state.summary.credential === 'none') {
+    if (needsCredential(state.summary.auth) && state.summary.credential === 'none') {
       return 'This source has no credential. Register it again with a password, or with the name of a secret.';
     }
     return null;
@@ -2422,8 +2465,8 @@ export class SourcesComponent {
       port: form.port === null || Number.isNaN(form.port) ? undefined : Number(form.port),
       database: form.database,
       auth: form.auth,
-      username: form.auth === 'sqlLogin' ? form.username || undefined : undefined,
-      secretRef: form.auth === 'sqlLogin' ? form.secretRef || undefined : undefined,
+      username: needsCredential(form.auth) ? form.username || undefined : undefined,
+      secretRef: needsCredential(form.auth) ? form.secretRef || undefined : undefined,
       schemas: form.schemas
         .split(',')
         .map((schema) => schema.trim())
@@ -2583,7 +2626,7 @@ export class SourcesComponent {
    */
   protected credentialAction(state: SourceState): 'set' | 'change' | null {
     if (this.ingest.mode() !== 'api') return null;
-    if (state.summary.auth !== 'sqlLogin') return null;
+    if (!needsCredential(state.summary.auth)) return null;
     // A reference into the deployment's own store is rotated there; this platform resolves it each scan.
     if (state.summary.credential === 'reference') return null;
     if (!this.ingest.canStorePassword()) return null;

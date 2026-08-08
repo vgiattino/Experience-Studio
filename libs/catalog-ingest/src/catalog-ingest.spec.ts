@@ -36,9 +36,11 @@ import {
   editableView,
   managedSecretRefFor,
   materialChanges,
+  needsCredential,
   normalise,
   quoteIdentifier,
   redactForClient,
+  splitWindowsLogin,
   type SourceEdit,
   type SourceRegistration,
   type SourceRegistrationInput,
@@ -474,6 +476,89 @@ describe('editing a registration', () => {
     // A reference is a name the steward chose and may change; it is not the secret.
     expect(view.secretRef).toBe('kv/edm/reader');
     expect(view.credential).toBe('reference');
+  });
+});
+
+describe('Windows authentication', () => {
+  /*
+    The defect these exist for: `integrated` was implemented as the driver's NTLM option with an empty
+    options object. That option is not integrated auth — it is NTLM with an explicit domain, user and
+    password — and an empty object throws before a socket is opened, so the mode could never have
+    connected on any platform. Splitting it into two modes is the fix; these pin the split.
+  */
+
+  it('knows which modes carry a password and which do not', () => {
+    expect(needsCredential('sqlLogin')).toBe(true);
+    expect(needsCredential('ntlm')).toBe(true);
+    // The two that exist precisely because nothing is typed.
+    expect(needsCredential('integrated')).toBe(false);
+    expect(needsCredential('managedIdentity')).toBe(false);
+  });
+
+  it('registers a trusted connection with no credential at all', () => {
+    // The whole point of the mode: no username, no secret, nothing to store.
+    expect(checkRegistration(registration({ auth: 'integrated' }))).toEqual([]);
+  });
+
+  it('splits DOMAIN\\user, which is the only form anybody types', () => {
+    expect(splitWindowsLogin('GRESHAM\\vincent.giattino')).toEqual({
+      domain: 'GRESHAM',
+      user: 'vincent.giattino',
+    });
+    expect(splitWindowsLogin('edm_reader')).toEqual({ user: 'edm_reader' });
+  });
+
+  it('refuses a domain login with no domain, rather than trying one', () => {
+    /*
+      Blocking, not a warning. A blank domain fails against the domain controller exactly like a wrong
+      password does, and a handful of those locks the account out — so the cheapest possible moment to
+      catch it is before the first attempt.
+    */
+    const problems = checkRegistration(
+      registration({ auth: 'ntlm', username: 'vincent.giattino', password: 'x' }),
+    );
+    const blocking = blockingProblems(problems);
+    expect(blocking.map((problem) => problem.field)).toContain('username');
+    expect(blocking.some((problem) => problem.message.includes('lockout'))).toBe(true);
+  });
+
+  it('accepts a domain login with a domain and a credential', () => {
+    expect(
+      checkRegistration(
+        registration({ auth: 'ntlm', username: 'GRESHAM\\vincent.giattino', password: 'x' }),
+      ),
+    ).toEqual([]);
+  });
+
+  it('holds a domain login to the same credential rules as a SQL login', () => {
+    // Neither a password nor a secret name.
+    const none = checkRegistration(registration({ auth: 'ntlm', username: 'GRESHAM\\v' }));
+    expect(blockingProblems(none).map((problem) => problem.field)).toContain('password');
+
+    // Both at once, which is ambiguous about which wins.
+    const both = checkRegistration(
+      registration({ auth: 'ntlm', username: 'GRESHAM\\v', password: 'x', secretRef: 'kv/edm/v' }),
+    );
+    expect(blockingProblems(both).map((problem) => problem.field)).toContain('password');
+  });
+
+  it('keeps a domain login’s credential through an edit, and drops it on the way to integrated', () => {
+    const domain = normalise(
+      registration({ auth: 'ntlm', username: 'GRESHAM\\v', secretRef: 'kv/edm/v' }),
+      'edm',
+      '2026-08-06T09:00:00.000Z',
+    );
+
+    const renamed = applyEdit(domain, editOf(domain, { name: 'Renamed' }), 'now', 'Steward');
+    expect(renamed.secretRef).toBe('kv/edm/v');
+    expect(renamed.username).toBe('GRESHAM\\v');
+
+    // A trusted connection has no username and no secret, so both go — and the route deletes the
+    // stored password to match.
+    const trusted = applyEdit(domain, editOf(domain, { auth: 'integrated' }), 'now', 'Steward');
+    expect(trusted.username).toBeUndefined();
+    expect(trusted.secretRef).toBeUndefined();
+    expect(redactForClient(trusted).credential).toBe('none');
   });
 });
 

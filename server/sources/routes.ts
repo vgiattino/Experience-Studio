@@ -41,6 +41,7 @@ import {
   infer,
   managedSecretRefFor,
   materialChanges,
+  needsCredential,
   normalise,
   promote,
   redactForClient,
@@ -277,7 +278,7 @@ sources.put('/:id', async (req, res) => {
   }
 
   const auth = (body['auth'] ?? stored.registration.auth) as AuthMode;
-  if (!['integrated', 'sqlLogin', 'managedIdentity'].includes(auth)) {
+  if (!['integrated', 'ntlm', 'sqlLogin', 'managedIdentity'].includes(auth)) {
     problem(res, 422, 'validation', `"${String(auth)}" is not an authentication mode this platform knows.`);
     return;
   }
@@ -419,7 +420,7 @@ sources.put('/:id/credential', async (req, res) => {
     problem(res, 422, 'validation', 'Give the new password.');
     return;
   }
-  if (stored.registration.auth !== 'sqlLogin') {
+  if (!needsCredential(stored.registration.auth)) {
     problem(
       res,
       422,
@@ -496,7 +497,7 @@ sources.post('/:id/test', async (req, res) => {
   }
 
   const { registration } = stored;
-  if (registration.auth === 'sqlLogin' && !(await secretIsAvailable(registration.secretRef))) {
+  if (needsCredential(registration.auth) && !(await secretIsAvailable(registration.secretRef))) {
     // Two different problems, two different fixes: a password this platform stored and can no longer
     // read, versus a reference into a store that does not hold it.
     const managed = summarise(stored).credential === 'managed';
