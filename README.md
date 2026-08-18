@@ -179,6 +179,7 @@ a feature branch. Being one major behind is the cheap time to move; two is not, 
 | [`schemas/`](./schemas/) | The core metadata model — ten models as JSON Schemas, three proposed runtime-core models, the expression grammar, worked examples |
 | [`docs/PRD.md`](./docs/PRD.md) | **The requirements of record** — FR-1…FR-57, UJ-1…UJ-13, NFRs, open questions. Extracted from `docs/source/`, which holds the authoritative .docx |
 | [`docs/PRD-TRACEABILITY.md`](./docs/PRD-TRACEABILITY.md) | All 57 FRs reconciled against the code: what is built, partial, scaffolded, and absent — read this before starting a feature |
+| [`docs/LEGACY-EDM-SOLUTION.md`](./docs/LEGACY-EDM-SOLUTION.md) | The legacy Opus EDM Solution editor as observed — the domain's existing workflow model, and what it implies for the gaps above. Reference, not a UI to clone |
 | [`docs/`](./docs/) | Product vision documents, personas, journeys, and the implementation records |
 | `apps/experience-studio/` | The Experience Builder prototype — prompt, generate, preview, save, run |
 | `apps/viewer/` | Runtime shell, the AI generation panel, and the page definitions, fixtures and catalog all apps serve |
