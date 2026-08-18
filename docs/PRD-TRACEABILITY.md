@@ -71,7 +71,7 @@ The prototype is a strong vertical slice of one persona doing one thing once.
 | FR | Status | Evidence | Gap |
 |---|---|---|---|
 | FR-17 Unified Experience object | **Built** | One `experience.schema.json` for a single dashboard and a multi-page application alike; all three creation paths converge on it; the renderer has no per-kind branch | — |
-| FR-18 Embedded Security **and Workflows** | **Scaffolded** | `security` is a real element and is *enforced* — the persona switch turns widgets `denied` while the page stays usable, verified | **`workflows` does not exist on the Experience schema.** Properties are: schemaVersion, id, name, description, icon, kind, workspaceId, pages, navigation, parameters, dataSources, actions, security, presentation, localization, environments, version, tags. An Approval Workspace cannot carry its approval workflow. [`LEGACY-EDM-SOLUTION.md`](./LEGACY-EDM-SOLUTION.md) records what a workflow already means in Opus EDM — typed nodes, ordered inputs, nesting, decisions, typed return codes — so this gap now has a concrete shape to fill |
+| FR-18 Embedded Security **and Workflows** | **Scaffolded** | `security` is a real element and is *enforced* — the persona switch turns widgets `denied` while the page stays usable, verified | **`workflows` does not exist on the Experience schema.** Properties are: schemaVersion, id, name, description, icon, kind, workspaceId, pages, navigation, parameters, dataSources, actions, security, presentation, localization, environments, version, tags. An Approval Workspace cannot carry its approval workflow |
 | FR-19 Per-Experience AI Context, Documentation, Tests | **Absent** | — | None of the three exist on the schema. This is load-bearing: FR-36's generated tests have nowhere to live, and FR-34's impact analysis has no per-Experience test set to select from |
 
 ## §4.5 Product Experience Registry & Integration Contract — FR-20…FR-24
@@ -146,11 +146,6 @@ mechanism to a new object, not new machinery.
 Conversion / Hybrid can be attempted. The PRD leaves the default strategy open (§15) and this
 document does not narrow it.
 
-One clarification on scope: the legacy **Solution** editor recorded in
-[`LEGACY-EDM-SOLUTION.md`](./LEGACY-EDM-SOLUTION.md) is *not* a Business Screen — it is process
-orchestration, and converting it is a different and larger problem than converting a page. FR-44 as
-written addresses screens; whether Solutions are in migration scope at all is not answered by the PRD.
-
 ## §4.12 Studio Access Tiers, Permissions & Collaboration — FR-45…FR-51
 
 **Absent in full.** Zero files match `accessTier`, `studioTier` or `collaborator`.
@@ -207,12 +202,6 @@ Ordered by how much else they unblock, not by size.
    FR-18 and FR-19 are model changes, and four other FRs (FR-36 regression tests, FR-34's test
    selection, FR-23's AI Context inheritance, and an Approval Workspace being able to carry its own
    approval) are blocked behind them. Cheap to add, and everything downstream assumes them.
-
-   `workflows` is no longer a blank cheque. The legacy Solution editor
-   ([`LEGACY-EDM-SOLUTION.md`](./LEGACY-EDM-SOLUTION.md)) shows the domain's existing answer — typed
-   nodes, ordered inputs within a step, nested workflows, decisions, and typed return codes where a
-   named non-error exit is branchable. It also shows two things the PRD omits and users already have:
-   **resume-from-failure**, and a `disabled` state distinct from `skipped`.
 
 3. **The lifecycle is six state labels with no gate.** `lifecycleState` has the right values and
    nothing checks them. Validation exists and is good (8 levels, verified) but is not a precondition
