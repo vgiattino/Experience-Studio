@@ -63,6 +63,15 @@ export interface ExperienceSummary {
    * `ownerFor` assigns one.
    */
   owner?: string;
+  /**
+   * Which Opus product it belongs to — FR-12's and FR-28's product filter.
+   *
+   * Read from the definition rather than recomputed here, because the route derives it on save from the
+   * entities the experience reads and the store has no catalog to derive it from. Absent means one of
+   * three things the route distinguishes and this field cannot: nothing claims what it reads, it spans
+   * two products, or it was saved before any catalog was promoted.
+   */
+  product?: string;
   prompt?: string;
   tags: readonly string[];
 }
@@ -204,6 +213,7 @@ export function summarize(record: StoredExperience): ExperienceSummary {
     // The catalog entry has to show who answers for this — it is the field a reuser checks before
     // extending somebody else's work, and the one owner-scoped analytics is keyed on.
     owner: d.owner?.userId,
+    product: d.productId,
     prompt: d.version?.provenance?.generation?.prompt,
     tags: d.tags ?? [],
   };

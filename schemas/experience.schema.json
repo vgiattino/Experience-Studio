@@ -31,6 +31,13 @@
       "maxLength": 128
     },
 
+    "productId": {
+      "description": "Which Opus product this experience belongs to, by the `id` of that product's registration (`product.schema.json`). Optional, and the three reasons it is optional are the whole design:\n\n· Not every experience has a product. An experience over catalog entities no product has claimed is legitimate, and forcing a value would mean inventing one.\n· It is DERIVED, not asserted. The server resolves it from the entities the experience's data sources read, because an experience's product is a fact about what it reads rather than a label somebody typed — a label can be wrong and stay wrong.\n· An experience whose pages span two products is a case the PRD explicitly leaves open (FR-3). The server records the ambiguity rather than picking, so `productId` is absent and the reason is in the response.\n\nWhat it is for: the Catalog's product filter (FR-12, FR-28), and choosing which product's AI Context and components ground a refinement (FR-3, FR-23).",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$",
+      "maxLength": 64
+    },
+
     "owner": {
       "description": "Who is accountable for this experience. Distinct from three things it is easily confused with: `version.audit.createdBy` is who first made it, `version.provenance.actorId` is who produced this particular version, and `workspaceId` is where it lives. Ownership survives every one of those changing. It is the anchor for sharing, for owner-scoped analytics, and for the question an approver actually asks — who answers for this. Optional in the schema so artifacts written before it validate; the server assigns one on every save and refuses to leave it unassigned, which is where the invariant is really kept.",
       "type": "object",

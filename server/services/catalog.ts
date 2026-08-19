@@ -19,7 +19,7 @@ import { dirname } from 'node:path';
 import { CatalogService, type PhysicalMap, type RawCatalog } from '@opus/catalog';
 import type { QualifiedRef, UserContext } from '@opus/contracts';
 
-import { PATHS } from '../config';
+import { PATHS, catalogSeedPath } from '../config';
 
 const service = new CatalogService();
 let loaded = false;
@@ -33,7 +33,7 @@ let loaded = false;
  */
 function ensureLoaded(): CatalogService {
   if (!loaded) {
-    const path = existsSync(PATHS.publishedCatalog) ? PATHS.publishedCatalog : PATHS.catalog;
+    const path = existsSync(PATHS.publishedCatalog) ? PATHS.publishedCatalog : catalogSeedPath();
     service.hydrate(JSON.parse(readFileSync(path, 'utf8')) as RawCatalog);
     loaded = true;
   }

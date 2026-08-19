@@ -53,6 +53,15 @@ export const PATHS = {
    * manifest, which would pull the framework into this process for information the JSON already holds.
    */
   components: join(ROOT, 'libs/components'),
+  /**
+   * Product registrations — the Product Integration Contract's artifacts (FR-20…FR-24).
+   *
+   * Read at runtime rather than compiled in, which is the mechanism behind "adding a product is a
+   * registration exercise, not a platform code change": a deployment adds a file here and nothing
+   * rebuilds. Not under `DATA_ROOT`, because these are checked-in configuration a product team owns,
+   * not mutable state this process writes.
+   */
+  products: join(ROOT, 'products'),
   /** Seed definitions copied into the store on first boot if it is empty. */
   seed: join(ROOT, 'apps/viewer/public/definitions'),
   /**
@@ -72,6 +81,27 @@ export const PATHS = {
    */
   secrets: join(DATA_ROOT, 'secrets'),
 } as const;
+
+/**
+ * Two read-only paths, resolved per call and overridable — the same argument `DATA_ROOT` and
+ * `OPUS_SECRET_DIR` already make, applied to the two inputs this process reads rather than writes.
+ *
+ * The operator case: a deployment runs the API against a catalog fixture and a set of product
+ * registrations that live wherever its configuration management puts them, not inside the application
+ * directory. Nothing here writes to either, so nothing prevented it except these paths being computed
+ * from `import.meta.url` at module load.
+ *
+ * The test case, which is what surfaced it: under a bundler `import.meta.url` is the bundle's location,
+ * so `ROOT` resolves somewhere else entirely and every path built on it points at nothing. A test that
+ * needs an environment variable to find real files is a test reporting that operators needed one too.
+ */
+export function catalogSeedPath(): string {
+  return process.env['OPUS_CATALOG_PATH']?.trim() || PATHS.catalog;
+}
+
+export function productsDir(): string {
+  return process.env['OPUS_PRODUCTS_DIR']?.trim() || PATHS.products;
+}
 
 export const PORT = Number(process.env['PORT'] ?? 4000);
 

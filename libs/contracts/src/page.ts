@@ -350,6 +350,15 @@ export interface ExperienceDefinition {
   icon?: string;
   kind?: 'application' | 'single' | 'process';
   workspaceId?: string;
+  /**
+   * Which Opus product this belongs to, by its registration id (`@opus/product-registry`).
+   *
+   * Derived by the server from the entities the data sources read, not asserted by the author — a
+   * product is a fact about what an experience reads, and a typed label can be wrong and stay wrong.
+   * Absent for an experience over unclaimed entities, and absent when its pages span two products,
+   * which is a case the PRD leaves open rather than one the server resolves.
+   */
+  productId?: string;
   /** Optional here so pre-ownership artifacts type-check; the server never stores one without it. */
   owner?: ExperienceOwner;
   pages: Readonly<Record<Identifier, PageDefinition | { $pageRef: string }>>;

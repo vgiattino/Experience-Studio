@@ -7,19 +7,28 @@
  *   /api/ai/*          Generation Service   — the model seam
  *   /api/data/batch    Data Gateway         — the single path to data
  *   /api/sources       Catalog Ingestion    — register, scan and publish a database's vocabulary
+ *   /api/products      Product Registry     — what each Opus product contributes (FR-20…FR-24)
  *
  * Conventions kept from §3.4 because calling code branches on them: one batch per render, a
  * machine-readable error category on every failure, and a correlation id threaded through.
  */
 
 import { Router, type Request, type Response } from 'express';
-import type { BatchRequest, DataSource, UserContext } from '@opus/contracts';
+import type { BatchRequest, DataSource, ExperienceDefinition, UserContext } from '@opus/contracts';
 import type { ModelRequest } from '@opus/generation';
 
 import { AI_PROVIDER } from './config';
 import { activeProvider, providerCatalogue, type MockSimulationInput } from './ai/providers/index';
 import { catalogVersion, projectionFor } from './services/catalog';
 import { validateExperience, type ExperienceValidation } from './services/validate-experience';
+import {
+  identifyProductFromPrompt,
+  productOf,
+  productProblems,
+  productViews,
+  unreadableRegistrations,
+  type ProductResolution,
+} from './services/product-registry';
 import { executeBatch, servedEntities } from './services/gateway';
 import { applyTransition } from '@opus/experience-model';
 
@@ -69,6 +78,7 @@ api.get('/health', async (_req, res) => {
     catalogVersion: catalogVersion(),
     entities: await servedEntities(),
     experiences: store.list().length,
+    products: productViews().length,
     ai: { active: AI_PROVIDER, providers: providerCatalogue() },
   });
 });
@@ -151,9 +161,84 @@ function actorFor(req: Request, res: Response): string | null {
   return callerFrom(req).user.id;
 }
 
+/**
+ * Resolve which product an experience belongs to, from the entities it reads, and stamp it.
+ *
+ * Derived rather than accepted from the body for the same reason `actorId` is: a value the client
+ * asserts about itself is a value the client can be wrong about. Here the wrongness is quieter than an
+ * unauthenticated actor but lasts longer — a page repointed at another product's data keeps its old
+ * badge forever, and every catalog filter built on that badge is then wrong.
+ *
+ * Three outcomes remove any value rather than keep a stale one, and one keeps it:
+ *
+ *   resolved   → stamp it
+ *   unclaimed  → no product owns what this reads; a badge would be an invention
+ *   spans      → two products; picking one mislabels the artifact silently (FR-3 leaves this open)
+ *   noCatalog  → nothing can be derived, so whatever was there is left alone rather than destroyed
+ */
+function withResolvedProduct(definition: ExperienceDefinition): {
+  definition: ExperienceDefinition;
+  resolution: ProductResolution;
+} {
+  const resolution = productOf(definition);
+  if (resolution.outcome === 'resolved') {
+    return { definition: { ...definition, productId: resolution.productId }, resolution };
+  }
+  if (resolution.outcome === 'noCatalog') return { definition, resolution };
+  const { productId: _stale, ...withoutProduct } = definition;
+  return { definition: withoutProduct as ExperienceDefinition, resolution };
+}
+
+// ── products (the Product Experience Registry) ──────────────────────────────
+/**
+ * What each Opus product contributes, and what is wrong with how it was registered.
+ *
+ * `problems` is returned alongside the products rather than logged and forgotten, because the
+ * interesting failures are the ones an operator caused by editing a file: two products claiming one
+ * catalog domain, a System Journey stepping through a page nobody ships. A registry that hides those
+ * behaves as though the second claimant does not exist.
+ */
+api.get('/products', (_req, res) => {
+  res.json({
+    products: productViews(),
+    problems: productProblems(),
+    unreadable: unreadableRegistrations(),
+  });
+});
+
+/**
+ * FR-3 on its own, so the identification can be seen without generating anything.
+ *
+ * A GET with the prompt as a query parameter: this reads nothing and writes nothing, and making it a
+ * POST would imply otherwise.
+ */
+api.get('/products/identify', (req, res) => {
+  const prompt = String(req.query['prompt'] ?? '').trim();
+  if (!prompt) return problem(res, 400, 'validation', 'Pass the prompt as ?prompt=…');
+  res.json(identifyProductFromPrompt(prompt));
+});
+
 // ── experiences ─────────────────────────────────────────────────────────────
+/**
+ * The catalog listing, with the product filled in where the record does not carry one.
+ *
+ * A seeded artifact never went through `save`, so nothing ever stamped its `productId` — and those are
+ * exactly the shipped baselines a user browses first. Leaving them blank would make FR-12's product
+ * column look broken on a fresh install, and back-filling the files on boot would dirty a checked-in
+ * fixture as a side effect of reading it.
+ *
+ * Deriving here costs one extra read per row. Acceptable at this scale and worth stating: with
+ * thousands of experiences the product belongs in an index, not in a loop.
+ */
 api.get('/experiences', (_req, res) => {
-  res.json(store.list());
+  res.json(
+    store.list().map((summary) => {
+      if (summary.product) return summary;
+      const record = store.get(summary.id);
+      const resolution = record ? productOf(record.definition) : undefined;
+      return resolution?.outcome === 'resolved' ? { ...summary, product: resolution.productId } : summary;
+    }),
+  );
 });
 
 api.get('/experiences/:id', (req, res) => {
@@ -173,7 +258,13 @@ api.put('/experiences/:id', (req, res) => {
   if (!actorId) return;
   if (refuseLifecycleChange(definition, store.get(req.params.id), res)) return;
   try {
-    res.json(store.save({ definition: definition as never, actorId, origin: body.origin as never }));
+    const resolved = withResolvedProduct(definition as never);
+    res.json({
+      ...store.save({ definition: resolved.definition, actorId, origin: body.origin as never }),
+      // Alongside the record rather than inside it: this is how the product was decided, not part of
+      // the artifact. The client shows it when the answer was "two products" or "none".
+      productResolution: resolved.resolution,
+    });
   } catch (error) {
     const status = (error as { status?: number }).status ?? 500;
     problem(res, status, status === 409 ? 'concurrency' : 'validation', (error as Error).message);
@@ -191,7 +282,11 @@ api.post('/experiences', (req, res) => {
   */
   if (refuseLifecycleChange(body.definition, null, res)) return;
   try {
-    res.status(201).json(store.save({ definition: body.definition as never, actorId, origin: body.origin as never }));
+    const resolved = withResolvedProduct(body.definition as never);
+    res.status(201).json({
+      ...store.save({ definition: resolved.definition, actorId, origin: body.origin as never }),
+      productResolution: resolved.resolution,
+    });
   } catch (error) {
     const status = (error as { status?: number }).status ?? 500;
     problem(res, status, status === 409 ? 'concurrency' : 'validation', (error as Error).message);
