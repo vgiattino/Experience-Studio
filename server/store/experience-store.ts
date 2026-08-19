@@ -319,6 +319,57 @@ export function save(request: SaveRequest): StoredExperience {
   return record;
 }
 
+/**
+ * Persist a lifecycle transition.
+ *
+ * ── WHY THIS IS NOT `save` ──────────────────────────────────────────────────────────────
+ * Three of `save`'s behaviours are right for an edit and wrong for a transition:
+ *
+ *   1. **It increments `artifactVersion`.** Approving something must not produce a new version of it —
+ *      the whole value of an approval is that it attaches to the exact version reviewed.
+ *   2. **It refuses a published record.** Publishing has to write the record that marks it published,
+ *      so the refusal would block the transition that creates the state it guards.
+ *   3. **It archives the previous body under `versions/`.** A transition changes only the governance
+ *      stamp, and since the version number does not move, three transitions would write three files
+ *      with the same name — leaving one snapshot where the caller might reasonably expect three. The
+ *      transition history is already kept twice over: accumulated in `governance` on the artifact, and
+ *      per-event in the audit log.
+ *
+ * Legality is not re-checked here. `applyTransition` owns the transition table and has already refused
+ * anything illegal, and a second copy of that table in the store is a second copy that drifts.
+ */
+export function saveTransition(request: {
+  id: string;
+  version: ExperienceDefinition['version'];
+  actorId: string;
+  transition: string;
+}): StoredExperience {
+  const previous = read(request.id);
+  if (!previous) {
+    throw Object.assign(new Error(`No experience "${request.id}"`), { status: 404 });
+  }
+
+  const record: StoredExperience = {
+    ...previous,
+    definition: { ...previous.definition, version: request.version },
+    updatedAt: new Date().toISOString(),
+    updatedBy: request.actorId,
+  };
+  write(record);
+  audit({
+    event: 'transition',
+    id: record.id,
+    transition: request.transition,
+    // The state moved from and to, so the log reads as a chain rather than as a set of snapshots.
+    from: previous.definition.version?.lifecycleState ?? 'draft',
+    to: request.version?.lifecycleState,
+    artifactVersion: request.version?.artifactVersion,
+    actorId: request.actorId,
+    owner: record.definition.owner?.userId,
+  });
+  return record;
+}
+
 export function remove(id: string): boolean {
   const record = read(id);
   if (!record) return false;

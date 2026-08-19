@@ -19,7 +19,10 @@ import type { ModelRequest } from '@opus/generation';
 import { AI_PROVIDER } from './config';
 import { activeProvider, providerCatalogue, type MockSimulationInput } from './ai/providers/index';
 import { catalogVersion, projectionFor } from './services/catalog';
+import { validateExperience, type ExperienceValidation } from './services/validate-experience';
 import { executeBatch, servedEntities } from './services/gateway';
+import { applyTransition } from '@opus/experience-model';
+
 import { PERSONAS, personaById } from './personas';
 import { sources } from './sources/routes';
 import * as store from './store/experience-store';
@@ -104,6 +107,36 @@ api.get('/catalog', (req, res) => {
  * are recording an actor gets a 200 and a different name in the audit log — the same reasoning as the
  * source-edit route refusing a password rather than dropping it.
  */
+/**
+ * Refuse a save that tries to move the lifecycle.
+ *
+ * This is the hole that made FR-33's whole chain optional: a client PUT the entire definition,
+ * `version.lifecycleState` included, so anything could write `published` and skip every stage. State now
+ * moves only through the transition routes below.
+ *
+ * Refused rather than silently reset, on the same reasoning as the actor: a caller who believes they
+ * just published something must not get a 200 for a save that did not.
+ */
+function refuseLifecycleChange(
+  incoming: unknown,
+  previous: { definition?: { version?: { lifecycleState?: string } } } | null,
+  res: Response,
+): boolean {
+  const proposed = (incoming as { version?: { lifecycleState?: string } })?.version?.lifecycleState;
+  const current = previous?.definition?.version?.lifecycleState ?? 'draft';
+  // Absent is fine — most saves do not mention it. Equal is fine. Different is a transition.
+  if (proposed === undefined || proposed === current) return false;
+
+  problem(
+    res,
+    409,
+    'concurrency',
+    `A save cannot move an experience from "${current}" to "${proposed}". The lifecycle moves through its own transitions — POST /api/experiences/:id/submit, /approve, /reject, /publish — each of which checks what that step requires. Save the definition without changing version.lifecycleState.`,
+    'lifecycleNotSavable',
+  );
+  return true;
+}
+
 function actorFor(req: Request, res: Response): string | null {
   const body = req.body as { actorId?: unknown } | undefined;
   if (body && 'actorId' in body && body.actorId !== undefined) {
@@ -138,6 +171,7 @@ api.put('/experiences/:id', (req, res) => {
   }
   const actorId = actorFor(req, res);
   if (!actorId) return;
+  if (refuseLifecycleChange(definition, store.get(req.params.id), res)) return;
   try {
     res.json(store.save({ definition: definition as never, actorId, origin: body.origin as never }));
   } catch (error) {
@@ -151,6 +185,11 @@ api.post('/experiences', (req, res) => {
   if (!body?.definition) return problem(res, 400, 'validation', 'Body must carry `definition`');
   const actorId = actorFor(req, res);
   if (!actorId) return;
+  /*
+    A create may not arrive already approved or published either. `previous` is null, so the guard
+    compares against "draft" — which is the only state a new experience may be created in.
+  */
+  if (refuseLifecycleChange(body.definition, null, res)) return;
   try {
     res.status(201).json(store.save({ definition: body.definition as never, actorId, origin: body.origin as never }));
   } catch (error) {
@@ -158,6 +197,105 @@ api.post('/experiences', (req, res) => {
     problem(res, status, status === 409 ? 'concurrency' : 'validation', (error as Error).message);
   }
 });
+
+// ── lifecycle transitions ───────────────────────────────────────────────────
+/**
+ * `submit`, `approve`, `reject`, `publish` — the four steps FR-33's chain needs.
+ *
+ * One handler because the differences between them all live in `applyTransition`, which is pure and
+ * tested as arithmetic. What the route adds is the three things the pure function cannot know: who is
+ * asking, whether the artifact validates, and how to persist the result.
+ *
+ * `validate` is exposed as its own route too, because a steward wants to see what is wrong before
+ * submitting rather than being told a submission was refused.
+ */
+api.post('/experiences/:id/validate', (req, res) => {
+  const record = store.get(req.params.id);
+  if (!record) return problem(res, 404, 'semantic', `No experience "${req.params.id}"`, 'notFound');
+  res.json(validateExperience(record.definition));
+});
+
+const TRANSITIONS = ['submit', 'approve', 'reject', 'publish'] as const;
+
+for (const transition of TRANSITIONS) {
+  api.post(`/experiences/:id/${transition}`, (req, res) => {
+    const record = store.get(req.params.id);
+    if (!record) return problem(res, 404, 'semantic', `No experience "${req.params.id}"`, 'notFound');
+
+    const actorId = actorFor(req, res);
+    if (!actorId) return;
+    const { user } = callerFrom(req);
+    const body = (req.body ?? {}) as { note?: string; environments?: string[] };
+
+    /*
+      Validation runs only for `submit`, and its cost is the reason.
+
+      It reads every page against the catalog and the manifests. Doing that on approve and publish as
+      well would re-answer a question already answered, and the answer cannot have changed: a save
+      cannot move state, so nothing has been edited since the submission that was validated.
+    */
+    const validation = transition === 'submit' ? validateExperience(record.definition) : undefined;
+
+    const outcome = applyTransition(
+      record.definition.version,
+      {
+        transition,
+        actorId,
+        capabilities: user.capabilities,
+        ...(validation ? { validated: validation.valid } : {}),
+        ...(body.note ? { note: body.note } : {}),
+        ...(body.environments ? { environments: body.environments } : {}),
+      },
+      new Date().toISOString(),
+    );
+
+    if (!outcome.ok) {
+      // 422 rather than 409: the request is well-formed and the artifact's state or the caller's rights
+      // are what refuse it. `code` is the machine-readable half a client branches on.
+      return problem(
+        res,
+        outcome.code === 'missingCapability' ? 403 : 422,
+        outcome.code === 'missingCapability' ? 'entitlement' : 'semantic',
+        validation && outcome.code === 'notValidated'
+          ? `${outcome.detail} ${describeFailures(validation)}`
+          : outcome.detail,
+        outcome.code,
+      );
+    }
+
+    /*
+      Written through `saveTransition`, not `save`.
+
+      `save` refuses to touch a published version and increments the artifact version on every write —
+      both correct for an edit and wrong for a transition: approving something must not create a new
+      version of it, and publishing must be able to write the record that makes it immutable.
+    */
+    const saved = store.saveTransition({
+      id: record.id,
+      version: outcome.version,
+      actorId,
+      transition,
+    });
+    res.json({ ...store.summarize(saved), state: outcome.state, ...(validation ? { validation } : {}) });
+  });
+}
+
+/** The first few reasons a validation failed, for a refusal message somebody can act on. */
+function describeFailures(validation: ExperienceValidation): string {
+  const lines = [
+    ...validation.pages.flatMap((page) =>
+      page.findings
+        .filter((finding) => finding.severity === 'error')
+        .map((finding) => `${page.pageId}: ${finding.message}`),
+    ),
+    ...validation.elements
+      .filter((problem) => problem.severity === 'error')
+      .map((problem) => `${problem.path}: ${problem.message}`),
+  ];
+  if (!lines.length) return '';
+  const shown = lines.slice(0, 3).join(' · ');
+  return lines.length > 3 ? `${shown} (and ${lines.length - 3} more)` : shown;
+}
 
 api.delete('/experiences/:id', (req, res) => {
   const removed = store.remove(req.params.id);

@@ -2,10 +2,8 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://schemas.opus.gresham.com/experience-studio/v1/versioning.schema.json",
   "title": "Versioning Model",
-  "description": "Four independent things are versioned in this platform, and conflating any two of them causes a category of bug that is hard to diagnose later:\n\n1. SCHEMA VERSION — the contract an artifact conforms to. Changes when the metadata model changes.\n2. ARTIFACT VERSION — a specific saved state of one experience. Increments on every published version; immutable once published.\n3. PINNED DEPENDENCY VERSIONS — the catalog and component registry versions an artifact was authored against. Pinned so that a catalog or component change can never silently alter the meaning or appearance of a live page.\n4. COMPONENT CONTRACT VERSION — per component type, in its manifest.\n\nThe envelope below is embedded in every stored artifact and carries all four, plus provenance and lifecycle state.",
-
+  "description": "Four independent things are versioned in this platform, and conflating any two of them causes a category of bug that is hard to diagnose later:\n\n1. SCHEMA VERSION \u2014 the contract an artifact conforms to. Changes when the metadata model changes.\n2. ARTIFACT VERSION \u2014 a specific saved state of one experience. Increments on every published version; immutable once published.\n3. PINNED DEPENDENCY VERSIONS \u2014 the catalog and component registry versions an artifact was authored against. Pinned so that a catalog or component change can never silently alter the meaning or appearance of a live page.\n4. COMPONENT CONTRACT VERSION \u2014 per component type, in its manifest.\n\nThe envelope below is embedded in every stored artifact and carries all four, plus provenance and lifecycle state.",
   "$defs": {
-
     "versionEnvelope": {
       "type": "object",
       "properties": {
@@ -13,36 +11,46 @@
           "description": "Metadata schema version this artifact conforms to. The runtime migrates older versions forward in memory at load time; the stored artifact is never mutated as a side effect of someone viewing a page, because that would break publication immutability and change an audit record with no actor.",
           "$ref": "common.schema.json#/$defs/majorMinor"
         },
-
         "artifactVersion": {
           "description": "Monotonic version of this artifact. Draft edits accumulate as patches against a base version; publishing mints a new immutable artifactVersion.",
           "type": "integer",
           "minimum": 1
         },
-
         "lifecycleState": {
           "description": "Position in the governance lifecycle. Legal transitions: draft->inReview->approved->published->deprecated->archived, with reject returning to draft and rollback repointing to a prior published version. Every transition is a permission check plus an immutable audit record.",
           "type": "string",
-          "enum": ["draft", "inReview", "approved", "published", "deprecated", "archived"]
+          "enum": [
+            "draft",
+            "inReview",
+            "approved",
+            "published",
+            "deprecated",
+            "archived"
+          ]
         },
-
         "immutable": {
-          "description": "True once published. Enforced in storage — no UPDATE grant on published rows — rather than only in service code, because a constraint that lives solely in application logic is eventually violated by one code path.",
+          "description": "True once published. Enforced in storage \u2014 no UPDATE grant on published rows \u2014 rather than only in service code, because a constraint that lives solely in application logic is eventually violated by one code path.",
           "type": "boolean",
           "default": false
         },
-
         "pins": {
           "description": "Dependency versions this artifact was authored and validated against. The reason a published page is reproducible: the same definition, the same catalog, the same component contracts.",
           "type": "object",
           "properties": {
-            "catalogVersion": { "type": "integer", "minimum": 1 },
-            "registryVersion": { "$ref": "common.schema.json#/$defs/semver" }
+            "catalogVersion": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "registryVersion": {
+              "$ref": "common.schema.json#/$defs/semver"
+            }
           },
-          "required": ["catalogVersion", "registryVersion"],
+          "required": [
+            "catalogVersion",
+            "registryVersion"
+          ],
           "additionalProperties": false
         },
-
         "lineage": {
           "type": "object",
           "properties": {
@@ -51,42 +59,80 @@
               "type": "integer",
               "minimum": 1
             },
-            "supersedes": { "type": "integer", "minimum": 1 },
-            "supersededBy": { "type": "integer", "minimum": 1 },
+            "supersedes": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "supersededBy": {
+              "type": "integer",
+              "minimum": 1
+            },
             "copiedFrom": {
               "type": "object",
               "properties": {
-                "experienceId": { "type": "string", "maxLength": 256 },
-                "version": { "type": "integer", "minimum": 1 }
+                "experienceId": {
+                  "type": "string",
+                  "maxLength": 256
+                },
+                "version": {
+                  "type": "integer",
+                  "minimum": 1
+                }
               },
-              "required": ["experienceId"],
+              "required": [
+                "experienceId"
+              ],
               "additionalProperties": false
             },
             "instantiatedFromTemplate": {
               "type": "object",
               "properties": {
-                "templateId": { "type": "string", "maxLength": 256 },
-                "templateVersion": { "type": "integer", "minimum": 1 }
+                "templateId": {
+                  "type": "string",
+                  "maxLength": 256
+                },
+                "templateVersion": {
+                  "type": "integer",
+                  "minimum": 1
+                }
               },
-              "required": ["templateId"],
+              "required": [
+                "templateId"
+              ],
               "additionalProperties": false
             }
           },
           "additionalProperties": false
         },
-
-        "provenance": { "$ref": "#/$defs/provenance" },
-
+        "provenance": {
+          "$ref": "#/$defs/provenance"
+        },
         "validation": {
           "description": "Outcome of the validation cascade at the time this version was created. Recorded so a reviewer can see what was checked, and so a page that only passed after repair is distinguishable from one that passed first time.",
           "type": "object",
           "properties": {
-            "status": { "type": "string", "enum": ["valid", "validWithWarnings", "invalid"] },
+            "status": {
+              "type": "string",
+              "enum": [
+                "valid",
+                "validWithWarnings",
+                "invalid"
+              ]
+            },
             "stagesPassed": {
               "type": "array",
               "items": {
                 "type": "string",
-                "enum": ["structural", "component", "semantic", "binding", "entitlement", "cost", "layout", "accessibility"]
+                "enum": [
+                  "structural",
+                  "component",
+                  "semantic",
+                  "binding",
+                  "entitlement",
+                  "cost",
+                  "layout",
+                  "accessibility"
+                ]
               },
               "uniqueItems": true
             },
@@ -96,147 +142,336 @@
               "items": {
                 "type": "object",
                 "properties": {
-                  "stage": { "type": "string", "maxLength": 32 },
-                  "path": { "type": "string", "maxLength": 512 },
-                  "code": { "type": "string", "maxLength": 64 },
-                  "message": { "type": "string", "maxLength": 1024 }
+                  "stage": {
+                    "type": "string",
+                    "maxLength": 32
+                  },
+                  "path": {
+                    "type": "string",
+                    "maxLength": 512
+                  },
+                  "code": {
+                    "type": "string",
+                    "maxLength": 64
+                  },
+                  "message": {
+                    "type": "string",
+                    "maxLength": 1024
+                  }
                 },
-                "required": ["stage", "code", "message"],
+                "required": [
+                  "stage",
+                  "code",
+                  "message"
+                ],
                 "additionalProperties": false
               }
             },
-            "validatedAt": { "type": "string", "format": "date-time" }
+            "validatedAt": {
+              "type": "string",
+              "format": "date-time"
+            }
           },
-          "required": ["status"],
+          "required": [
+            "status"
+          ],
           "additionalProperties": false
         },
-
         "governance": {
           "type": "object",
           "properties": {
-            "submittedBy": { "type": "string", "maxLength": 256 },
-            "submittedAt": { "type": "string", "format": "date-time" },
+            "submittedBy": {
+              "type": "string",
+              "maxLength": 256
+            },
+            "submittedAt": {
+              "type": "string",
+              "format": "date-time"
+            },
             "approvedBy": {
               "type": "array",
-              "items": { "type": "string", "maxLength": 256 },
+              "items": {
+                "type": "string",
+                "maxLength": 256
+              },
               "maxItems": 5
             },
-            "approvedAt": { "type": "string", "format": "date-time" },
-            "approvalNote": { "type": "string", "maxLength": 2048 },
-            "publishedBy": { "type": "string", "maxLength": 256 },
-            "publishedAt": { "type": "string", "format": "date-time" },
+            "approvedAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "approvalNote": {
+              "type": "string",
+              "maxLength": 2048
+            },
+            "rejectedBy": {
+              "description": "Who sent it back, and when, and why. A rejection is as much a governance event as an approval \u2014 FR-33's chain includes returning work to draft, and an artifact that records only its approvals cannot answer why it took three attempts.",
+              "type": "string",
+              "maxLength": 256
+            },
+            "rejectedAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "rejectionNote": {
+              "type": "string",
+              "maxLength": 2048
+            },
+            "publishedBy": {
+              "type": "string",
+              "maxLength": 256
+            },
+            "publishedAt": {
+              "type": "string",
+              "format": "date-time"
+            },
             "publishedEnvironments": {
               "description": "Environments this version is live in. A version is promoted between environments byte-identically; only the gateway's binding resolution differs, which is what keeps the audit chain from generation to production unbroken.",
               "type": "array",
-              "items": { "type": "string", "maxLength": 64 },
+              "items": {
+                "type": "string",
+                "maxLength": 64
+              },
               "maxItems": 16,
               "uniqueItems": true
             },
-            "deprecatedAt": { "type": "string", "format": "date-time" },
-            "deprecationNote": { "type": "string", "maxLength": 1024 }
+            "deprecatedAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "deprecationNote": {
+              "type": "string",
+              "maxLength": 1024
+            }
           },
           "additionalProperties": false
         },
-
-        "audit": { "$ref": "common.schema.json#/$defs/auditStamp" }
+        "audit": {
+          "$ref": "common.schema.json#/$defs/auditStamp"
+        }
       },
-      "required": ["schemaVersion", "artifactVersion", "lifecycleState", "pins"],
+      "required": [
+        "schemaVersion",
+        "artifactVersion",
+        "lifecycleState",
+        "pins"
+      ],
       "additionalProperties": false
     },
-
     "provenance": {
       "description": "How this version came to exist. For an AI-authored artifact under enterprise governance, provenance is part of the audit trail: a reviewer must be able to ask why a page looks the way it does and get an answer. It is also the dataset that makes real-world generation quality measurable.",
       "type": "object",
       "properties": {
         "origin": {
           "type": "string",
-          "enum": ["human", "ai", "aiRefined", "template", "import", "migration", "copy"]
+          "enum": [
+            "human",
+            "ai",
+            "aiRefined",
+            "template",
+            "import",
+            "migration",
+            "copy"
+          ]
         },
-        "actorId": { "type": "string", "maxLength": 256 },
-        "createdAt": { "type": "string", "format": "date-time" },
-
+        "actorId": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
         "generation": {
           "description": "Present when origin is 'ai' or 'aiRefined'.",
           "type": "object",
           "properties": {
-            "prompt": { "type": "string", "maxLength": 8192 },
-            "intentClass": { "type": "string", "enum": ["create", "refine", "explain"] },
-            "promptTemplateVersion": { "$ref": "common.schema.json#/$defs/semver" },
-            "modelId": { "type": "string", "maxLength": 128 },
-            "modelVersion": { "type": "string", "maxLength": 128 },
-            "temperature": { "type": "number", "minimum": 0, "maximum": 2 },
+            "prompt": {
+              "type": "string",
+              "maxLength": 8192
+            },
+            "intentClass": {
+              "type": "string",
+              "enum": [
+                "create",
+                "refine",
+                "explain"
+              ]
+            },
+            "promptTemplateVersion": {
+              "$ref": "common.schema.json#/$defs/semver"
+            },
+            "modelId": {
+              "type": "string",
+              "maxLength": 128
+            },
+            "modelVersion": {
+              "type": "string",
+              "maxLength": 128
+            },
+            "temperature": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 2
+            },
             "retrievedConcepts": {
               "description": "Catalog references supplied as grounding. Recorded because a wrong binding is usually a retrieval failure rather than a generation failure, and the two are indistinguishable without this.",
               "type": "array",
-              "items": { "$ref": "common.schema.json#/$defs/qualifiedRef" },
+              "items": {
+                "$ref": "common.schema.json#/$defs/qualifiedRef"
+              },
               "maxItems": 200
             },
             "exemplarTemplateIds": {
               "type": "array",
-              "items": { "type": "string", "maxLength": 256 },
+              "items": {
+                "type": "string",
+                "maxLength": 256
+              },
               "maxItems": 20
             },
-            "validationAttempts": { "type": "integer", "minimum": 1, "maximum": 10 },
+            "validationAttempts": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10
+            },
             "repairedStages": {
               "type": "array",
-              "items": { "type": "string", "maxLength": 32 },
+              "items": {
+                "type": "string",
+                "maxLength": 32
+              },
               "maxItems": 16
             },
-            "fallbackUsed": { "type": "boolean", "default": false },
-            "fallbackTemplateId": { "type": "string", "maxLength": 256 },
-            "tokensIn": { "type": "integer", "minimum": 0 },
-            "tokensOut": { "type": "integer", "minimum": 0 },
-            "costEstimate": { "type": "number", "minimum": 0 },
-            "durationMs": { "type": "integer", "minimum": 0 },
-            "correlationId": { "type": "string", "maxLength": 128 }
+            "fallbackUsed": {
+              "type": "boolean",
+              "default": false
+            },
+            "fallbackTemplateId": {
+              "type": "string",
+              "maxLength": 256
+            },
+            "tokensIn": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "tokensOut": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "costEstimate": {
+              "type": "number",
+              "minimum": 0
+            },
+            "durationMs": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "correlationId": {
+              "type": "string",
+              "maxLength": 128
+            }
           },
-          "required": ["modelId", "modelVersion", "intentClass"],
+          "required": [
+            "modelId",
+            "modelVersion",
+            "intentClass"
+          ],
           "additionalProperties": false
         },
-
         "editSummary": {
           "description": "Change record between the base version and this one. patchOperationCount over AI-generated versions is the platform's truest quality signal: it measures how much a human had to correct the first attempt.",
           "type": "object",
           "properties": {
-            "patchOperationCount": { "type": "integer", "minimum": 0 },
-            "humanPatchOperations": { "type": "integer", "minimum": 0 },
-            "aiPatchOperations": { "type": "integer", "minimum": 0 },
-            "summary": { "type": "string", "maxLength": 2048 }
+            "patchOperationCount": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "humanPatchOperations": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "aiPatchOperations": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "summary": {
+              "type": "string",
+              "maxLength": 2048
+            }
           },
           "additionalProperties": false
         },
-
         "migration": {
           "description": "Present when origin is 'migration'.",
           "type": "object",
           "properties": {
-            "fromSchemaVersion": { "$ref": "common.schema.json#/$defs/majorMinor" },
-            "toSchemaVersion": { "$ref": "common.schema.json#/$defs/majorMinor" },
+            "fromSchemaVersion": {
+              "$ref": "common.schema.json#/$defs/majorMinor"
+            },
+            "toSchemaVersion": {
+              "$ref": "common.schema.json#/$defs/majorMinor"
+            },
             "migrationChain": {
               "type": "array",
-              "items": { "type": "string", "maxLength": 64 },
+              "items": {
+                "type": "string",
+                "maxLength": 64
+              },
               "maxItems": 32
             },
-            "appliedAt": { "type": "string", "format": "date-time" },
-            "appliedBy": { "type": "string", "maxLength": 256 }
+            "appliedAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "appliedBy": {
+              "type": "string",
+              "maxLength": 256
+            }
           },
-          "required": ["fromSchemaVersion", "toSchemaVersion"],
+          "required": [
+            "fromSchemaVersion",
+            "toSchemaVersion"
+          ],
           "additionalProperties": false
         }
       },
-      "required": ["origin", "actorId", "createdAt"],
+      "required": [
+        "origin",
+        "actorId",
+        "createdAt"
+      ],
       "additionalProperties": false
     },
-
     "patchRecord": {
-      "description": "One entry in an artifact's patch log. Every change — a drag in the canvas, an AI refinement, a schema migration — is a JSON Patch applied through one store, which is what keeps conversational refinement coherent with direct manipulation and makes undo the inverse patch regardless of origin.",
+      "description": "One entry in an artifact's patch log. Every change \u2014 a drag in the canvas, an AI refinement, a schema migration \u2014 is a JSON Patch applied through one store, which is what keeps conversational refinement coherent with direct manipulation and makes undo the inverse patch regardless of origin.",
       "type": "object",
       "properties": {
-        "seq": { "type": "integer", "minimum": 1 },
-        "baseArtifactVersion": { "type": "integer", "minimum": 1 },
-        "origin": { "type": "string", "enum": ["user", "ai", "migration", "system"] },
-        "actorId": { "type": "string", "maxLength": 256 },
-        "createdAt": { "type": "string", "format": "date-time" },
+        "seq": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "baseArtifactVersion": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "origin": {
+          "type": "string",
+          "enum": [
+            "user",
+            "ai",
+            "migration",
+            "system"
+          ]
+        },
+        "actorId": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
         "operations": {
           "description": "RFC 6902 JSON Patch operations.",
           "type": "array",
@@ -245,12 +480,31 @@
           "items": {
             "type": "object",
             "properties": {
-              "op": { "type": "string", "enum": ["add", "remove", "replace", "move", "copy", "test"] },
-              "path": { "type": "string", "maxLength": 1024 },
-              "from": { "type": "string", "maxLength": 1024 },
+              "op": {
+                "type": "string",
+                "enum": [
+                  "add",
+                  "remove",
+                  "replace",
+                  "move",
+                  "copy",
+                  "test"
+                ]
+              },
+              "path": {
+                "type": "string",
+                "maxLength": 1024
+              },
+              "from": {
+                "type": "string",
+                "maxLength": 1024
+              },
               "value": {}
             },
-            "required": ["op", "path"],
+            "required": [
+              "op",
+              "path"
+            ],
             "additionalProperties": false
           }
         },
@@ -258,24 +512,37 @@
           "description": "Inverse operations, stored so undo is exact rather than reconstructed.",
           "type": "array",
           "maxItems": 1000,
-          "items": { "type": "object" }
+          "items": {
+            "type": "object"
+          }
         },
         "intent": {
-          "description": "What the actor was trying to do — the prompt for an AI patch, the gesture for a user patch. Makes the log readable as history rather than as a diff stream.",
+          "description": "What the actor was trying to do \u2014 the prompt for an AI patch, the gesture for a user patch. Makes the log readable as history rather than as a diff stream.",
           "type": "string",
           "maxLength": 1024
         },
-        "correlationId": { "type": "string", "maxLength": 128 }
+        "correlationId": {
+          "type": "string",
+          "maxLength": 128
+        }
       },
-      "required": ["seq", "baseArtifactVersion", "origin", "actorId", "createdAt", "operations"],
+      "required": [
+        "seq",
+        "baseArtifactVersion",
+        "origin",
+        "actorId",
+        "createdAt",
+        "operations"
+      ],
       "additionalProperties": false
     },
-
     "compatibilityPolicy": {
-      "description": "Reference definition of what may change without a major schema version. Not an artifact property — documented in the schema set so the rule travels with the contract.\n\nADDITIVE (minor bump, old artifacts stay valid): new optional property; new optional slot; new component type; new action kind; new member of an OPEN enum; new curated data source; new relationship.\n\nBREAKING (major bump, migration required): removing or renaming a property; making an optional property required; retyping a property; removing a member from any enum; adding a member to a CLOSED enum, since existing validators will reject it; changing the meaning of an existing field.\n\nWhich enums are closed and why: dataType, sensitivity, platformRole, action.kind, dataSource.kind, lifecycleState and container.type are closed, because every validator and every renderer must know each member to behave correctly. componentTypeRef, capability, entity.domain and environment names are open strings validated against a registry at semantic-validation time, because they grow continuously and a closed enum would make each addition a breaking schema change.",
+      "description": "Reference definition of what may change without a major schema version. Not an artifact property \u2014 documented in the schema set so the rule travels with the contract.\n\nADDITIVE (minor bump, old artifacts stay valid): new optional property; new optional slot; new component type; new action kind; new member of an OPEN enum; new curated data source; new relationship.\n\nBREAKING (major bump, migration required): removing or renaming a property; making an optional property required; retyping a property; removing a member from any enum; adding a member to a CLOSED enum, since existing validators will reject it; changing the meaning of an existing field.\n\nWhich enums are closed and why: dataType, sensitivity, platformRole, action.kind, dataSource.kind, lifecycleState and container.type are closed, because every validator and every renderer must know each member to behave correctly. componentTypeRef, capability, entity.domain and environment names are open strings validated against a registry at semantic-validation time, because they grow continuously and a closed enum would make each addition a breaking schema change.",
       "type": "object",
       "properties": {
-        "note": { "type": "string" }
+        "note": {
+          "type": "string"
+        }
       },
       "additionalProperties": false
     }

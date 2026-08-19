@@ -46,6 +46,13 @@ export const PATHS = {
    */
   publishedCatalog: join(DATA_ROOT, 'catalog.json'),
   fixtures: join(ROOT, 'apps/viewer/public/data'),
+  /**
+   * Component manifests, read as JSON.
+   *
+   * Not through `@opus/component-registry`: its loader resolves the Angular *component* alongside each
+   * manifest, which would pull the framework into this process for information the JSON already holds.
+   */
+  components: join(ROOT, 'libs/components'),
   /** Seed definitions copied into the store on first boot if it is empty. */
   seed: join(ROOT, 'apps/viewer/public/definitions'),
   /**

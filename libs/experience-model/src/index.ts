@@ -140,6 +140,21 @@ export {
 } from './version';
 
 export {
+  APPROVE_CAPABILITY,
+  DEFAULT_TRANSITION_POLICY,
+  PUBLISH_CAPABILITY,
+  applyTransition,
+  canTransition,
+  transitionsFrom,
+  type LifecycleState,
+  type LifecycleTransition,
+  type TransitionCode,
+  type TransitionOutcome,
+  type TransitionPolicy,
+  type TransitionRequest,
+} from './lifecycle';
+
+export {
   blockingElementProblems,
   checkExperienceElements,
   testsCovering,

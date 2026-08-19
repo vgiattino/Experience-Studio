@@ -60,7 +60,19 @@ export const PERSONAS: readonly Persona[] = [
       id: 'steward@demo-tenant',
       displayName: 'Sam Steward',
       roles: ['viewer', 'author', 'catalogSteward'],
-      capabilities: ['experience.view', 'experience.author', 'catalog.edit', 'dataQuality.view'],
+      /*
+        The steward approves and publishes; the analyst authors. Two personas rather than one is what
+        makes separation of duties (FR-33) demonstrable at all — with a single all-powerful persona the
+        rule is untestable through the UI, and a rule nobody can see working is a rule nobody trusts.
+      */
+      capabilities: [
+        'experience.view',
+        'experience.author',
+        'experience.approve',
+        'experience.publish',
+        'catalog.edit',
+        'dataQuality.view',
+      ],
       entitlementScopeHash: 'scope-steward',
     },
   },
