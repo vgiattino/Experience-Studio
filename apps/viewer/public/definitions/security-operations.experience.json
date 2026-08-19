@@ -5,6 +5,12 @@
   "description": "The sample experience: an operations dashboard that drills into any security's golden record.",
   "icon": "activity",
   "kind": "application",
+  "standard": {
+    "standardId": "security-operations",
+    "version": "1.0",
+    "productRelease": "2026.08",
+    "releaseNotes": "Initial product standard, shipped with the EDM Experience Framework."
+  },
   "pages": {
     "operations-dashboard": {
       "$pageRef": "operations-dashboard.page.json"

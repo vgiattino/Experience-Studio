@@ -36,6 +36,8 @@ export type {
   // Experience
   ExperienceDefinition,
   ExperienceNavigation,
+  StandardDeclaration,
+  StandardLineage,
   NavItem,
   NavBadge,
   // Page
@@ -153,6 +155,21 @@ export {
   type TransitionPolicy,
   type TransitionRequest,
 } from './lifecycle';
+
+export {
+  compareStandardVersions,
+  deriveClientExperience,
+  derivedIdFor,
+  describeUpdate,
+  isClientVariant,
+  isStandard,
+  refuseStandardWrite,
+  updateAvailableFor,
+  type DeriveOutcome,
+  type DeriveRequest,
+  type StandardUpdate,
+  type StandardWriteRefusal,
+} from './lineage';
 
 export {
   blockingElementProblems,

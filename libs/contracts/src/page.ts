@@ -248,6 +248,42 @@ export interface ExperienceNavigation {
 }
 
 /**
+ * A product-standard experience's own identity and version (PRD §16.2).
+ *
+ * `version` is MAJOR.MINOR to match the document's vocabulary — §16.6 talks in `v1.0` and `v2.0`.
+ */
+export interface StandardDeclaration {
+  /** Stable across versions, and separate from the experience `id` so a rename is not a new standard. */
+  standardId: string;
+  /** The standard's product version. Not `artifactVersion`. */
+  version: string;
+  /** The release that shipped this version, in the product's own vocabulary. */
+  productRelease?: string;
+  /** What changed, in the product team's words — read beside the computed diff in §16.4. */
+  releaseNotes?: string;
+}
+
+/**
+ * What a client experience was derived from, and how far its baseline has moved since (PRD §16.1).
+ *
+ * The baseline is `standardVersion`, and it changes: a synchronisation moves it forward and records
+ * the step in `syncedFromVersion`. That is why this is not simply a copy record — the whole point is
+ * that the relationship has a future.
+ */
+export interface StandardLineage {
+  standardId: string;
+  /** The standard version this is currently based on. Compared against the shipped one for §16.3. */
+  standardVersion: string;
+  productRelease?: string;
+  derivedAt: string;
+  derivedBy: string;
+  /** Absent until the first synchronisation — meaning it is still on its original baseline. */
+  syncedAt?: string;
+  syncedFromVersion?: string;
+  syncedBy?: string;
+}
+
+/**
  * Who answers for an experience.
  *
  * Deliberately not any of the three fields it sits next to. `version.audit.createdBy` is who first
@@ -350,6 +386,25 @@ export interface ExperienceDefinition {
   icon?: string;
   kind?: 'application' | 'single' | 'process';
   workspaceId?: string;
+  /**
+   * Set when this artifact IS a product-standard experience (PRD §16).
+   *
+   * `version` here is the standard's *product* version — the `v1.0` of §16.6 — and is unrelated to
+   * `version.artifactVersion`, which counts saves. Two independent version lines against one page is
+   * exactly what §16.6 describes, and collapsing them makes "which standard is my page based on"
+   * unanswerable.
+   *
+   * A standard is deployed, never saved: the store refuses any save whose target carries this field.
+   */
+  standard?: StandardDeclaration;
+  /**
+   * Set when this artifact is a client-specific experience derived from a standard (PRD §16.1, FR-20).
+   *
+   * A standing relationship rather than a snapshot, which is what separates it from
+   * `version.lineage.copiedFrom`: a copy expects nothing of its source, a derivation expects to be
+   * told when the source moves.
+   */
+  derivedFrom?: StandardLineage;
   /**
    * Which Opus product this belongs to, by its registration id (`@opus/product-registry`).
    *

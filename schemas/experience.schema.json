@@ -31,6 +31,75 @@
       "maxLength": 128
     },
 
+    "standard": {
+      "description": "Present when this artifact IS a product-standard experience — one the EDM product team owns, ships and versions (PRD §16, §16.2).\n\nTwo things about it are load-bearing.\n\nFIRST, `version` is the standard's own product version and has nothing to do with `version.artifactVersion`. §16.6's example lists them side by side — \"Standard v1.0, Client v1.0, Standard v2.0 available, Client v1.1\" — which is two independent lines against one page. `artifactVersion` counts saves of one stored artifact; this counts product releases of a shipped one. Conflating them would make \"which standard is my page based on\" unanswerable.\n\nSECOND, a standard is DEPLOYED, NEVER SAVED. §16.2 says new standard versions \"are deployed as part of product releases\", so they arrive as files in a release, not through the authoring API — and the definition store refuses any save whose target carries this field. That refusal is where Principle 2 (\"client customization must never modify the product standard\") is actually kept; everything else about it is convention.",
+      "type": "object",
+      "properties": {
+        "standardId": {
+          "description": "Stable identity of the standard across its versions. Usually equal to the experience `id`, and separate from it so that a renamed artifact does not become a different standard.",
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*(?:\\.[a-z][a-z0-9-]*)*$",
+          "maxLength": 256
+        },
+        "version": {
+          "description": "The standard's product version, MAJOR.MINOR — the `v1.0` of §16.6. Increments on a product release that changes this experience.",
+          "$ref": "common.schema.json#/$defs/majorMinor"
+        },
+        "productRelease": {
+          "description": "The product release that shipped this standard version, in the product's own release vocabulary. §16.1 requires a client page to expose its \"originating product release\", which is a different question from which standard version it came from: two releases can ship the same standard unchanged.",
+          "type": "string",
+          "maxLength": 64
+        },
+        "releaseNotes": {
+          "description": "What changed in this standard version, in the product team's words. Read by the comparison experience (§16.4) alongside the computed diff — a structural diff can say a column was added and cannot say why.",
+          "type": "string",
+          "maxLength": 4096
+        }
+      },
+      "required": ["standardId", "version"],
+      "additionalProperties": false
+    },
+
+    "derivedFrom": {
+      "description": "Present when this artifact is a CLIENT-SPECIFIC experience derived from a product standard (PRD §16, §16.1, FR-20).\n\nThis is a standing relationship, not a snapshot of where the bytes came from — which is what distinguishes it from `version.lineage.copiedFrom`. A copy has no future: nothing is expected of the thing it was copied from. A derivation does: when the standard reaches a new version the client must be told (§16.3), must be able to compare (§16.4), and must be able to synchronise or refuse (§16.5). Absent this field none of those three questions has an answer.\n\nThe baseline MOVES. After a synchronisation the client is derived from the newer standard version, and `syncedAt`/`syncedFromVersion` record that it moved rather than that it was always there — so \"has this client ever adopted a product update\" is answerable from the artifact, not only from the audit log.",
+      "type": "object",
+      "properties": {
+        "standardId": {
+          "description": "The standard this was derived from, by its `standard.standardId`.",
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*(?:\\.[a-z][a-z0-9-]*)*$",
+          "maxLength": 256
+        },
+        "standardVersion": {
+          "description": "The standard version this client experience is currently based on — its baseline. Compared against the shipped standard's `standard.version` to answer §16.3's \"is an update available\".",
+          "$ref": "common.schema.json#/$defs/majorMinor"
+        },
+        "productRelease": {
+          "description": "The originating product release, carried from the standard at derivation. §16.1 asks the client page to expose it.",
+          "type": "string",
+          "maxLength": 64
+        },
+        "derivedAt": { "type": "string", "format": "date-time" },
+        "derivedBy": {
+          "description": "Who forked it. Distinct from `owner.userId`, which can change afterwards, and from `version.provenance.actorId`, which is per version.",
+          "type": "string",
+          "maxLength": 256
+        },
+        "syncedAt": {
+          "description": "When this client experience last adopted a newer standard. Absent means it has never been synchronised and is still on its original baseline.",
+          "type": "string",
+          "format": "date-time"
+        },
+        "syncedFromVersion": {
+          "description": "The baseline this experience held immediately before the last synchronisation. With `standardVersion` it gives the step that was taken, which is what a reviewer asks about a sync.",
+          "$ref": "common.schema.json#/$defs/majorMinor"
+        },
+        "syncedBy": { "type": "string", "maxLength": 256 }
+      },
+      "required": ["standardId", "standardVersion", "derivedAt", "derivedBy"],
+      "additionalProperties": false
+    },
+
     "productId": {
       "description": "Which Opus product this experience belongs to, by the `id` of that product's registration (`product.schema.json`). Optional, and the three reasons it is optional are the whole design:\n\n· Not every experience has a product. An experience over catalog entities no product has claimed is legitimate, and forcing a value would mean inventing one.\n· It is DERIVED, not asserted. The server resolves it from the entities the experience's data sources read, because an experience's product is a fact about what it reads rather than a label somebody typed — a label can be wrong and stay wrong.\n· An experience whose pages span two products is a case the PRD explicitly leaves open (FR-3). The server records the ambiguity rather than picking, so `productId` is absent and the reason is in the response.\n\nWhat it is for: the Catalog's product filter (FR-12, FR-28), and choosing which product's AI Context and components ground a refinement (FR-3, FR-23).",
       "type": "string",

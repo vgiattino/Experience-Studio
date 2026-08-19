@@ -83,8 +83,8 @@ export const PATHS = {
 } as const;
 
 /**
- * Two read-only paths, resolved per call and overridable — the same argument `DATA_ROOT` and
- * `OPUS_SECRET_DIR` already make, applied to the two inputs this process reads rather than writes.
+ * The read-only inputs, resolved per call and overridable — the same argument `DATA_ROOT` and
+ * `OPUS_SECRET_DIR` already make, applied to the things this process reads rather than writes.
  *
  * The operator case: a deployment runs the API against a catalog fixture and a set of product
  * registrations that live wherever its configuration management puts them, not inside the application
@@ -101,6 +101,18 @@ export function catalogSeedPath(): string {
 
 export function productsDir(): string {
   return process.env['OPUS_PRODUCTS_DIR']?.trim() || PATHS.products;
+}
+
+/**
+ * Where shipped experiences are read from — the seed on first boot, and the source of product-standard
+ * versions on every boot (PRD §16.2).
+ *
+ * Overridable for the same two reasons as the others, and a third specific to this one: a release
+ * *is* a change to this directory, so being able to point the process at a different set of shipped
+ * artifacts is how a deployment stages one.
+ */
+export function seedDir(): string {
+  return process.env['OPUS_SEED_DIR']?.trim() || PATHS.seed;
 }
 
 export const PORT = Number(process.env['PORT'] ?? 4000);

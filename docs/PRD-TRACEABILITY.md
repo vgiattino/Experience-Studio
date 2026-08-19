@@ -22,8 +22,11 @@ the layers underneath is not re-derived here; it is cited, and the account itsel
 | Priority | FRs | Built | Partial | Absent |
 |---|---|---|---|---|
 | **P0** | FR-01…FR-19 less FR-06 | 4 | 8 | 6 |
-| **P1** | FR-20…FR-24 | 0 | 1 | 4 |
+| **P1** | FR-20…FR-24 | 3 | 1 | 1 |
 | **P2** | FR-25, FR-26 | 0 | 0 | 2 |
+
+FR-20, FR-21 and FR-24 moved from Absent to Built in the first change made under this PRD, because
+FR-20 is upstream of every P0 that modifies a page — see the section below on what had to come first.
 
 The distribution says something specific and it is not "much is missing". It is that **the platform
 beneath the requirement is largely built and the requirement itself largely is not.**
@@ -34,11 +37,12 @@ honours it, and **no conversational path reaches it**. A grid's conditional form
 can set all three by hand in the builder's inspector. Nobody can say "highlight securities with
 unresolved exceptions" and have it happen — and saying it is the requirement.
 
-The other shape worth naming: **§16's lifecycle is the largest genuinely-absent thing, and it is
-upstream of everything else.** Principle 2 is *"client customization must never modify the product
-standard"*. Today an AI modification to a shipped page writes back over the shipped page. Until lineage
-exists, every FR-08 refinement is a violation of Principle 2, which is why the lineage model comes
-before the refinement engine in the order of work below and not after it.
+The other shape worth naming: **§16's lifecycle was the largest genuinely-absent thing, and it is
+upstream of everything else** — which is why it was built first rather than in P1 order. Principle 2 is
+*"client customization must never modify the product standard"*, and an AI modification to a shipped
+page used to write back over the shipped page. Every FR-08 refinement would have been a violation of
+Principle 2, so lineage came before the refinement engine. What remains of §16 is the P1 half:
+comparison and synchronisation.
 
 ---
 
@@ -87,12 +91,12 @@ The section that carries the most architectural weight, and the one with the lea
 |---|---|---|---|
 | FR-17 Auditability | **Built** | Append-only `audit.log.jsonl`; the actor resolved server-side and a body-supplied `actorId` refused 400; provenance on every version with origin and correlation id; ownership transfer self-evidencing on the record | AI *configuration changes* are audited as saves, not as changes — the log records that a version was written, not which prompt produced which edit. FR-17 says "audit AI-generated configuration changes", and the correlation id is the thread that would make that true |
 | FR-18 Reusability | **Partial** | Save and reopen work; the Experiences library lists everything regardless of origin | No "save as template", no promotion of a client experience to a reusable asset |
-| FR-19 Versioning and rollback | **Partial** | Append-only version history under `versions/`, `artifactVersion` per save, published versions immutable and a save against one refused, four governed lifecycle transitions | **No rollback operation.** Superseded bodies are on disk and nothing restores one. §16.5's "revert to standard" is a different thing again and also absent |
-| FR-20 Product lineage | **Absent** | — | The requirement of record for this whole section. Nothing links a client page to the standard it came from. `origin: 'seed'` marks *provenance of the file*, not derivation: modify a seeded page today and the save overwrites it in place, so **Principle 2 is violated by the only path a user has** |
-| FR-21 Standard updates | **Absent** | — | Needs FR-20 first. `products/opus-edm.product.json` registers System Pages with no version of their own, so there is nothing to compare a client's baseline against |
+| FR-19 Versioning and rollback | **Partial** | Append-only version history under `versions/`, `artifactVersion` per save, published versions immutable and a save against one refused, four governed lifecycle transitions, and now the product version line beside the client one (§16.6's two lines) | **No rollback operation.** Superseded bodies are on disk and nothing restores one. §16.5's "revert to standard" is a different thing again and also absent |
+| FR-20 Product lineage | **Built** | `standard` and `derivedFrom` on the experience; `libs/experience-model/src/lineage.ts`; `POST /api/experiences/:id/derive`. Two version lines, deliberately different types so no arithmetic can mix them. The store refuses every write to a standard — both the incoming definition carrying `standard` **and** the stored one, which is the case that actually happens when a client PUTs a body it stripped the field from. See [`STANDARD-LIFECYCLE.md`](./STANDARD-LIFECYCLE.md) | The unit of the standard is the **experience**, not the screen: §5.1 names thirty screens and the shipped library is two multi-page experiences. Aligning them means splitting the library into single-page experiences with cross-experience drill-down — part of the library work below, not of the lineage |
+| FR-21 Standard updates | **Built** | `updateAvailableFor` + `GET /api/experiences/:id/standard-update`, returning §16.3's sentence with `customised` set from `artifactVersion > 1`. `deployStandards()` installs newer standard versions on boot — the deployment half of "deployed, never saved", since `seedMissing` correctly never overwrites and so could never install a v2.0. Verified: shipping v2.0 upgraded the standard in place and left the customised client variant on baseline v1.0 | No notification *surface* — the API answers the question and nothing asks it yet. That is part of the builder revamp |
 | FR-22 Comparison | **Absent** | — | §16.4 asks for a diff classified into nine named categories. `detectDrift` in `catalog-ingest` is a genuine precedent for the *shape* of that answer — it diffs a re-scan against a promoted baseline and reports what changed and what it breaks — but it is about metadata, not layouts |
 | FR-23 Synchronization | **Absent** | — | Needs FR-20 and FR-22 |
-| FR-24 Upgrade safety | **Absent** | — | Vacuously true today, in the worst way: a product update cannot overwrite a client customisation because neither concept exists. This is the same trap the old PRD's FR-20 fell into, and it is worth naming twice |
+| FR-24 Upgrade safety | **Built** | Satisfied by construction rather than by a check, which is the stronger form: `deployStandards()` only ever writes an artifact carrying `standard`, and the store refuses every client write to such an artifact — so the set a release can overwrite and the set a client can have edited are provably disjoint. Asserted end to end in `experience-store.spec.ts`: ship v1.0, derive, customise, ship v2.0, redeploy, and the variant's name, baseline and artifact version are all unchanged | Nothing, at this scope. What is still absent is the *selective* synchronisation §16.5 defers, which is a different requirement |
 
 **FR-16 Security — Built.** Enforced, not declared. The persona switch turns widgets `denied` while the
 page stays usable; the catalog projection removes unentitled members server-side; the gateway is the
@@ -118,26 +122,32 @@ refinement, in the register the refinement engine has to produce.
 
 ---
 
-## The one thing that must be built first
+## The one thing that had to be built first — done
 
-**FR-20, lineage.** Not because it is the largest, but because every other P0 is unsafe without it.
+**FR-20, lineage.** Not because it was the largest, but because every other P0 was unsafe without it.
 
 FR-08 modification, FR-10 grid configuration, FR-11 visualisation changes, FR-12 navigation, FR-14 tabs
 — all of them modify a page. §16 and Principle 2 say a modification to a *standard* page must produce a
-*derived client* experience and leave the standard untouched. Today the save path writes over the file.
-So building the refinement engine first would mean shipping, at speed, the ability to destroy the
+*derived client* experience and leave the standard untouched. The save path used to write over the file,
+so building the refinement engine first would have meant shipping, at speed, the ability to destroy the
 product's own baseline.
+
+It is now enforced in the store rather than in a route, because a route is a door and there is more than
+one door — and it is checked on both the incoming definition and the stored one, since the case that
+actually happens is a client PUTting a body it stripped the marker from.
 
 The order that follows from the document rather than from convenience:
 
-1. **FR-20 lineage** — a standard page with its own version, a client variant that records what it was
-   derived from, and a save path that *forks rather than overwrites* when a standard is modified.
+1. ~~**FR-20 lineage**~~ **Done** — see [`STANDARD-LIFECYCLE.md`](./STANDARD-LIFECYCLE.md). FR-21 and
+   FR-24 came with it: update detection, and a release that provably cannot touch client work.
 2. **FR-08/10/11/12/14 the refinement vocabulary** — retarget the parked builder's plan → assemble →
    ground → review architecture at `PageDefinition`. FR-11 first: changing a chart's mark is one
    validated property and proves the whole path.
 3. **FR-09 conversational context** — cheap once the verbs exist, and it is what turns nine prompts into
    one conversation.
-4. **FR-21/22 update detection and comparison** — P1, and `detectDrift` is the precedent to follow.
+4. **FR-22 comparison** — P1. `detectDrift` is the precedent to follow, and §16.5's deferred *selective*
+   synchronisation is the constraint that matters: a comparison must be per-change rather than a single
+   blob, or selective sync can never be built on it.
 5. **FR-23 sync and revert** — P1.
 6. **FR-15 source comparison** — the missing component, and it unblocks four named screens plus §28.
 7. **FR-06 AI search** — well-placed, as noted.
@@ -150,13 +160,14 @@ The order that follows from the document rather than from convenience:
 | Term | The PRD means | The code means |
 |---|---|---|
 | **Page** | A screen a user opens, e.g. Security Master Overview | A `PageDefinition` inside an `ExperienceDefinition`; the thing a user opens is usually the *experience* |
-| **Standard page** | A product-owned, product-versioned asset (§16) | `origin: 'seed'`, which records where a file came from and carries no version and no ownership |
-| **Version** | The standard's product version, *and* separately the client's (§16.6) | `artifactVersion`, a single monotonic counter per stored artifact |
+| **Standard page** | A product-owned, product-versioned asset (§16) | `standard` on the experience — a product-owned artifact with its own `MAJOR.MINOR` version. Resolved. `origin: 'seed'` still exists and still means only "this file was deployed, not authored here" |
+| **Version** | The standard's product version, *and* separately the client's (§16.6) | Both, now, and as different types: `standard.version` is `MAJOR.MINOR` and moves with releases; `artifactVersion` is an integer and moves with saves. Resolved |
 | **Template** | A reusable starting point in the library (FR-04) | A generation exemplar in `libs/generation/src/templates.ts` |
 | **Pattern** | One of §20's seven ordered compositions | Nothing yet |
 | **AI search** (FR-06) | Natural language → filters over data | `retrieve()` — similarity search over *catalog metadata*, for grounding a generation |
 | **Experience** | Sometimes one screen, sometimes a multi-page journey | Always the multi-page artifact. §5.1's "Security Master Overview" is one page of one experience |
 
-The third row is the one that will cause a bug. §16.6's example lists *"Standard v1.0, Client v1.0,
-Standard v2.0 available, Client v1.1"* — two independent version lines against one artifact, and the
-store has one counter.
+The second and third rows were the ones that would have caused a bug, and both are now resolved — see
+[`STANDARD-LIFECYCLE.md`](./STANDARD-LIFECYCLE.md) §3. The first row, **Page**, is the one still live:
+the unit of the standard is the experience and §5.1 counts screens, so "how many standard pages ship" has
+two answers (two, or nine) depending on which vocabulary the asker is using.

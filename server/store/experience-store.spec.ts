@@ -14,7 +14,7 @@
  * and refusing to overwrite — properties a mock would assert about itself.
  */
 
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -179,5 +179,200 @@ describe('actor attribution', () => {
     expect(entries[0]?.['ownerChangedFrom']).toBeNull();
     expect(entries[1]).not.toHaveProperty('ownerChangedFrom');
     expect(entries[2]?.['ownerChangedFrom']).toBe('ana@demo-tenant');
+  });
+});
+
+describe('§16 — a standard is deployed, never saved', () => {
+  /*
+    Principle 2, at the layer that decides. `lineage.spec.ts` tests the rule as a function; what is
+    only testable here is that no path through the STORE reaches a standard — the claim that matters,
+    because a route is a door and there is more than one door.
+
+    A release is a directory of shipped experiences, so these tests write one and point `OPUS_SEED_DIR`
+    at it. That is the same door a real release uses, which is the point: testing the refusal against a
+    standard installed by `save` would be testing a state that cannot occur.
+  */
+  let release: string;
+
+  beforeEach(() => {
+    release = mkdtempSync(join(tmpdir(), 'opus-release-'));
+    process.env['OPUS_SEED_DIR'] = release;
+  });
+
+  afterEach(() => {
+    delete process.env['OPUS_SEED_DIR'];
+    rmSync(release, { recursive: true, force: true });
+  });
+
+  function ship(version: string, over: Partial<ExperienceDefinition> = {}): void {
+    const shipped = definition({
+      id: 'shipped-thing',
+      name: `Shipped Thing v${version}`,
+      standard: { standardId: 'shipped-thing', version, productRelease: `2026.0${version[0]}` },
+      version: { schemaVersion: '1.0.0', artifactVersion: 1, lifecycleState: 'published' },
+      ...over,
+    } as Partial<ExperienceDefinition>);
+    writeFileSync(join(release, 'shipped.experience.json'), JSON.stringify(shipped), 'utf8');
+  }
+
+  it('installs a standard nobody has yet', async () => {
+    const s = await store();
+    ship('1.0');
+    expect(s.deployStandards()).toEqual({ installed: ['shipped-thing'], upgraded: [] });
+    expect(s.get('shipped-thing')?.definition.standard?.version).toBe('1.0');
+  });
+
+  it('upgrades an installed standard when the release ships a newer one', async () => {
+    const s = await store();
+    ship('1.0');
+    s.deployStandards();
+    ship('2.0');
+    expect(s.deployStandards()).toEqual({
+      installed: [],
+      upgraded: [{ id: 'shipped-thing', from: '1.0', to: '2.0' }],
+    });
+    expect(s.get('shipped-thing')?.definition.standard?.version).toBe('2.0');
+  });
+
+  it('does not reinstall the same version, so a redeploy is quiet', async () => {
+    const s = await store();
+    ship('1.0');
+    s.deployStandards();
+    expect(s.deployStandards()).toEqual({ installed: [], upgraded: [] });
+  });
+
+  it('does not downgrade, so a rollback stays a deliberate act', async () => {
+    const s = await store();
+    ship('2.0');
+    s.deployStandards();
+    ship('1.0');
+    expect(s.deployStandards()).toEqual({ installed: [], upgraded: [] });
+    expect(s.get('shipped-thing')?.definition.standard?.version).toBe('2.0');
+  });
+
+  it('ignores shipped experiences that are not standards', async () => {
+    // `seedMissing` owns those, and it must never overwrite. Deploying them would do exactly that.
+    const s = await store();
+    writeFileSync(
+      join(release, 'ordinary.experience.json'),
+      JSON.stringify(definition({ id: 'ordinary-thing' })),
+      'utf8',
+    );
+    expect(s.deployStandards()).toEqual({ installed: [], upgraded: [] });
+  });
+
+  it('FR-24 — a release never touches the client variant', async () => {
+    /*
+      The requirement, end to end and in the store. The client's customisation lives in the derived
+      artifact, and a release only ever writes artifacts carrying `standard` — which the store refuses
+      every client write to. So the set a release can overwrite and the set a client can have edited are
+      provably disjoint, and this asserts it rather than trusting the argument.
+    */
+    const s = await store();
+    ship('1.0');
+    s.deployStandards();
+
+    const variant = s.save({
+      definition: definition({
+        id: 'shipped-thing.client',
+        name: 'Shipped Thing — Acme',
+        derivedFrom: {
+          standardId: 'shipped-thing',
+          standardVersion: '1.0',
+          derivedAt: '2026-08-19T12:00:00.000Z',
+          derivedBy: 'ana@demo-tenant',
+        },
+      } as Partial<ExperienceDefinition>),
+      actorId: 'ana@demo-tenant',
+    });
+    expect(variant.definition.owner?.userId).toBe('ana@demo-tenant');
+
+    ship('2.0');
+    s.deployStandards();
+
+    const after = s.get('shipped-thing.client');
+    expect(after?.definition.name).toBe('Shipped Thing — Acme');
+    expect(after?.definition.derivedFrom?.standardVersion).toBe('1.0');
+    expect(after?.definition.version.artifactVersion).toBe(1);
+  });
+
+  it('refuses a save of a standard, and names the derive target', async () => {
+    const s = await store();
+    ship('1.0');
+    s.deployStandards();
+    const installed = s.get('shipped-thing')!.definition;
+
+    let thrown: unknown;
+    try {
+      s.save({ definition: { ...installed, name: 'Taken over' }, actorId: 'ana@demo-tenant' });
+    } catch (error) {
+      thrown = error;
+    }
+    expect((thrown as { status?: number })?.status).toBe(409);
+    expect((thrown as { code?: string })?.code).toBe('standardNotEditable');
+    // A refusal that does not name the alternative makes the caller reimplement `derivedIdFor`.
+    expect((thrown as { deriveTo?: string })?.deriveTo).toBe('shipped-thing.client');
+  });
+
+  it('refuses a save over an installed standard even when the incoming copy hides the marker', async () => {
+    /*
+      The case that actually happens, and the reason `save` reads the STORED definition as well as the
+      incoming one: a client PUTs a body it stripped `standard` from. Checking only the request would
+      let that through and silently demote a product asset to an ordinary artifact — after which
+      nothing would stop the next save either.
+    */
+    const s = await store();
+    ship('1.0');
+    s.deployStandards();
+
+    const stripped = { ...s.get('shipped-thing')!.definition } as Record<string, unknown>;
+    delete stripped['standard'];
+
+    expect(() =>
+      s.save({ definition: stripped as unknown as ExperienceDefinition, actorId: 'ana@demo-tenant' }),
+    ).toThrow(/product-standard/);
+    // And the marker is still there afterwards.
+    expect(s.get('shipped-thing')?.definition.standard?.version).toBe('1.0');
+  });
+
+  it('refuses a lifecycle transition against a standard', async () => {
+    // An approval recorded against a product standard attributes a product decision to a client user.
+    const s = await store();
+    ship('1.0');
+    s.deployStandards();
+
+    let thrown: unknown;
+    try {
+      s.saveTransition({
+        id: 'shipped-thing',
+        version: { schemaVersion: '1.0.0', artifactVersion: 1, lifecycleState: 'inReview' } as never,
+        actorId: 'sam@demo-tenant',
+        transition: 'submit',
+      });
+    } catch (error) {
+      thrown = error;
+    }
+    expect((thrown as { code?: string })?.code).toBe('standardNotEditable');
+  });
+
+  it('permits a save of a client variant of a standard', async () => {
+    // The whole point: the variant is the writable thing.
+    const s = await store();
+    ship('1.0');
+    s.deployStandards();
+    expect(() =>
+      s.save({
+        definition: definition({
+          id: 'shipped-thing.client',
+          derivedFrom: {
+            standardId: 'shipped-thing',
+            standardVersion: '1.0',
+            derivedAt: '2026-08-19T12:00:00.000Z',
+            derivedBy: 'ana@demo-tenant',
+          },
+        } as Partial<ExperienceDefinition>),
+        actorId: 'ana@demo-tenant',
+      }),
+    ).not.toThrow();
   });
 });

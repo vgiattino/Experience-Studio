@@ -28,8 +28,9 @@ import {
 import { join } from 'node:path';
 
 import type { ExperienceDefinition, ProvenanceOrigin } from '@opus/contracts';
+import { compareStandardVersions, refuseStandardWrite } from '@opus/experience-model';
 
-import { DATA_ROOT, PATHS } from '../config';
+import { DATA_ROOT, PATHS, seedDir } from '../config';
 
 export interface StoredExperience {
   id: string;
@@ -72,6 +73,17 @@ export interface ExperienceSummary {
    * two products, or it was saved before any catalog was promoted.
    */
   product?: string;
+  /**
+   * §16 lineage, flattened for a list row.
+   *
+   * `standard` is set on a product-owned artifact and carries its product version; `derivedFromStandard`
+   * and `basedOnVersion` are set on a client variant. A row can be neither — an experience somebody
+   * created from scratch is not part of the standard lifecycle at all, and that is a third state rather
+   * than a missing value.
+   */
+  standard?: { standardId: string; version: string; productRelease?: string };
+  derivedFromStandard?: string;
+  basedOnVersion?: string;
   prompt?: string;
   tags: readonly string[];
 }
@@ -140,36 +152,44 @@ function audit(entry: Record<string, unknown>): void {
  * rather than generating it, so what the app renders on first open is exactly what an author would
  * have saved.
  */
+/**
+ * Inline every `$pageRef`. The store holds whole experiences, so a ref pointing at a sibling file in
+ * the Viewer's asset folder would dangle once the artifact is copied in.
+ *
+ * Shared by seeding and by standard deployment — two callers reading the same directory, and a second
+ * copy of this loop would be a second place for the ref convention to drift.
+ */
+function resolvePageRefs(definition: ExperienceDefinition): ExperienceDefinition {
+  const pages: Record<string, unknown> = {};
+  for (const [pageId, page] of Object.entries(definition.pages ?? {})) {
+    if (page && typeof page === 'object' && '$pageRef' in page) {
+      const ref = (page as { $pageRef: string }).$pageRef;
+      const refFile = join(seedDir(), ref.endsWith('.json') ? ref : `${ref}.page.json`);
+      if (existsSync(refFile)) {
+        pages[pageId] = JSON.parse(readFileSync(refFile, 'utf8'));
+        continue;
+      }
+    }
+    pages[pageId] = page;
+  }
+  return { ...definition, pages: pages as ExperienceDefinition['pages'] };
+}
+
 export function seedMissing(): { seeded: string[] } {
   ensureDirs();
   const known = new Set(list().map((summary) => summary.id));
 
   const seeded: string[] = [];
-  if (!existsSync(PATHS.seed)) return { seeded };
+  if (!existsSync(seedDir())) return { seeded };
 
-  for (const file of readdirSync(PATHS.seed).filter((f) => f.endsWith('.experience.json'))) {
-    const definition = JSON.parse(readFileSync(join(PATHS.seed, file), 'utf8')) as ExperienceDefinition;
+  for (const file of readdirSync(seedDir()).filter((f) => f.endsWith('.experience.json'))) {
+    const definition = JSON.parse(readFileSync(join(seedDir(), file), 'utf8')) as ExperienceDefinition;
     // Already in the store: leave it alone. Re-seeding would overwrite whatever the user has done to
     // it since, which is the one thing a seed must never do.
     if (known.has(definition.id)) continue;
-    // Page refs are resolved at seed time: the store holds whole experiences, so a `$pageRef` that
-    // pointed at a sibling file in the Viewer's asset folder would dangle here.
-    const pages: Record<string, unknown> = {};
-    for (const [pageId, page] of Object.entries(definition.pages ?? {})) {
-      if (page && typeof page === 'object' && '$pageRef' in page) {
-        const ref = (page as { $pageRef: string }).$pageRef;
-        const refFile = join(PATHS.seed, ref.endsWith('.json') ? ref : `${ref}.page.json`);
-        if (existsSync(refFile)) {
-          pages[pageId] = JSON.parse(readFileSync(refFile, 'utf8'));
-          continue;
-        }
-      }
-      pages[pageId] = page;
-    }
-
     write({
       id: definition.id,
-      definition: { ...definition, pages: pages as ExperienceDefinition['pages'] },
+      definition: resolvePageRefs(definition),
       updatedAt: new Date().toISOString(),
       updatedBy: 'seed',
       origin: 'seed',
@@ -181,6 +201,58 @@ export function seedMissing(): { seeded: string[] } {
   // artifact is reachable in the new app rather than only those an experience happens to list.
   audit({ event: 'seed', ids: seeded });
   return { seeded };
+}
+
+/**
+ * §16.2 — install newer product-standard versions. The deployment half of "a standard is deployed,
+ * never saved".
+ *
+ * `seedMissing` deliberately never overwrites, because overwriting a user's work is the one thing a
+ * seed must not do. That correct rule makes it useless for a product release: a v2.0 standard would
+ * be skipped forever because v1.0 is already installed. So this is a second, narrower pass.
+ *
+ * FR-24 — "never automatically overwrite client customizations" — is satisfied by construction rather
+ * than by a check, and the construction is worth stating: this only ever writes an artifact that
+ * carries `standard`, and the store refuses every client write to such an artifact. So the set of
+ * things this can overwrite and the set of things a client can have edited are provably disjoint. A
+ * client's work lives in the derived variant, which this never looks at.
+ *
+ * Older or equal versions are skipped, so a rollback is a deliberate act (delete and re-seed) rather
+ * than something a redeploy does by surprise.
+ */
+export function deployStandards(): { installed: string[]; upgraded: { id: string; from: string; to: string }[] } {
+  ensureDirs();
+  const installed: string[] = [];
+  const upgraded: { id: string; from: string; to: string }[] = [];
+  if (!existsSync(seedDir())) return { installed, upgraded };
+
+  for (const file of readdirSync(seedDir()).filter((f) => f.endsWith('.experience.json'))) {
+    const definition = JSON.parse(readFileSync(join(seedDir(), file), 'utf8')) as ExperienceDefinition;
+    if (!definition.standard) continue;
+
+    const existing = read(definition.id);
+    const from = existing?.definition.standard?.version;
+    if (existing && compareStandardVersions(from, definition.standard.version) >= 0) continue;
+
+    const resolved = resolvePageRefs(definition);
+    write({
+      id: definition.id,
+      definition: resolved,
+      updatedAt: new Date().toISOString(),
+      updatedBy: 'release',
+      origin: 'seed',
+    });
+    if (existing && from) {
+      upgraded.push({ id: definition.id, from, to: definition.standard.version });
+    } else if (!existing) {
+      installed.push(definition.id);
+    }
+  }
+
+  if (installed.length || upgraded.length) {
+    audit({ event: 'deployStandards', installed, upgraded });
+  }
+  return { installed, upgraded };
 }
 
 export function list(): ExperienceSummary[] {
@@ -214,6 +286,18 @@ export function summarize(record: StoredExperience): ExperienceSummary {
     // extending somebody else's work, and the one owner-scoped analytics is keyed on.
     owner: d.owner?.userId,
     product: d.productId,
+    ...(d.standard
+      ? {
+          standard: {
+            standardId: d.standard.standardId,
+            version: d.standard.version,
+            ...(d.standard.productRelease ? { productRelease: d.standard.productRelease } : {}),
+          },
+        }
+      : {}),
+    ...(d.derivedFrom
+      ? { derivedFromStandard: d.derivedFrom.standardId, basedOnVersion: d.derivedFrom.standardVersion }
+      : {}),
     prompt: d.version?.provenance?.generation?.prompt,
     tags: d.tags ?? [],
   };
@@ -271,7 +355,24 @@ export function save(request: SaveRequest): StoredExperience {
     throw Object.assign(new Error('definition.id is required'), { status: 400 });
   }
 
+  /*
+    Principle 2, kept where the bytes are written: "client customization must never modify the product
+    standard." A route is a door and there is more than one door, so the check lives here.
+
+    Both sides are refused. The INCOMING definition carrying `standard` is the obvious case — somebody
+    saving a standard. The STORED one carrying it is the case that actually happens: a client PUTs a
+    definition it stripped the field from, over a standard, which would silently demote a product asset
+    to an ordinary artifact. The second is why this reads `previous` as well.
+  */
   const previous = read(definition.id);
+  const standardWrite = refuseStandardWrite(definition) ?? (previous ? refuseStandardWrite(previous.definition) : null);
+  if (standardWrite) {
+    throw Object.assign(new Error(standardWrite.detail), {
+      status: 409,
+      code: standardWrite.code,
+      deriveTo: standardWrite.deriveTo,
+    });
+  }
 
   if (previous && previous.definition.version?.lifecycleState === 'published') {
     // Immutability is a storage property, not a convention. Refusing here is what makes "the
@@ -357,6 +458,20 @@ export function saveTransition(request: {
   const previous = read(request.id);
   if (!previous) {
     throw Object.assign(new Error(`No experience "${request.id}"`), { status: 404 });
+  }
+
+  /*
+    A standard's lifecycle belongs to the product release that shipped it, not to a client's approval
+    chain. Refused here as well as in `save` because a transition writes the artifact too, and an
+    approval recorded against a product standard would attribute a product decision to a client user.
+  */
+  const standardWrite = refuseStandardWrite(previous.definition);
+  if (standardWrite) {
+    throw Object.assign(new Error(standardWrite.detail), {
+      status: 409,
+      code: standardWrite.code,
+      deriveTo: standardWrite.deriveTo,
+    });
   }
 
   const record: StoredExperience = {

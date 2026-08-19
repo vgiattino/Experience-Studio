@@ -5,6 +5,12 @@
   "description": "Operational experience for the securities master: processing health and exception remediation.",
   "icon": "securities",
   "kind": "application",
+  "standard": {
+    "standardId": "securities-operations",
+    "version": "1.0",
+    "productRelease": "2026.08",
+    "releaseNotes": "Initial product standard, shipped with the EDM Experience Framework."
+  },
   "workspaceId": "ops-securities",
   "pages": {
     "security-master-operations": {

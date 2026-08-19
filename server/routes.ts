@@ -29,7 +29,14 @@ import {
   type ProductResolution,
 } from './services/product-registry';
 import { executeBatch, servedEntities } from './services/gateway';
-import { applyTransition } from '@opus/experience-model';
+import {
+  applyTransition,
+  derivedIdFor,
+  deriveClientExperience,
+  describeUpdate,
+  isStandard,
+  updateAvailableFor,
+} from '@opus/experience-model';
 
 import { PERSONAS, personaById } from './personas';
 import { sources } from './sources/routes';
@@ -161,6 +168,34 @@ function actorFor(req: Request, res: Response): string | null {
 }
 
 /**
+ * Turn a store refusal into a problem response, keeping what the store said about it.
+ *
+ * The three save routes previously flattened every 409 to `concurrency` and discarded the error's own
+ * `code`. That is wrong twice over for §16: nothing raced when a client tried to save over a product
+ * standard, so `concurrency` misdescribes it; and `standardNotEditable` is precisely the code a client
+ * needs in order to do the right thing next, which is to derive and retry. `deriveTo` is carried for
+ * the same reason — a refusal that does not name the alternative makes the caller reimplement
+ * `derivedIdFor` to recover from it.
+ */
+function refuseSave(res: Response, error: unknown): void {
+  const { status = 500, code, deriveTo } = error as { status?: number; code?: string; deriveTo?: string };
+  const category = code === 'standardNotEditable' ? 'semantic' : status === 409 ? 'concurrency' : 'validation';
+  if (deriveTo) {
+    res.status(status).json({
+      type: `about:blank#${code}`,
+      title: code,
+      status,
+      category,
+      code,
+      detail: (error as Error).message,
+      deriveTo,
+    });
+    return;
+  }
+  problem(res, status, category, (error as Error).message, code ?? category);
+}
+
+/**
  * Resolve which product an experience belongs to, from the entities it reads, and stamp it.
  *
  * Derived rather than accepted from the body for the same reason `actorId` is: a value the client
@@ -266,8 +301,7 @@ api.put('/experiences/:id', (req, res) => {
       productResolution: resolved.resolution,
     });
   } catch (error) {
-    const status = (error as { status?: number }).status ?? 500;
-    problem(res, status, status === 409 ? 'concurrency' : 'validation', (error as Error).message);
+    return refuseSave(res, error);
   }
 });
 
@@ -288,9 +322,118 @@ api.post('/experiences', (req, res) => {
       productResolution: resolved.resolution,
     });
   } catch (error) {
-    const status = (error as { status?: number }).status ?? 500;
-    problem(res, status, status === 409 ? 'concurrency' : 'validation', (error as Error).message);
+    return refuseSave(res, error);
   }
+});
+
+// ── §16: standards, derivation, and update notification ─────────────────────
+
+/**
+ * Every product standard the store holds.
+ *
+ * Read from the store rather than from the definitions directory, because a standard reaches the store
+ * by deployment (`seedMissing`) and the store is therefore the authority on which version is actually
+ * installed. Reading the files would report what the release *contains*, which is a different question
+ * and the wrong one for "is an update available".
+ */
+function standardDefinitions(): ExperienceDefinition[] {
+  return store
+    .list()
+    .map((summary) => store.get(summary.id)?.definition)
+    .filter((definition): definition is ExperienceDefinition => !!definition && isStandard(definition));
+}
+
+api.get('/standards', (_req, res) => {
+  res.json(
+    standardDefinitions().map((definition) => ({
+      id: definition.id,
+      name: typeof definition.name === 'string' ? definition.name : definition.name.default,
+      standardId: definition.standard!.standardId,
+      version: definition.standard!.version,
+      productRelease: definition.standard!.productRelease,
+      releaseNotes: definition.standard!.releaseNotes,
+      pageCount: Object.keys(definition.pages ?? {}).length,
+      /* Whether this tenant has already forked it, so the library can offer Open or Customise. */
+      derivedId: store.get(derivedIdFor(definition.standard!.standardId)) ? derivedIdFor(definition.standard!.standardId) : null,
+    })),
+  );
+});
+
+/**
+ * FR-20 — fork a standard into a client-specific experience.
+ *
+ * A separate route rather than a side effect of saving, because the fork is the thing §16 cares about
+ * and a PUT that quietly wrote somewhere other than its own URL would hide it. The builder calls this
+ * on the first edit of a standard and says what happened; the store's 409 names this route for anyone
+ * who tries the save directly.
+ *
+ * Idempotent by returning the existing variant rather than a second one: §16 speaks of "your current
+ * experience", singular, and a second fork would give "is an update available for my Security Master
+ * Overview" two answers.
+ */
+api.post('/experiences/:id/derive', (req, res) => {
+  const record = store.get(req.params.id);
+  if (!record) return problem(res, 404, 'semantic', `No experience "${req.params.id}"`, 'notFound');
+
+  const actorId = actorFor(req, res);
+  if (!actorId) return;
+
+  const body = (req.body ?? {}) as { name?: string; id?: string };
+  const outcome = deriveClientExperience(
+    { standard: record.definition, actorId, name: body.name, id: body.id },
+    new Date().toISOString(),
+  );
+  if (!outcome.ok) {
+    return problem(res, 409, 'semantic', outcome.detail, outcome.code);
+  }
+
+  const existing = store.get(outcome.definition.id);
+  if (existing) {
+    // Already forked. Returning it with 200 rather than 409 because the caller's intent — "give me my
+    // client version of this" — is satisfied, and a conflict would push every caller into a
+    // check-then-create race for no benefit.
+    return res.status(200).json({ ...existing, derived: false });
+  }
+
+  try {
+    const resolved = withResolvedProduct(outcome.definition);
+    res.status(201).json({
+      ...store.save({ definition: resolved.definition, actorId, origin: 'copy' }),
+      productResolution: resolved.resolution,
+      derived: true,
+    });
+  } catch (error) {
+    return refuseSave(res, error);
+  }
+});
+
+/**
+ * FR-21 — §16.3's notification, for one client experience.
+ *
+ * Returns `null` rather than 404 when there is no update: "nothing is available" is a successful
+ * answer to this question, and a 404 would make a client branch on an error to render a quiet state.
+ */
+api.get('/experiences/:id/standard-update', (req, res) => {
+  const record = store.get(req.params.id);
+  if (!record) return problem(res, 404, 'semantic', `No experience "${req.params.id}"`, 'notFound');
+
+  const standards = standardDefinitions();
+  const update = updateAvailableFor(record.definition, standards);
+  if (!update) return res.json({ update: null });
+
+  /*
+    The STANDARD's name, not the client's. A client that renamed its variant to "Securities Operations
+    — Acme" has no new version of that; the product released a new version of the standard the variant
+    derives from, and saying otherwise invites the reader to look for an Acme release that does not
+    exist. §16.3's own example names the page the product ships.
+  */
+  const shipped = standards.find((s) => s.standard?.standardId === update.standardId);
+  const name = shipped
+    ? typeof shipped.name === 'string'
+      ? shipped.name
+      : shipped.name.default
+    : update.standardId;
+  res.json({ update, message: describeUpdate(update, name) });
 });
 
 // ── lifecycle transitions ───────────────────────────────────────────────────

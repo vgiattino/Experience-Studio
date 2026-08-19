@@ -13,7 +13,7 @@ import express from 'express';
 
 import { PORT, AI_PROVIDER } from './config';
 import { api } from './routes';
-import { seedMissing } from './store/experience-store';
+import { deployStandards, seedMissing } from './store/experience-store';
 import { catalogVersion } from './services/catalog';
 import { servedEntities } from './services/gateway';
 
@@ -42,12 +42,21 @@ app.use((_req, res) => {
 // build in the repo — a large blast radius for a two-line convenience.
 async function main(): Promise<void> {
   const { seeded } = seedMissing();
+  /*
+    Product-standard versions install on boot, which is this prototype's stand-in for §16.2's "deployed
+    as part of product releases". Ordered after seeding so a first boot installs rather than upgrades,
+    and safe against client work by construction — see `deployStandards`.
+  */
+  const { upgraded } = deployStandards();
   const entities = await servedEntities();
 
   app.listen(PORT, () => {
     console.log(`\n  Opus Experience Studio API   http://localhost:${PORT}/api/health`);
     console.log(`  catalog v${catalogVersion()} · ${entities.length} entities · AI provider: ${AI_PROVIDER}`);
     if (seeded.length) console.log(`  seeded experiences: ${seeded.join(', ')}`);
+    for (const step of upgraded) {
+      console.log(`  standard upgraded: ${step.id} v${step.from} → v${step.to}`);
+    }
     console.log('');
   });
 }
