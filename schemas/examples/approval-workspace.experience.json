@@ -1,0 +1,108 @@
+{
+  "schemaVersion": "1.0",
+  "id": "break-approval-workspace",
+  "name": "Break Approval Workspace",
+  "description": "The worked example for an embedded workflow: an experience whose business process is part of the artifact rather than configured beside it.",
+  "kind": "application",
+  "workspaceId": "securities-ops",
+
+  "owner": {
+    "userId": "ops-lead@demo-tenant",
+    "assignedAt": "2026-08-19T09:00:00Z",
+    "assignedBy": "ops-lead@demo-tenant"
+  },
+
+  "pages": {
+    "queue": { "$pageRef": "security-master-dashboard.page.json" }
+  },
+
+  "actions": {
+    "submit-for-approval": {
+      "id": "submit-for-approval",
+      "kind": "setParameter",
+      "label": "Submit for approval",
+      "parameter": "as-of",
+      "value": { "$expr": "today()" }
+    },
+    "apply-override": {
+      "id": "apply-override",
+      "kind": "refresh",
+      "label": "Apply the override",
+      "bypassCache": true
+    }
+  },
+
+  "workflows": {
+    "override-approval": {
+      "name": "Override approval",
+      "description": "A steward proposes an override on a disputed price; a second person approves it before it is applied. Two people by design — the approver is not the proposer, which is what makes the record worth keeping.",
+      "trigger": { "kind": "onAction", "actionId": "submit-for-approval" },
+      "steps": [
+        {
+          "id": "propose",
+          "name": "Propose the override",
+          "kind": "action",
+          "actionId": "submit-for-approval",
+          "note": "Records the proposed value and the reason. No data changes yet."
+        },
+        {
+          "id": "review",
+          "name": "Approve or reject",
+          "kind": "approval",
+          "requiredCapabilities": ["catalog.edit"],
+          "note": "A named capability rather than an open decision — an approval anybody could complete is a formality."
+        },
+        {
+          "id": "apply",
+          "name": "Apply the override",
+          "kind": "action",
+          "actionId": "apply-override",
+          "note": "Invokes an action this experience already declares. A workflow's reach is a subset of what the artifact declares; it cannot invent one."
+        }
+      ]
+    }
+  },
+
+  "aiContext": {
+    "extends": "product",
+    "terminology": [
+      {
+        "term": "Override",
+        "means": "A steward's replacement of a vendor-supplied value on the golden record, carrying a reason and an approver.",
+        "notToBeConfusedWith": "A correction, which fixes a value the vendor themselves restated."
+      }
+    ],
+    "instructions": [
+      "Never propose a component that applies an override without routing through the override-approval workflow."
+    ]
+  },
+
+  "documentation": {
+    "purpose": "Where a disputed price is resolved: proposed by one steward, approved by another, applied with both names on the record.",
+    "audience": "Securities data stewards and their approvers."
+  },
+
+  "tests": {
+    "approval-requires-a-capability": {
+      "name": "The approval step cannot be completed by just anyone",
+      "origin": "authored",
+      "covers": { "pages": ["queue"] },
+      "given": "A user holding no catalog.edit capability, on a proposed override.",
+      "expect": "The approve action is unavailable to them, and is refused server-side if called directly."
+    }
+  },
+
+  "version": {
+    "schemaVersion": "1.0",
+    "artifactVersion": 1,
+    "lifecycleState": "draft",
+    "pins": { "catalogVersion": 7, "registryVersion": "3.2.0" },
+    "provenance": {
+      "origin": "human",
+      "actorId": "ops-lead@demo-tenant",
+      "createdAt": "2026-08-19T09:00:00Z"
+    }
+  },
+
+  "tags": ["approval", "workflow", "example"]
+}

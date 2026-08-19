@@ -264,6 +264,84 @@ export interface ExperienceOwner {
   assignedBy?: string;
 }
 
+/**
+ * One step in an embedded business process.
+ *
+ * `approval` is a named human decision; `action` invokes one of the experience's own actions. Two
+ * kinds because two are what FR-18 states — notification, timer and branch steps are absent on
+ * purpose rather than forgotten.
+ */
+export interface WorkflowStep {
+  id: Identifier;
+  name: I18nString;
+  kind: 'approval' | 'action';
+  /** Who may complete it. An approval without one is a decision anybody can make. */
+  requiredCapabilities?: readonly string[];
+  /** For `kind: 'action'` — an action this experience declares. Checked referentially. */
+  actionId?: Identifier;
+  note?: string;
+}
+
+/**
+ * Business process embedded in the experience.
+ *
+ * The design claim, borrowed from the agent model: a workflow's reach is a **subset of what the
+ * experience already declares**. A step that acts invokes one of the experience's own `actions`; it
+ * introduces no parallel action system and no new execution path.
+ *
+ * Declarative only — nothing executes these. Branching, parallelism, loops, timers, escalation and
+ * in-flight state are all deliberately absent: the requirement claims order and nothing more, and a
+ * speculative process language is worse than none.
+ */
+export interface Workflow {
+  name: I18nString;
+  description?: string;
+  trigger?: { kind: 'manual' | 'onAction'; actionId?: Identifier };
+  /** An array because order is the only structure claimed. */
+  steps: readonly WorkflowStep[];
+}
+
+/**
+ * Terminology and instructions that scope AI behaviour for one experience.
+ *
+ * `extends: 'product'` layers this over the product-level context rather than replacing it, which is
+ * what FR-19 requires. Explicit rather than implied so that standing alone is a visible choice.
+ */
+export interface ExperienceAiContext {
+  extends?: 'product' | 'none';
+  terminology?: readonly { term: string; means: string; notToBeConfusedWith?: string }[];
+  instructions?: readonly string[];
+  hints?: { whenToUse?: string; whenNotToUse?: string; exampleQuestions?: readonly string[]; preferOver?: readonly string[] };
+}
+
+export interface ExperienceDocumentation {
+  purpose?: string;
+  audience?: string;
+  notes?: string;
+  links?: readonly { label: string; href: string }[];
+}
+
+/**
+ * One regression test.
+ *
+ * `expect` is prose because no runner exists, and an executable assertion syntax that nothing executes
+ * is a dialect the model never grows into. `covers` is the part that works today: impact analysis reads
+ * it to decide which tests a dependency change should re-run.
+ */
+export interface ExperienceTest {
+  name: string;
+  origin?: 'authored' | 'generated';
+  covers?: {
+    pages?: readonly Identifier[];
+    dataSources?: readonly Identifier[];
+    entities?: readonly string[];
+  };
+  given?: string;
+  expect: string;
+  /** Nothing writes this yet — there is no runner. */
+  lastRun?: { at: string; result: 'pass' | 'fail' | 'skipped'; detail?: string };
+}
+
 export interface ExperienceDefinition {
   schemaVersion: string;
   id: string;
@@ -280,6 +358,13 @@ export interface ExperienceDefinition {
   dataSources?: Readonly<Record<Identifier, DataSource>>;
   actions?: Readonly<Record<Identifier, Action>>;
   security?: ArtifactSecurity;
+  /** Business process embedded in the artifact rather than bolted on after publish (FR-18). */
+  workflows?: Readonly<Record<Identifier, Workflow>>;
+  /** Terminology and instructions scoping AI behaviour for this experience (FR-19). */
+  aiContext?: ExperienceAiContext;
+  documentation?: ExperienceDocumentation;
+  /** What impact analysis selects from and generated regression tests populate (FR-19, FR-34, FR-36). */
+  tests?: Readonly<Record<Identifier, ExperienceTest>>;
   presentation?: Record<string, unknown>;
   localization?: Record<string, unknown>;
   environments?: readonly string[];

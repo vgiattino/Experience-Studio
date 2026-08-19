@@ -25,9 +25,9 @@ in the source draft* — they are new requirements, not regressions.
 | | FRs | Notes |
 |---|---|---|
 | **Built** | 9 | FR-1, 4, 5, 7, 13, 14, 17, 21, 28 |
-| **Partial** | 15 | The creation paths and the object model are real but incomplete |
-| **Scaffolded** | 4 | FR-18 (security half), FR-33, FR-35, FR-12 |
-| **Absent** | 29 | Navigation Model, Studio Access Tiers, Experience Analytics, System Pages/Journeys, the Product Integration Contract as a contract, legacy migration |
+| **Partial** | 17 | The creation paths and the object model are real but incomplete |
+| **Scaffolded** | 3 | FR-33, FR-35, FR-12 |
+| **Absent** | 27 | Navigation Model, Studio Access Tiers, Experience Analytics, System Pages/Journeys, the Product Integration Contract as a contract, legacy migration |
 
 The shape of that distribution is the point. **Everything on the "describe it and get a page" axis is
 built and demonstrable. Almost nothing on the "many people, many products, over time" axis exists.**
@@ -71,8 +71,8 @@ The prototype is a strong vertical slice of one persona doing one thing once.
 | FR | Status | Evidence | Gap |
 |---|---|---|---|
 | FR-17 Unified Experience object | **Built** | One `experience.schema.json` for a single dashboard and a multi-page application alike; all three creation paths converge on it; the renderer has no per-kind branch | — |
-| FR-18 Embedded Security **and Workflows** | **Scaffolded** | `security` is a real element and is *enforced* — the persona switch turns widgets `denied` while the page stays usable, verified | **`workflows` does not exist on the Experience schema.** Properties are: schemaVersion, id, name, description, icon, kind, workspaceId, pages, navigation, parameters, dataSources, actions, security, presentation, localization, environments, version, tags. An Approval Workspace cannot carry its approval workflow |
-| FR-19 Per-Experience AI Context, Documentation, Tests | **Absent** | — | None of the three exist on the schema. This is load-bearing: FR-36's generated tests have nowhere to live, and FR-34's impact analysis has no per-Experience test set to select from |
+| FR-18 Embedded Security **and Workflows** | **Partial** | `security` is real and *enforced* — the persona switch turns widgets `denied` while the page stays usable. `workflows` now exists on the schema and the contract, with a worked Approval Workspace in `schemas/examples/`. Its design claim is that a workflow's reach is a **subset of what the experience already declares** — a step invokes one of the experience's own actions, and `checkExperienceElements` refuses one that invents an action | Declarative only: nothing executes a workflow. Branching, parallelism, timers, escalation and in-flight state are deliberately unmodelled — the requirement claims order and nothing more |
+| FR-19 Per-Experience AI Context, Documentation, Tests | **Partial** | All three are on the schema and the contract. `aiContext.extends` makes FR-19's "specialize or extend without replacing" an explicit choice rather than an assumption, and standing alone earns a warning. `tests` carry `covers` and an `origin` distinguishing generated from authored; `testsCovering()` is FR-34's selection as a function, and both shipped examples are gated against the checker | No runner, so `lastRun` is never written and `expect` is prose. AI Context is not yet read by the generation pipeline — the element exists, the grounding does not consume it |
 
 ## §4.5 Product Experience Registry & Integration Contract — FR-20…FR-24
 
@@ -114,7 +114,7 @@ The prototype is a strong vertical slice of one persona doing one thing once.
 | FR-33 Full lifecycle enforcement | **Scaffolded** | `lifecycleState: 'draft' \| 'inReview' \| 'approved' \| 'published' \| 'deprecated' \| 'archived'` (`libs/contracts/src/page.ts:102`) — the right six states. Published versions are immutable and a save against one is refused (`server/store/experience-store.ts:201`) | **Nothing enforces a transition.** No Validate gate blocking Collaborate, no Approve requiring a named approver, no Collaborate stage. The enum is a label, not a gate. Validation itself is real (8 levels, structural/component/semantic/binding/layout) but is not wired as a lifecycle precondition |
 | FR-34 Change impact analysis | **Partial** | `detectDrift` is genuine impact analysis for the *metadata* half: it diffs a re-scan against the promoted baseline and reports what changed and what it breaks, with widened-nullability and proportional-row-count reasoning | Scoped to catalog ingestion only. A changed *shared component* triggers nothing. No "which pages need testing", no regression-test selection, no human review queue |
 | FR-35 Versioning / publish / promote / rollback | **Scaffolded** | Append-only version history under `versions/`, `artifactVersion` increments, published-immutable enforced, provenance envelope with origin and correlation id | No rollback operation, no promotion transition, no ownership field. Ownership is named in the FR and absent from the model |
-| FR-36 AI-generated regression tests | **Absent** | — | Blocked on FR-19: an Experience has no `tests` element to populate |
+| FR-36 AI-generated regression tests | **Absent** | — | No longer blocked: `tests` exists to populate, with `origin: 'generated'` to mark what the AI wrote. What is missing is the generation itself and a runner |
 | FR-37 Collaboration before publish | **Absent** | — | See §4.12 |
 
 ## §4.10 Business User Navigation — FR-38…FR-43
@@ -206,10 +206,31 @@ Ordered by how much else they unblock, not by size.
    Ten tests in `server/store/experience-store.spec.ts`, and verified through the API across four
    personas — including the transfer appearing in the audit log while ordinary edits do not.
 
-2. **`workflows`, `aiContext`, `documentation` and `tests` are missing from the Experience schema.**
-   FR-18 and FR-19 are model changes, and four other FRs (FR-36 regression tests, FR-34's test
-   selection, FR-23's AI Context inheritance, and an Approval Workspace being able to carry its own
-   approval) are blocked behind them. Cheap to add, and everything downstream assumes them.
+2. ~~**`workflows`, `aiContext`, `documentation` and `tests` are missing from the Experience schema.**~~
+   **Done.**
+
+   All four are on `experience.schema.json` and `ExperienceDefinition`, each modelling only what the
+   requirement's stated consequences need — with what was deliberately left out written into the schema
+   beside it, so the next person can tell an omission from an oversight.
+
+   `workflows` carries the design claim borrowed from the agent model: **a workflow's reach is a subset
+   of what the experience already declares.** A step that acts invokes one of the experience's own
+   actions, so a workflow introduces no parallel action system and no second execution path. Branching,
+   parallelism, loops, timers, escalation and in-flight state are absent on purpose — FR-18 claims order
+   and nothing more, and a speculative process language is worse than none.
+
+   `aiContext.extends` turns FR-19's "specialize or extend without replacing" into an explicit choice.
+   `none` is expressible and warns, because an experience that discards its product's vocabulary
+   produces answers that are fluent, well-grounded and wrong.
+
+   `tests` earn their place through `covers` rather than through `expect`: `testsCovering()` is FR-34's
+   selection as a function, and `origin` distinguishes what the AI wrote from what a person did — the
+   question SM-11 exists to ask.
+
+   And because "a type nothing enforces" is this document's own definition of scaffolding,
+   `checkExperienceElements` in `@opus/experience-model` closes the gap JSON Schema cannot: a step
+   invoking an undeclared action, two steps sharing an id, a test covering a page that is not there, a
+   term defined twice. Both shipped examples are gated against it. 564 → 581 tests.
 
 3. **The lifecycle is six state labels with no gate.** `lifecycleState` has the right values and
    nothing checks them. Validation exists and is good (8 levels, verified) but is not a precondition
@@ -254,8 +275,9 @@ A recommendation, not a plan — sequencing across products is explicitly out of
 
 1. ~~**`owner` on the Experience, and resolve `actorId` server-side.**~~ **Done** — see gap 1 above.
    §4.12 and §4.13 no longer wait on a missing field.
-2. **`workflows`, `aiContext`, `documentation`, `tests` on the Experience schema** (FR-18, FR-19).
-   Model-only; unblocks FR-36 and part of FR-34.
+2. ~~**`workflows`, `aiContext`, `documentation`, `tests` on the Experience schema**~~ **Done** — see
+   gap 2. FR-36 now has somewhere to put a generated test; what it still lacks is the generation and a
+   runner.
 3. **Make the lifecycle a gate** (FR-33): Validate as a precondition, Approve requiring a named
    approver, both recorded immutably. The validator already exists — this is wiring plus refusal.
 4. **The Enterprise component family** (FR-30): Exception Queue, Approval, Workflow, Notifications,

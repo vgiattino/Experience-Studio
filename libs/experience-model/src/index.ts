@@ -139,4 +139,11 @@ export {
   type GenerationProvenance,
 } from './version';
 
+export {
+  blockingElementProblems,
+  checkExperienceElements,
+  testsCovering,
+  type ElementProblem,
+} from './elements';
+
 export type { ExperienceSummary, StoredExperience } from './store-types';

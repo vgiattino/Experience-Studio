@@ -6,14 +6,20 @@
   "icon": "securities",
   "kind": "application",
   "workspaceId": "ops-securities",
-
   "pages": {
-    "security-master-operations": { "$pageRef": "security-master-dashboard.page.json" },
-    "security-detail": { "$pageRef": "security-detail.page.json" },
-    "processing-detail": { "$pageRef": "processing-detail.page.json" },
-    "security-search": { "$pageRef": "security-search.page.json" }
+    "security-master-operations": {
+      "$pageRef": "security-master-dashboard.page.json"
+    },
+    "security-detail": {
+      "$pageRef": "security-detail.page.json"
+    },
+    "processing-detail": {
+      "$pageRef": "processing-detail.page.json"
+    },
+    "security-search": {
+      "$pageRef": "security-search.page.json"
+    }
   },
-
   "navigation": {
     "mode": "sidebar",
     "homePage": "security-master-operations",
@@ -36,7 +42,13 @@
         "label": "Securities",
         "icon": "securities",
         "children": [
-          { "kind": "page", "id": "nav-search", "label": "Search", "icon": "search", "page": "security-search" }
+          {
+            "kind": "page",
+            "id": "nav-search",
+            "label": "Search",
+            "icon": "search",
+            "page": "security-search"
+          }
         ]
       },
       {
@@ -45,9 +57,16 @@
         "label": "Processing",
         "icon": "pipeline",
         "page": "processing-detail",
-        "badge": { "source": "nav-late-count", "field": "late-count", "emphasis": "warning" }
+        "badge": {
+          "source": "nav-late-count",
+          "field": "late-count",
+          "emphasis": "warning"
+        }
       },
-      { "kind": "divider", "id": "nav-div-1" },
+      {
+        "kind": "divider",
+        "id": "nav-div-1"
+      },
       {
         "kind": "external",
         "id": "nav-help",
@@ -57,17 +76,28 @@
       }
     ],
     "drilldownTargets": {
-      "securities.security": { "page": "security-detail", "openIn": "self" },
-      "dq.exception": { "page": "security-detail", "tab": "exceptions", "openIn": "drawer" },
-      "processing.file-load": { "page": "processing-detail", "openIn": "self" }
+      "securities.security": {
+        "page": "security-detail",
+        "openIn": "self"
+      },
+      "dq.exception": {
+        "page": "security-detail",
+        "tab": "exceptions",
+        "openIn": "drawer"
+      },
+      "processing.file-load": {
+        "page": "processing-detail",
+        "openIn": "self"
+      }
     }
   },
-
   "parameters": {
     "as-of": {
       "label": "As Of",
       "dataType": "date",
-      "default": { "$expr": "today()" },
+      "default": {
+        "$expr": "today()"
+      },
       "required": true,
       "exposedInShell": true,
       "persist": "session"
@@ -81,7 +111,6 @@
       "persist": "user"
     }
   },
-
   "dataSources": {
     "nav-late-count": {
       "id": "nav-late-count",
@@ -89,40 +118,67 @@
       "entity": "processing.file-load",
       "kind": "aggregate",
       "select": {
-        "measures": [{ "measure": "late-file-count", "aggregation": "count", "alias": "late-count" }]
+        "measures": [
+          {
+            "measure": "late-file-count",
+            "aggregation": "count",
+            "alias": "late-count"
+          }
+        ]
       },
       "filter": {
         "all": [
-          { "target": "business-date", "operator": "eq", "value": { "$param": "as-of" } },
-          { "target": "load-status", "operator": "eq", "value": "LATE" }
+          {
+            "target": "business-date",
+            "operator": "eq",
+            "value": {
+              "$param": "as-of"
+            }
+          },
+          {
+            "target": "load-status",
+            "operator": "eq",
+            "value": "LATE"
+          }
         ]
       },
-      "refresh": { "mode": "interval", "intervalSeconds": 300 },
+      "refresh": {
+        "mode": "interval",
+        "intervalSeconds": 300
+      },
       "loadPolicy": "eager",
       "expectedCostClass": "low"
     }
   },
-
   "actions": {
     "reset-context": {
       "id": "reset-context",
       "kind": "setParameter",
       "label": "Reset to Today",
       "parameter": "as-of",
-      "value": { "$expr": "today()" },
+      "value": {
+        "$expr": "today()"
+      },
       "updateUrl": true
     }
   },
-
   "security": {
     "intendedAudience": "Securities operations team and data stewards.",
-    "requiredRoles": ["viewer", "author"],
-    "requiredCapabilities": ["experience.view"],
+    "requiredRoles": [
+      "viewer",
+      "author"
+    ],
+    "requiredCapabilities": [
+      "experience.view"
+    ],
     "workspaceScope": "tenant",
     "deniedDataPolicy": "showDeniedState",
     "exportPolicy": {
       "allowed": true,
-      "formats": ["csv", "xlsx"],
+      "formats": [
+        "csv",
+        "xlsx"
+      ],
       "maxRows": 50000,
       "requiresReason": true,
       "watermark": true
@@ -134,28 +190,102 @@
       "allowCrossTenantExemplar": false
     }
   },
-
+  "aiContext": {
+    "extends": "product",
+    "terminology": [
+      {
+        "term": "Late file",
+        "means": "A vendor file whose expected arrival time has passed and which has not been received. Lateness is measured against the vendor contract, not against the load window.",
+        "notToBeConfusedWith": "A failed file, which arrived and could not be processed."
+      },
+      {
+        "term": "New security",
+        "means": "An instrument first seen in the current business date, whether or not it has been mastered yet."
+      }
+    ],
+    "instructions": [
+      "Figures on this dashboard are as of the selected business date, never \"now\". Do not add a component that reads current time.",
+      "Prefer the vendor contract as the source for expectation, not the observed history."
+    ],
+    "hints": {
+      "whenToUse": "Questions about today\u2019s processing: what arrived, what is late, what failed, what is queued for review.",
+      "whenNotToUse": "Questions about one instrument\u2019s golden record \u2014 that is Security Overview."
+    }
+  },
+  "documentation": {
+    "purpose": "The page a data steward opens first: what the overnight run did, what it did not do, and what is waiting for a person.",
+    "audience": "Data stewards and operations leads on the securities desk.",
+    "notes": "Row counts are estimates read from partition metadata, so a figure moving by a few rows between refreshes is expected and is not drift."
+  },
+  "tests": {
+    "late-files-honours-as-of": {
+      "name": "Late file count follows the selected business date",
+      "origin": "authored",
+      "covers": {
+        "pages": [
+          "security-master-operations"
+        ],
+        "entities": [
+          "processing.file-load"
+        ]
+      },
+      "given": "A business date on which two vendor files were late.",
+      "expect": "The Late Files KPI reads 2, and changing the date changes the figure rather than leaving it at today\u2019s value."
+    },
+    "drilldown-carries-the-security": {
+      "name": "Drill-down carries the selected security to the detail page",
+      "origin": "authored",
+      "covers": {
+        "pages": [
+          "security-master-operations",
+          "security-detail"
+        ]
+      },
+      "expect": "Selecting a row opens Security Detail for that instrument, with the business date preserved."
+    },
+    "nav-count-matches-kpi": {
+      "name": "The navigation badge agrees with the KPI it summarises",
+      "origin": "generated",
+      "covers": {
+        "dataSources": [
+          "nav-late-count"
+        ]
+      },
+      "expect": "The late-count badge in navigation equals the Late Files KPI on the dashboard."
+    }
+  },
   "presentation": {
     "themeRef": "opus.default",
     "density": "comfortable",
     "showShellHeader": true
   },
-
   "localization": {
     "defaultLocale": "en-GB",
-    "supportedLocales": ["en-GB", "en-US", "de-DE"],
+    "supportedLocales": [
+      "en-GB",
+      "en-US",
+      "de-DE"
+    ],
     "stringTableRef": "securities.operations.strings"
   },
-
-  "environments": ["dev", "uat", "production"],
-
+  "environments": [
+    "dev",
+    "uat",
+    "production"
+  ],
   "version": {
     "schemaVersion": "1.0",
     "artifactVersion": 22,
     "lifecycleState": "published",
     "immutable": true,
-    "pins": { "catalogVersion": 7, "registryVersion": "3.2.0" },
-    "lineage": { "basedOnVersion": 21, "supersedes": 21 },
+    "pins": {
+      "catalogVersion": 7,
+      "registryVersion": "3.2.0"
+    },
+    "lineage": {
+      "basedOnVersion": 21,
+      "supersedes": 21
+    },
     "provenance": {
       "origin": "human",
       "actorId": "ops-lead@demo-tenant",
@@ -169,17 +299,31 @@
     },
     "validation": {
       "status": "valid",
-      "stagesPassed": ["structural", "component", "semantic", "binding", "entitlement", "cost", "layout", "accessibility"],
+      "stagesPassed": [
+        "structural",
+        "component",
+        "semantic",
+        "binding",
+        "entitlement",
+        "cost",
+        "layout",
+        "accessibility"
+      ],
       "validatedAt": "2026-08-03T14:12:00Z"
     },
     "governance": {
       "submittedBy": "ops-lead@demo-tenant",
       "submittedAt": "2026-08-03T14:13:00Z",
-      "approvedBy": ["platform-reviewer@demo-tenant"],
+      "approvedBy": [
+        "platform-reviewer@demo-tenant"
+      ],
       "approvedAt": "2026-08-03T14:19:00Z",
       "publishedBy": "platform-reviewer@demo-tenant",
       "publishedAt": "2026-08-03T14:22:00Z",
-      "publishedEnvironments": ["uat", "production"]
+      "publishedEnvironments": [
+        "uat",
+        "production"
+      ]
     },
     "audit": {
       "createdBy": "ops-lead@demo-tenant",
@@ -188,6 +332,8 @@
       "modifiedAt": "2026-08-03T14:11:00Z"
     }
   },
-
-  "tags": ["operations", "securities"]
+  "tags": [
+    "operations",
+    "securities"
+  ]
 }

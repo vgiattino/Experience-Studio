@@ -114,6 +114,51 @@
 
     "security": { "$ref": "security.schema.json#/$defs/artifactSecurity" },
 
+    "workflows": {
+      "description": "Business process embedded in the experience, not bolted on after publish — an Approval Workspace carries its approval here, in the same definition as its pages. Declarative only: nothing executes these yet, and the reason to define them now is that an approval that lives outside the artifact cannot be versioned, reviewed or rolled back with it. See `$defs/workflow` for what is deliberately not modelled.",
+      "type": "object",
+      "propertyNames": { "$ref": "common.schema.json#/$defs/identifier" },
+      "additionalProperties": { "$ref": "#/$defs/workflow" },
+      "maxProperties": 16
+    },
+
+    "aiContext": {
+      "description": "Business terminology and instructions that scope AI behaviour for THIS experience. Extends the product-level AI Context rather than replacing it — the direction is declared in `extends` rather than inferred, because an experience that silently discarded its product's vocabulary would produce fluent, well-grounded, wrong answers.",
+      "$ref": "#/$defs/aiContext"
+    },
+
+    "documentation": {
+      "description": "What this experience is for, in the words of whoever is accountable for it. Part of the definition rather than a wiki page because the two drift the moment the experience is versioned, and the reviewer at Approve is reading one of them.",
+      "type": "object",
+      "properties": {
+        "purpose": { "type": "string", "maxLength": 2048 },
+        "audience": { "type": "string", "maxLength": 1024 },
+        "notes": { "type": "string", "maxLength": 8192 },
+        "links": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "label": { "type": "string", "maxLength": 256 },
+              "href": { "type": "string", "format": "uri", "maxLength": 2048 }
+            },
+            "required": ["label", "href"],
+            "additionalProperties": false
+          },
+          "maxItems": 20
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "tests": {
+      "description": "The regression tests for this experience. What makes them useful before a runner exists is `covers`: impact analysis reads it to decide which tests a metadata change should re-run, which is the difference between retesting one experience and retesting the catalog.",
+      "type": "object",
+      "propertyNames": { "$ref": "common.schema.json#/$defs/identifier" },
+      "additionalProperties": { "$ref": "#/$defs/experienceTest" },
+      "maxProperties": 200
+    },
+
     "presentation": {
       "type": "object",
       "properties": {
@@ -153,5 +198,148 @@
   },
 
   "required": ["schemaVersion", "id", "name", "pages", "version"],
-  "additionalProperties": false
+  "additionalProperties": false,
+
+  "$defs": {
+    "workflow": {
+      "description": "An ordered sequence of steps a person moves through inside this experience.\n\nThe design claim, borrowed from the agent model: a workflow's reach is a SUBSET of what the experience already declares. A step that acts invokes one of the experience's own `actions`; it introduces no parallel action system and no new execution path, which is what keeps it reviewable alongside everything else in the artifact.\n\nDeliberately NOT modelled, because the requirement does not ask for them and a speculative process language is worse than none: branching, parallel steps, loops, timers, escalation, compensation, sub-workflows, and any persistence of in-flight state. Steps are a list because order is the only structure claimed. When a real engine arrives, what it needs beyond this will be known rather than guessed.",
+      "type": "object",
+      "properties": {
+        "name": { "$ref": "common.schema.json#/$defs/i18nString" },
+        "description": { "type": "string", "maxLength": 2048 },
+        "trigger": {
+          "description": "What starts it. `manual` is somebody pressing something; `onAction` ties it to one of the experience's declared actions, which is how an Approval Workspace's Submit begins its approval.",
+          "type": "object",
+          "properties": {
+            "kind": { "type": "string", "enum": ["manual", "onAction"] },
+            "actionId": { "$ref": "common.schema.json#/$defs/identifier" }
+          },
+          "required": ["kind"],
+          "additionalProperties": false
+        },
+        "steps": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/workflowStep" },
+          "minItems": 1,
+          "maxItems": 32
+        }
+      },
+      "required": ["name", "steps"],
+      "additionalProperties": false
+    },
+
+    "workflowStep": {
+      "type": "object",
+      "properties": {
+        "id": { "$ref": "common.schema.json#/$defs/identifier" },
+        "name": { "$ref": "common.schema.json#/$defs/i18nString" },
+        "kind": {
+          "description": "`approval` is a named human decision — the case FR-18 gives, and the one that makes a workflow worth versioning with the artifact. `action` invokes one of the experience's own actions. Two kinds because two are what the requirement states; notification, timer and branch steps are absent on purpose.",
+          "type": "string",
+          "enum": ["approval", "action"]
+        },
+        "requiredCapabilities": {
+          "description": "Who may complete this step. An approval step with no capability is a decision anyone can make, which is not an approval — so validation warns when one is absent.",
+          "type": "array",
+          "items": { "$ref": "security.schema.json#/$defs/capability" },
+          "maxItems": 8,
+          "uniqueItems": true
+        },
+        "actionId": {
+          "description": "For `kind: action` — an action this experience declares. Referential, and checked: a step pointing at an action that does not exist is a workflow that cannot run.",
+          "$ref": "common.schema.json#/$defs/identifier"
+        },
+        "note": { "type": "string", "maxLength": 1024 }
+      },
+      "required": ["id", "name", "kind"],
+      "additionalProperties": false
+    },
+
+    "aiContext": {
+      "type": "object",
+      "properties": {
+        "extends": {
+          "description": "`product` layers this on top of the product-level AI Context registered through the integration contract; `none` deliberately stands alone. Explicit rather than implied so that replacing a product's vocabulary is a visible choice somebody made, not a default nobody noticed.",
+          "type": "string",
+          "enum": ["product", "none"],
+          "default": "product"
+        },
+        "terminology": {
+          "description": "What a word means HERE. `notToBeConfusedWith` is the field that earns this element: grounding failures in a domain like this are rarely unknown words, they are familiar words meaning something narrower than the model assumes.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "term": { "type": "string", "maxLength": 128 },
+              "means": { "type": "string", "maxLength": 1024 },
+              "notToBeConfusedWith": { "type": "string", "maxLength": 512 }
+            },
+            "required": ["term", "means"],
+            "additionalProperties": false
+          },
+          "maxItems": 100
+        },
+        "instructions": {
+          "description": "Standing instructions for AI working on or within this experience.",
+          "type": "array",
+          "items": { "type": "string", "maxLength": 1024 },
+          "maxItems": 40
+        },
+        "hints": { "$ref": "common.schema.json#/$defs/aiHints" }
+      },
+      "additionalProperties": false
+    },
+
+    "experienceTest": {
+      "description": "One regression test. Prose in `expect` rather than an assertion language, because no runner exists and inventing an executable syntax nothing executes is how a model acquires a dialect it never grows into. `covers` is the part that works today.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "maxLength": 256 },
+        "origin": {
+          "description": "`generated` marks a test the AI wrote (FR-36). Kept distinct from `authored` because a suite that cannot tell them apart cannot answer whether generation is trustworthy — the question SM-11 exists to ask.",
+          "type": "string",
+          "enum": ["authored", "generated"],
+          "default": "authored"
+        },
+        "covers": {
+          "description": "What this test exercises, by reference. Impact analysis reads this to select tests when a dependency changes; every reference is checked against the experience, so a test cannot claim to cover something that is not there.",
+          "type": "object",
+          "properties": {
+            "pages": {
+              "type": "array",
+              "items": { "$ref": "common.schema.json#/$defs/identifier" },
+              "maxItems": 40
+            },
+            "dataSources": {
+              "type": "array",
+              "items": { "$ref": "common.schema.json#/$defs/identifier" },
+              "maxItems": 40
+            },
+            "entities": {
+              "description": "Catalog entities, by qualified ref — the level a metadata change actually arrives at.",
+              "type": "array",
+              "items": { "$ref": "common.schema.json#/$defs/qualifiedRef" },
+              "maxItems": 40
+            }
+          },
+          "additionalProperties": false
+        },
+        "given": { "type": "string", "maxLength": 2048 },
+        "expect": { "type": "string", "maxLength": 2048 },
+        "lastRun": {
+          "description": "Nothing writes this yet — there is no runner. It is here so a result has somewhere to live the moment there is one, rather than the first runner also having to change the schema.",
+          "type": "object",
+          "properties": {
+            "at": { "type": "string", "format": "date-time" },
+            "result": { "type": "string", "enum": ["pass", "fail", "skipped"] },
+            "detail": { "type": "string", "maxLength": 2048 }
+          },
+          "required": ["at", "result"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["name", "expect"],
+      "additionalProperties": false
+    }
+  }
 }
