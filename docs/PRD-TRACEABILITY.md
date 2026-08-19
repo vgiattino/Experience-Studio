@@ -25,9 +25,9 @@ in the source draft* — they are new requirements, not regressions.
 | | FRs | Notes |
 |---|---|---|
 | **Built** | 9 | FR-1, 4, 5, 7, 13, 14, 17, 21, 28 |
-| **Partial** | 14 | The creation paths and the object model are real but incomplete |
+| **Partial** | 15 | The creation paths and the object model are real but incomplete |
 | **Scaffolded** | 4 | FR-18 (security half), FR-33, FR-35, FR-12 |
-| **Absent** | 30 | Navigation Model, Studio Access Tiers, Experience Analytics, System Pages/Journeys, the Product Integration Contract as a contract, legacy migration |
+| **Absent** | 29 | Navigation Model, Studio Access Tiers, Experience Analytics, System Pages/Journeys, the Product Integration Contract as a contract, legacy migration |
 
 The shape of that distribution is the point. **Everything on the "describe it and get a page" axis is
 built and demonstrable. Almost nothing on the "many people, many products, over time" axis exists.**
@@ -55,7 +55,7 @@ The prototype is a strong vertical slice of one persona doing one thing once.
 | FR-9 Multi-scope template catalog | **Partial** | Four real business templates as JSON page definitions (`security-master-dashboard`, `security-overview`, `party-overview`, `exception-management`) — see `EDM-TEMPLATES.md` | They are files, not a catalog. No Enterprise / Product / Organization scope, no Shared, no Recommended. Scope is the substance of this FR and none of it exists |
 | FR-10 Template customization → standard Definition | **Partial** | Opening a template definition in the builder produces an ordinary Experience — the convergence claim holds structurally | No lineage link back to the origin template, which the FR requires |
 | FR-11 Save-as-template / promotion | **Absent** | — | No promotion path, no permission model for Product/Enterprise scope |
-| FR-12 Catalog discovery + metadata | **Scaffolded** | `CATALOG-BROWSER.md`; entries carry name, version, origin, prompt | Missing from every entry: owner, product, status, tags, dependencies, permissions. Dependencies are the field FR-34's impact analysis is supposed to read |
+| FR-12 Catalog discovery + metadata | **Scaffolded** | `CATALOG-BROWSER.md`; entries carry name, version, origin, prompt, and now **owner** (`ExperienceSummary.owner`) | Still missing: product, status, tags, dependencies, permissions. Dependencies are the field FR-34's impact analysis is supposed to read |
 
 ## §4.3 Visual Page Builder — FR-13…FR-16
 
@@ -154,10 +154,10 @@ document does not narrow it.
 |---|---|---|
 | FR-45 Three-tier access model | **Absent** | Three personas with capability lists — `analyst`, `steward`, `restricted` — resolved **server-side**, which is the enforcement posture FR-45 and FR-48 demand ("not only hidden in the UI"). But capabilities gate *actions*, not access to Studio itself |
 | FR-46 System Page Builder scoping | **Absent** | — |
-| FR-47 Studio Builder + default ownership | **Absent** | No `owner` on an Experience at all |
+| FR-47 Studio Builder + default ownership | **Partial** | The *ownership* half is done: `owner` is on the Experience schema and the contract, the store assigns the saver on first save, keeps it across an ordinary edit by somebody else, records a transfer with who performed it, and refuses to leave it unassigned. What is absent is the *tier* — nothing distinguishes a Studio Builder from anyone else |
 | FR-48 Consumer-only | **Absent** | The `restricted` persona holds only `experience.view`, which is close in spirit and is enforced server-side |
 | FR-49 Share with Collaborator roles | **Absent** | — |
-| FR-50 Invitation and activity attribution | **Partial** | Attribution is real: `actorId` is *required* on both `provenance` and `patchRecord` (`schemas/versioning.schema.json:227,270`), the store writes it as `updatedBy` (`server/store/experience-store.ts:232`), and the runtime renders "Authored by analyst@demo-tenant". **But it arrives in the request body and is unverified** (`server/routes.ts:114`) — a client can claim any actor, and it falls back to `'anonymous'`. Personas are resolved server-side; this is not. No invitation, and no Collaborator to attribute *to* |
+| FR-50 Invitation and activity attribution | **Partial** | Attribution is now evidence rather than a claim: the route resolves the actor from the caller's identity, **refuses** a body-supplied `actorId` with a 400 rather than ignoring it, and the client stopped sending one. `SaveRequest.actorId` is required, so `'anonymous'` is unreachable. Verified across four personas with the transfer visible in the audit log | No invitation, and no Collaborator to attribute *to* — both need §4.12's tier model |
 | FR-51 Shared Experiences stay single-entry | **Absent** | — |
 
 ## §4.13 Experience Analytics & Owner Insights — FR-52…FR-57
@@ -170,7 +170,7 @@ appears in 31 files, and **every occurrence is a component type namespace** — 
 |---|---|
 | FR-52 Per-Experience usage analytics | **Absent** |
 | FR-53 Per-Experience performance analytics | **Absent** |
-| FR-54 Owner-scoped analytics access | **Absent** — needs an `owner` field first |
+| FR-54 Owner-scoped analytics access | **Absent** — but no longer blocked; `owner` now exists to scope on |
 | FR-55 Threshold-based notification | **Absent** |
 | FR-56 Proactive Critical alerting | **Absent** |
 | FR-57 Analytics-informed AI refinement | **Absent** |
@@ -184,19 +184,27 @@ is currently unfalsifiable — which also makes SM-12 and SM-14 unmeasurable.
 
 Ordered by how much else they unblock, not by size.
 
-1. **An Experience has no owner, and the actor it does record is self-asserted.** Two distinct
-   problems that look like one.
+1. ~~**An Experience has no owner, and the actor it does record is self-asserted.**~~ **Done.**
 
-   *Owner* is simply absent — no `owner` on `experience.schema.json`, and `updatedBy` is a last-writer
-   field, not an owner. Without it FR-47, FR-49, FR-51 and FR-54 cannot begin.
+   `owner` is now on `experience.schema.json` and `ExperienceDefinition`, deliberately distinct from the
+   three fields it sits beside — `version.audit.createdBy` is who first made it,
+   `version.provenance.actorId` is who produced one version, `workspaceId` is where it lives, and an
+   experience can outlive all three while still needing somebody accountable.
 
-   *Actor* is better than it first appears: `actorId` is required on `provenance` and `patchRecord`,
-   the store persists it, and the runtime displays it. But it comes from the request body and nothing
-   checks it (`server/routes.ts:114`), defaulting to `'anonymous'`. NFR-10 asks for an immutable record
-   "sufficient to reconstruct why any published Experience looks the way it does", and an unverified
-   actor field does not carry that weight — particularly next to personas, which *are* resolved
-   server-side precisely so a client cannot claim an identity. Closing this is a small change to one
-   route, and it is the difference between an audit trail and a log.
+   The invariant is kept where the bytes are written, not in a route: `ownerFor` assigns the saver when
+   there is no owner (covering both a new experience and the backfill of every artifact written before
+   this existed), keeps the existing owner across an ordinary edit so a collaborator pressing save does
+   not silently acquire it, stamps a transfer with who performed it, and treats a blank incoming owner
+   as "keep the one it had" rather than as removal.
+
+   The actor is now resolved from the caller's identity, and a body-supplied `actorId` is **refused**
+   with a 400 rather than ignored — ignoring it would mean a caller who believes they are recording an
+   actor gets a 200 and a different name in the log. The client was sending the same identity twice,
+   once as a persona the server verifies and once as an `actorId` the server trusted; it now sends only
+   the first. `SaveRequest.actorId` is required, so `'anonymous'` is unreachable.
+
+   Ten tests in `server/store/experience-store.spec.ts`, and verified through the API across four
+   personas — including the transfer appearing in the audit log while ordinary edits do not.
 
 2. **`workflows`, `aiContext`, `documentation` and `tests` are missing from the Experience schema.**
    FR-18 and FR-19 are model changes, and four other FRs (FR-36 regression tests, FR-34's test
@@ -244,9 +252,8 @@ as open, and where either the code or the PRD should move.
 
 A recommendation, not a plan — sequencing across products is explicitly out of the PRD's scope (§0).
 
-1. **`owner` on the Experience, and resolve `actorId` server-side instead of trusting the body.**
-   Unblocks §4.12 and §4.13, and turns the existing attribution from self-asserted into evidence.
-   Smallest change with the largest downstream effect.
+1. ~~**`owner` on the Experience, and resolve `actorId` server-side.**~~ **Done** — see gap 1 above.
+   §4.12 and §4.13 no longer wait on a missing field.
 2. **`workflows`, `aiContext`, `documentation`, `tests` on the Experience schema** (FR-18, FR-19).
    Model-only; unblocks FR-36 and part of FR-34.
 3. **Make the lifecycle a gate** (FR-33): Validate as a precondition, Approve requiring a named

@@ -247,6 +247,23 @@ export interface ExperienceNavigation {
   >;
 }
 
+/**
+ * Who answers for an experience.
+ *
+ * Deliberately not any of the three fields it sits next to. `version.audit.createdBy` is who first
+ * made it, `version.provenance.actorId` is who produced one particular version, and `workspaceId` is
+ * where it lives — an experience can outlive all three and still need somebody accountable for it.
+ *
+ * `userId` is a person, never a role or a group. Accountability that cannot be addressed to somebody
+ * is not accountability, and the approval step exists to put a name against a decision.
+ */
+export interface ExperienceOwner {
+  userId: string;
+  assignedAt?: string;
+  /** Equal to `userId` at creation; different after a transfer, which is what evidences the transfer. */
+  assignedBy?: string;
+}
+
 export interface ExperienceDefinition {
   schemaVersion: string;
   id: string;
@@ -255,6 +272,8 @@ export interface ExperienceDefinition {
   icon?: string;
   kind?: 'application' | 'single' | 'process';
   workspaceId?: string;
+  /** Optional here so pre-ownership artifacts type-check; the server never stores one without it. */
+  owner?: ExperienceOwner;
   pages: Readonly<Record<Identifier, PageDefinition | { $pageRef: string }>>;
   navigation?: ExperienceNavigation;
   parameters?: Readonly<Record<Identifier, PageParameter & { exposedInShell?: boolean }>>;

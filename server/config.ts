@@ -14,11 +14,22 @@ const here = dirname(fileURLToPath(import.meta.url));
 
 export const ROOT = resolve(here, '..');
 
+/**
+ * Where everything this process writes lives.
+ *
+ * Overridable because a deployment wants its mutable state on a mounted volume with its own backup and
+ * retention policy, not inside the application directory — the same argument `OPUS_SECRET_DIR` already
+ * makes for the one part of it that holds credentials. It also makes the definition store testable
+ * against a real filesystem rather than a mock, which for append-only versioned storage is the only
+ * test worth having.
+ */
+export const DATA_ROOT = process.env['OPUS_DATA_DIR'] ?? join(ROOT, 'server/data');
+
 export const PATHS = {
   /** Saved experience definitions. The prototype's Definition Service store. */
-  experiences: join(ROOT, 'server/data/experiences'),
+  experiences: join(DATA_ROOT, 'experiences'),
   /** Append-only audit of generations and saves, so the flow is inspectable after the fact. */
-  audit: join(ROOT, 'server/data/audit.log.jsonl'),
+  audit: join(DATA_ROOT, 'audit.log.jsonl'),
   /**
    * The catalog and the row fixtures are shared with the Viewer rather than copied. One
    * catalog, one set of rows: a second copy would drift, and the whole point of the semantic
@@ -33,7 +44,7 @@ export const PATHS = {
    * `git status` dirty as a side effect of using the product, and would leave no way back to a known
    * starting point. This file is absent until the first promotion, and deleting it is the reset.
    */
-  publishedCatalog: join(ROOT, 'server/data/catalog.json'),
+  publishedCatalog: join(DATA_ROOT, 'catalog.json'),
   fixtures: join(ROOT, 'apps/viewer/public/data'),
   /** Seed definitions copied into the store on first boot if it is empty. */
   seed: join(ROOT, 'apps/viewer/public/definitions'),
@@ -44,7 +55,7 @@ export const PATHS = {
    * vocabulary — it is the record of where a part of the vocabulary came from, and it outlives any
    * particular version of the catalog it produced.
    */
-  sources: join(ROOT, 'server/data/sources'),
+  sources: join(DATA_ROOT, 'sources'),
   /**
    * Passwords a steward typed, encrypted at rest.
    *
@@ -52,7 +63,7 @@ export const PATHS = {
    * lifetimes and different privileges: a registration is metadata anybody reviewing the platform may
    * read, and this is not.
    */
-  secrets: join(ROOT, 'server/data/secrets'),
+  secrets: join(DATA_ROOT, 'secrets'),
 } as const;
 
 export const PORT = Number(process.env['PORT'] ?? 4000);

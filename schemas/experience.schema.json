@@ -31,6 +31,26 @@
       "maxLength": 128
     },
 
+    "owner": {
+      "description": "Who is accountable for this experience. Distinct from three things it is easily confused with: `version.audit.createdBy` is who first made it, `version.provenance.actorId` is who produced this particular version, and `workspaceId` is where it lives. Ownership survives every one of those changing. It is the anchor for sharing, for owner-scoped analytics, and for the question an approver actually asks — who answers for this. Optional in the schema so artifacts written before it validate; the server assigns one on every save and refuses to leave it unassigned, which is where the invariant is really kept.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "description": "The accountable user. Never a role or a group — accountability that cannot be addressed to a person is not accountability.",
+          "type": "string",
+          "maxLength": 256
+        },
+        "assignedAt": { "type": "string", "format": "date-time" },
+        "assignedBy": {
+          "description": "Who assigned it. Equal to `userId` on creation, and different after a transfer — which is what makes a transfer self-evidencing on the record rather than only reconstructable from the audit log.",
+          "type": "string",
+          "maxLength": 256
+        }
+      },
+      "required": ["userId"],
+      "additionalProperties": false
+    },
+
     "pages": {
       "description": "Pages keyed by id. Stored inline for small experiences and by reference for large ones; either way they version and promote together.",
       "type": "object",

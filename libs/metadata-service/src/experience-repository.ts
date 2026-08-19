@@ -44,7 +44,13 @@ export class ExperienceRepository {
     const saved = await apiRequest<StoredExperience>(`/experiences/${definition.id}`, {
       method: 'PUT',
       persona: this.identity.personaId(),
-      body: { definition, actorId: this.identity.user()?.id ?? 'anonymous', origin },
+      /*
+        No `actorId`. It used to be sent here alongside the persona, which was the same identity twice
+        — once verifiable and once merely asserted — and the server trusted the asserted one. The
+        server now derives the actor from the persona it already resolves, and refuses a body that
+        carries one, so sending it would be a 400.
+      */
+      body: { definition, origin },
     });
     await this.refresh();
     return saved;

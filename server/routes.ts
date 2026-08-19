@@ -92,6 +92,32 @@ api.get('/catalog', (req, res) => {
   res.json({ catalogVersion: catalogVersion(), snapshot: projectionFor(user, dataCapabilities) });
 });
 
+/**
+ * Who is acting, for a write — from the resolved identity, never from the body.
+ *
+ * The body used to carry `actorId`, and the store trusted it. That is the wrong shape twice over: it
+ * defaults to `'anonymous'` when omitted, and when supplied it is a claim by the party being audited.
+ * Meanwhile the same request already carries a persona the server resolves for every read, so the
+ * verified answer was available the whole time and was being ignored.
+ *
+ * Refused rather than ignored when a client sends one. Ignoring it means a caller who believes they
+ * are recording an actor gets a 200 and a different name in the audit log — the same reasoning as the
+ * source-edit route refusing a password rather than dropping it.
+ */
+function actorFor(req: Request, res: Response): string | null {
+  const body = req.body as { actorId?: unknown } | undefined;
+  if (body && 'actorId' in body && body.actorId !== undefined) {
+    problem(
+      res,
+      400,
+      'validation',
+      'An actor is not supplied by the caller. It is resolved from the identity on the request, because an audit trail whose actor is asserted by the party being audited records nothing. Remove `actorId` from the body.',
+    );
+    return null;
+  }
+  return callerFrom(req).user.id;
+}
+
 // ── experiences ─────────────────────────────────────────────────────────────
 api.get('/experiences', (_req, res) => {
   res.json(store.list());
@@ -104,14 +130,16 @@ api.get('/experiences/:id', (req, res) => {
 });
 
 api.put('/experiences/:id', (req, res) => {
-  const body = req.body as { definition?: unknown; actorId?: string; origin?: string };
+  const body = req.body as { definition?: unknown; origin?: string };
   if (!body?.definition) return problem(res, 400, 'validation', 'Body must carry `definition`');
   const definition = body.definition as { id?: string };
   if (definition.id !== req.params.id) {
     return problem(res, 400, 'validation', `Body id "${definition.id}" does not match path "${req.params.id}"`);
   }
+  const actorId = actorFor(req, res);
+  if (!actorId) return;
   try {
-    res.json(store.save({ definition: definition as never, actorId: body.actorId, origin: body.origin as never }));
+    res.json(store.save({ definition: definition as never, actorId, origin: body.origin as never }));
   } catch (error) {
     const status = (error as { status?: number }).status ?? 500;
     problem(res, status, status === 409 ? 'concurrency' : 'validation', (error as Error).message);
@@ -119,10 +147,12 @@ api.put('/experiences/:id', (req, res) => {
 });
 
 api.post('/experiences', (req, res) => {
-  const body = req.body as { definition?: unknown; actorId?: string; origin?: string };
+  const body = req.body as { definition?: unknown; origin?: string };
   if (!body?.definition) return problem(res, 400, 'validation', 'Body must carry `definition`');
+  const actorId = actorFor(req, res);
+  if (!actorId) return;
   try {
-    res.status(201).json(store.save({ definition: body.definition as never, actorId: body.actorId, origin: body.origin as never }));
+    res.status(201).json(store.save({ definition: body.definition as never, actorId, origin: body.origin as never }));
   } catch (error) {
     const status = (error as { status?: number }).status ?? 500;
     problem(res, status, status === 409 ? 'concurrency' : 'validation', (error as Error).message);

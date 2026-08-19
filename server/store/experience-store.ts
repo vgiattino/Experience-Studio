@@ -29,7 +29,7 @@ import { join } from 'node:path';
 
 import type { ExperienceDefinition, ProvenanceOrigin } from '@opus/contracts';
 
-import { PATHS } from '../config';
+import { DATA_ROOT, PATHS } from '../config';
 
 export interface StoredExperience {
   id: string;
@@ -57,15 +57,41 @@ export interface ExperienceSummary {
   lifecycleState: string;
   origin: string;
   updatedAt: string;
+  /**
+   * Who answers for it. Absent on a seeded artifact, and that is not an oversight — a baseline the
+   * product ships has no individual owner until somebody adopts it by saving it, at which point
+   * `ownerFor` assigns one.
+   */
+  owner?: string;
   prompt?: string;
   tags: readonly string[];
 }
 
 const VERSIONS = 'versions';
 
+/**
+ * Where the store writes, resolved per call rather than at module load.
+ *
+ * `PATHS` is computed once when `config.ts` is first imported, which is fine for a running server and
+ * wrong for anything that needs to point the store somewhere else afterwards — an operator moving the
+ * data directory, and a test wanting a real filesystem it can throw away. `secret-store.ts` reads
+ * `OPUS_SECRET_DIR` the same way and for the same reason.
+ */
+function dataDir(): string {
+  return process.env['OPUS_DATA_DIR']?.trim() || DATA_ROOT;
+}
+
+function experiencesDir(): string {
+  return join(dataDir(), 'experiences');
+}
+
+function auditPath(): string {
+  return join(dataDir(), 'audit.log.jsonl');
+}
+
 function ensureDirs(): void {
-  mkdirSync(PATHS.experiences, { recursive: true });
-  mkdirSync(join(PATHS.experiences, VERSIONS), { recursive: true });
+  mkdirSync(experiencesDir(), { recursive: true });
+  mkdirSync(join(experiencesDir(), VERSIONS), { recursive: true });
 }
 
 function fileFor(id: string): string {
@@ -74,7 +100,7 @@ function fileFor(id: string): string {
   if (!/^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$/.test(id)) {
     throw Object.assign(new Error(`Invalid experience id "${id}"`), { status: 400 });
   }
-  return join(PATHS.experiences, `${id}.experience.json`);
+  return join(experiencesDir(), `${id}.experience.json`);
 }
 
 function read(id: string): StoredExperience | null {
@@ -91,7 +117,7 @@ function write(record: StoredExperience): void {
 function audit(entry: Record<string, unknown>): void {
   ensureDirs();
   const line = `${JSON.stringify({ at: new Date().toISOString(), ...entry })}\n`;
-  writeFileSync(PATHS.audit, line, { encoding: 'utf8', flag: 'a' });
+  writeFileSync(auditPath(), line, { encoding: 'utf8', flag: 'a' });
 }
 
 /**
@@ -150,9 +176,9 @@ export function seedMissing(): { seeded: string[] } {
 
 export function list(): ExperienceSummary[] {
   ensureDirs();
-  const files = readdirSync(PATHS.experiences).filter((f) => f.endsWith('.experience.json'));
+  const files = readdirSync(experiencesDir()).filter((f) => f.endsWith('.experience.json'));
   const summaries = files.map((file) => {
-    const record = JSON.parse(readFileSync(join(PATHS.experiences, file), 'utf8')) as StoredExperience;
+    const record = JSON.parse(readFileSync(join(experiencesDir(), file), 'utf8')) as StoredExperience;
     return summarize(record);
   });
   return summaries.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
@@ -175,6 +201,9 @@ export function summarize(record: StoredExperience): ExperienceSummary {
     lifecycleState: d.version?.lifecycleState ?? 'draft',
     origin: record.origin,
     updatedAt: record.updatedAt,
+    // The catalog entry has to show who answers for this — it is the field a reuser checks before
+    // extending somebody else's work, and the one owner-scoped analytics is keyed on.
+    owner: d.owner?.userId,
     prompt: d.version?.provenance?.generation?.prompt,
     tags: d.tags ?? [],
   };
@@ -186,8 +215,44 @@ export function get(id: string): StoredExperience | null {
 
 export interface SaveRequest {
   definition: ExperienceDefinition;
-  actorId?: string;
+  /**
+   * Who is saving — resolved from the caller's identity by the route, never taken from the body.
+   *
+   * It was optional and body-supplied, which meant it defaulted to `'anonymous'` and that a client
+   * could claim to be anybody. Required now, and the route is the only thing that fills it, because an
+   * audit trail whose actor is asserted by the party being audited is a log.
+   */
+  actorId: string;
   origin?: StoredExperience['origin'];
+}
+
+/**
+ * Ownership across a save. Three cases, and the third is the one worth stating.
+ *
+ *   1. **No owner yet** — the saver becomes the owner. That covers both a new experience (FR-47's
+ *      "defaults to the Studio Builder who created it") and an artifact written before ownership
+ *      existed, which is backfilled the first time anybody touches it.
+ *   2. **An owner, unchanged** — kept, with its original `assignedAt`/`assignedBy` intact. An ordinary
+ *      edit by a collaborator must not silently make them the owner.
+ *   3. **A different owner in the incoming definition** — a transfer, stamped with who did it and
+ *      when. Deliberately not refused here: transfer is a legitimate act and the route is where the
+ *      right to perform it belongs. What is refused is *un*assignment — a definition arriving with a
+ *      blank `userId` keeps the owner it had rather than losing one.
+ */
+function ownerFor(
+  incoming: ExperienceDefinition,
+  previous: StoredExperience | null,
+  actorId: string,
+  now: string,
+): NonNullable<ExperienceDefinition['owner']> {
+  const held = previous?.definition.owner;
+  const proposed = incoming.owner?.userId?.trim();
+
+  if (!proposed) {
+    return held ?? { userId: actorId, assignedAt: now, assignedBy: actorId };
+  }
+  if (held && held.userId === proposed) return held;
+  return { userId: proposed, assignedAt: now, assignedBy: actorId };
 }
 
 export function save(request: SaveRequest): StoredExperience {
@@ -215,21 +280,25 @@ export function save(request: SaveRequest): StoredExperience {
     ensureDirs();
     const v = previous.definition.version?.artifactVersion ?? 1;
     writeFileSync(
-      join(PATHS.experiences, VERSIONS, `${definition.id}.v${v}.json`),
+      join(experiencesDir(), VERSIONS, `${definition.id}.v${v}.json`),
       `${JSON.stringify(previous, null, 2)}\n`,
       'utf8',
     );
   }
 
   const nextVersion = (previous?.definition.version?.artifactVersion ?? 0) + 1;
+  const now = new Date().toISOString();
   const record: StoredExperience = {
     id: definition.id,
     definition: {
       ...definition,
+      // Assigned here rather than trusted from the body, so no path through this function can store
+      // an experience nobody answers for. See `ownerFor`.
+      owner: ownerFor(definition, previous, request.actorId, now),
       version: { ...definition.version, artifactVersion: nextVersion },
     },
-    updatedAt: new Date().toISOString(),
-    updatedBy: request.actorId ?? 'anonymous',
+    updatedAt: now,
+    updatedBy: request.actorId,
     origin: request.origin ?? definition.version?.provenance?.origin ?? 'human',
   };
   write(record);
@@ -239,6 +308,12 @@ export function save(request: SaveRequest): StoredExperience {
     artifactVersion: nextVersion,
     origin: record.origin,
     actorId: record.updatedBy,
+    owner: record.definition.owner?.userId,
+    // Only when it changed. A field that repeats the owner on every save buries the one save that
+    // moved it, which is the save anybody auditing ownership is looking for.
+    ...(previous?.definition.owner?.userId !== record.definition.owner?.userId
+      ? { ownerChangedFrom: previous?.definition.owner?.userId ?? null }
+      : {}),
     correlationId: definition.version?.provenance?.generation?.correlationId,
   });
   return record;
@@ -251,11 +326,11 @@ export function remove(id: string): boolean {
   ensureDirs();
   const v = record.definition.version?.artifactVersion ?? 1;
   writeFileSync(
-    join(PATHS.experiences, VERSIONS, `${id}.v${v}.deleted.json`),
+    join(experiencesDir(), VERSIONS, `${id}.v${v}.deleted.json`),
     `${JSON.stringify(record, null, 2)}\n`,
     'utf8',
   );
-  copyFileSync(fileFor(id), join(PATHS.experiences, VERSIONS, `${id}.last.json`));
+  copyFileSync(fileFor(id), join(experiencesDir(), VERSIONS, `${id}.last.json`));
   rmSync(fileFor(id));
   audit({ event: 'delete', id });
   return true;
