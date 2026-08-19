@@ -61,6 +61,9 @@
       "@opus/experience-model": [
         "libs/experience-model/src/index.ts"
       ],
+      "@opus/product-registry": [
+        "libs/product-registry/src/index.ts"
+      ],
       "@opus/page-renderer": [
         "libs/page-renderer/src/index.ts"
       ],

@@ -1,0 +1,138 @@
+{
+  "schemaVersion": "1.0",
+  "id": "opus-control",
+  "name": "Opus Control",
+  "description": "Transaction and position control: reconciling internal records against external statements, and working the breaks that reconciliation raises through to proof.",
+  "productVersion": "not-deployed",
+  "icon": "balance",
+  "status": "registered",
+
+  "notes": "READ THIS BEFORE ASSUMING IT IS A PLACEHOLDER.\n\nThis registration exists to test FR-20's central claim — 'adding a product is a registration exercise, not a platform code change' — which was previously unfalsifiable, because with one product there was nothing to be product-agnostic ABOUT. Adding this file required no change to any file under libs/ or server/, and that is the entire point of it.\n\nIts `status` is `registered` rather than `active` because the demo tenant's catalog contains no Control data. That is the honest state and a deliberately chosen one: fabricating recon and settlement tables would make the registry look complete while proving nothing, and would put invented data in front of anyone demonstrating the platform. `groundingFor()` reports this product as ungrounded, product identification still recognises its vocabulary, and a prompt about breaks therefore gets 'Control's metadata is not in this tenant' rather than a fluent dashboard built out of EDM's securities — which is exactly the failure the whole product concept exists to prevent.\n\nIt registers no components, templates or System Pages for the same reason: there is nothing behind them here. What it does register is vocabulary, which costs nothing to be true.",
+
+  "metadata": {
+    "domains": ["recon", "settlement", "cash"],
+    "glossary": [
+      {
+        "term": "Break",
+        "definition": "A discrepancy between two records that should agree — an internal position against a custodian statement, a ledger balance against a bank's. The unit of work in this product.",
+        "seeAlso": ["Match rule", "Proof"]
+      },
+      {
+        "term": "Match rule",
+        "definition": "The test that decides whether two records are the same thing, including its tolerances. A break is what is left after every match rule has run."
+      },
+      {
+        "term": "Proof",
+        "definition": "The evidenced statement that two sets of records agree for a period, with every break either matched or explained. The output the whole reconciliation exists to produce."
+      },
+      {
+        "term": "Nostro",
+        "definition": "An account held with another institution, and the classic subject of a cash reconciliation."
+      },
+      {
+        "term": "Aged break",
+        "definition": "A break outstanding beyond its expected resolution window. Ageing is the primary risk signal in reconciliation, more so than count."
+      }
+    ]
+  },
+
+  "aiContext": {
+    "terminology": [
+      {
+        "term": "break",
+        "means": "A discrepancy between two records that should agree, awaiting matching or explanation.",
+        "notToBeConfusedWith": "A service outage, or a page break. A break here is a unit of reconciliation work."
+      },
+      {
+        "term": "match",
+        "means": "The pairing of two records that a match rule has determined represent the same item.",
+        "notToBeConfusedWith": "A string match or a search hit."
+      },
+      {
+        "term": "proof",
+        "means": "The evidenced agreement of two record sets for a period, with every break resolved or explained.",
+        "notToBeConfusedWith": "A mathematical proof, or a proof of concept."
+      },
+      {
+        "term": "unmatched",
+        "means": "A record that no match rule paired, and therefore a break awaiting investigation."
+      },
+      {
+        "term": "nostro",
+        "means": "An account held with another institution, reconciled against that institution's statement."
+      },
+      {
+        "term": "reconciliation",
+        "means": "The process of comparing two record sets under match rules and resolving what does not agree."
+      }
+    ],
+    "instructions": [
+      "Ageing outranks volume: an aged break is a risk statement, a break count is a workload statement. A page about reconciliation health leads with ageing.",
+      "Never present a match rate without the population it is a rate of — 99% matched is meaningless without knowing whether the remainder is four items or four thousand."
+    ],
+    "intentSignals": [
+      "reconciliation",
+      "recon break",
+      "unmatched item",
+      "match rule",
+      "aged break",
+      "nostro",
+      "nostro breakdown",
+      "cash reconciliation",
+      "position reconciliation",
+      "custodian statement",
+      "settlement mismatch",
+      "ledger balance",
+      "proof pack",
+      "break investigation"
+    ],
+    "hints": {
+      "whenToUse": "Any request about reconciling two record sets, the breaks that reconciliation raises, match rates, or evidencing agreement for a period.",
+      "exampleQuestions": [
+        "Show me aged reconciliation breaks by custodian",
+        "Build a cash reconciliation proof dashboard for month end"
+      ]
+    }
+  },
+
+  "security": {
+    "capabilities": [
+      {
+        "id": "control.recon.read",
+        "label": "Read reconciliations",
+        "description": "Reconciliation runs, their match rules and their results.",
+        "axis": "data"
+      },
+      {
+        "id": "control.break.read",
+        "label": "Read breaks",
+        "axis": "data"
+      },
+      {
+        "id": "control.break.resolve",
+        "label": "Resolve breaks",
+        "axis": "platform"
+      },
+      {
+        "id": "control.proof.sign",
+        "label": "Sign off a proof",
+        "description": "Attest that a period reconciles. Held separately from resolving breaks, because the person who cleared the work should not be the person who certifies it.",
+        "axis": "platform"
+      }
+    ],
+    "roles": [
+      {
+        "id": "control-operator",
+        "label": "Reconciliation Operator",
+        "description": "Works breaks. Cannot sign off the proof they worked towards.",
+        "capabilities": ["control.recon.read", "control.break.read", "control.break.resolve"]
+      },
+      {
+        "id": "control-controller",
+        "label": "Controller",
+        "description": "Signs off proofs.",
+        "capabilities": ["control.recon.read", "control.break.read", "control.proof.sign"]
+      }
+    ]
+  }
+}

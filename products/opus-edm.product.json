@@ -1,0 +1,336 @@
+{
+  "schemaVersion": "1.0",
+  "id": "opus-edm",
+  "name": "Opus EDM",
+  "description": "Enterprise data management for instrument, party and pricing reference data: vendor feeds are ingested, reconciled into a golden copy, and the rule breaches that reconciliation raises are worked as exceptions by a data steward.",
+  "productVersion": "demo",
+  "icon": "database",
+  "status": "active",
+
+  "notes": "This registration is real, not illustrative. Every domain listed under `metadata.domains` is a domain the demo tenant's catalog actually contains, scanned from a live MS SQL Server through @opus/catalog-ingest; every `definitionRef` is a page that ships in apps/viewer/public/definitions. What is NOT here is as deliberate: no components, because every component in the library today is platform-native and claiming one for EDM would misrepresent who maintains it; no `metadata.dataSources`, because a source id is assigned per tenant when a steward registers the database and hard-coding this tenant's would be wrong everywhere else.",
+
+  "metadata": {
+    "domains": ["securities", "processing", "dq", "parties", "vendor", "master"],
+    "glossary": [
+      {
+        "term": "Golden copy",
+        "definition": "The single approved value for an attribute after every vendor's value for it has been reconciled under the active rule set. It is a derived value with a recorded provenance, not one vendor's value promoted.",
+        "seeAlso": ["Source value", "Override"]
+      },
+      {
+        "term": "Source value",
+        "definition": "One vendor's value for one attribute of one security, as delivered, before reconciliation. Retained after reconciliation so a golden copy can always be traced back to what each vendor said."
+      },
+      {
+        "term": "Override",
+        "definition": "A steward's deliberate substitution of a value the rules chose, recorded with who, when and why. An override is a governed decision, not a correction of a mistake."
+      },
+      {
+        "term": "Exception",
+        "definition": "A rule breach raised during validation or reconciliation that a person has to clear. Carries a severity, an age, and an assignee.",
+        "seeAlso": ["Rule"]
+      },
+      {
+        "term": "Rule",
+        "definition": "A data quality or reconciliation test evaluated on ingestion. A rule that fires produces an exception; the rule is the standard, the exception is the instance."
+      },
+      {
+        "term": "File load",
+        "definition": "One delivery of one vendor file through ingestion, with its own step-by-step processing history and outcome."
+      },
+      {
+        "term": "Legal entity",
+        "definition": "A party that can be a counterparty, issuer or account holder, positioned in an ownership hierarchy."
+      }
+    ]
+  },
+
+  "templates": [
+    {
+      "id": "security-master-dashboard",
+      "name": "Security Master Dashboard",
+      "definitionRef": "definitions/security-master-dashboard.page.json",
+      "intent": "A morning health check over the security master: how many securities, how much moved, what needs attention. The starting point for a dashboard about reference data completeness rather than about processing."
+    },
+    {
+      "id": "operations-dashboard",
+      "name": "Operations Dashboard",
+      "definitionRef": "definitions/operations-dashboard.page.json",
+      "intent": "Today's processing: files in, files late, files failed, and the exceptions they raised. The starting point for an operational shift-handover view."
+    }
+  ],
+
+  "systemPages": [
+    {
+      "id": "security-master-operations",
+      "name": "Security Master",
+      "definitionRef": "definitions/security-master-operations.page.json",
+      "override": "extend"
+    },
+    {
+      "id": "security-overview",
+      "name": "Security Overview",
+      "definitionRef": "definitions/security-overview.page.json",
+      "override": "extend"
+    },
+    {
+      "id": "party-overview",
+      "name": "Party Overview",
+      "definitionRef": "definitions/party-overview.page.json",
+      "override": "extend"
+    },
+    {
+      "id": "exception-management",
+      "name": "Exception Management",
+      "definitionRef": "definitions/exception-management.page.json",
+      "override": "extend"
+    },
+    {
+      "id": "processing-detail",
+      "name": "File Processing",
+      "definitionRef": "definitions/processing-detail.page.json",
+      "override": "extend"
+    }
+  ],
+
+  "systemJourneys": [
+    {
+      "id": "security-investigation",
+      "name": "Security investigation",
+      "description": "The path a steward walks when a figure on the master dashboard looks wrong: find the security, read its golden copy and per-vendor source values, check who is related to it, then work whatever exceptions it raised. This is the journey the shipped `securities.operations` experience already wires by drill-down; registering it names the path so it can be navigated deliberately rather than discovered.",
+      "steps": ["security-master-operations", "security-overview", "party-overview", "exception-management"]
+    },
+    {
+      "id": "processing-triage",
+      "name": "Processing triage",
+      "description": "The operational path: something is late or failed, so open the load, read its steps, and clear the exceptions it produced.",
+      "steps": ["processing-detail", "exception-management"]
+    }
+  ],
+
+  "actions": [
+    {
+      "id": "assign-exception",
+      "label": "Assign exception",
+      "description": "Give an open exception an owner. The one action the Exception Queue's unassigned count exists to prompt.",
+      "capability": "edm.dq.assign",
+      "mutates": true
+    },
+    {
+      "id": "clear-exception",
+      "label": "Clear exception",
+      "description": "Close an exception, recording the resolution. Closing is a decision about data, so it is capability-gated rather than available to anyone who can see the queue.",
+      "capability": "edm.dq.resolve",
+      "mutates": true
+    },
+    {
+      "id": "propose-override",
+      "label": "Propose override",
+      "description": "Substitute a value the rules chose, for approval. Proposing and approving are separate capabilities on purpose — an override nobody else saw is an undocumented change to the golden copy.",
+      "capability": "edm.override.propose",
+      "mutates": true
+    },
+    {
+      "id": "reprocess-load",
+      "label": "Reprocess file load",
+      "description": "Re-run a failed or partial load. Mutating, because a second run replaces what the first produced.",
+      "capability": "edm.processing.reprocess",
+      "mutates": true
+    },
+    {
+      "id": "view-lineage",
+      "label": "View lineage",
+      "description": "Trace a golden copy value back through reconciliation to each vendor's source value. Read-only, and the answer to nearly every question that starts \"why does it say that\".",
+      "capability": "edm.security.read",
+      "mutates": false
+    }
+  ],
+
+  "security": {
+    "capabilities": [
+      {
+        "id": "edm.processing.read",
+        "label": "Read processing",
+        "description": "File loads and their step history.",
+        "axis": "data"
+      },
+      {
+        "id": "edm.security.read",
+        "label": "Read securities",
+        "description": "The security master and its per-vendor source values.",
+        "axis": "data"
+      },
+      {
+        "id": "edm.party.read",
+        "label": "Read parties",
+        "description": "Legal entities, customer accounts and their hierarchies.",
+        "axis": "data"
+      },
+      {
+        "id": "edm.dq.read",
+        "label": "Read data quality",
+        "description": "Rules and the exceptions they raise.",
+        "axis": "data"
+      },
+      {
+        "id": "edm.dq.assignee.read",
+        "label": "Read exception assignees",
+        "description": "Who owns an exception. Separate from reading the exception itself, because who is working what is personnel information in some deployments.",
+        "axis": "data"
+      },
+      { "id": "edm.dq.assign", "label": "Assign exceptions", "axis": "platform" },
+      { "id": "edm.dq.resolve", "label": "Clear exceptions", "axis": "platform" },
+      { "id": "edm.override.propose", "label": "Propose overrides", "axis": "platform" },
+      {
+        "id": "edm.override.approve",
+        "label": "Approve overrides",
+        "description": "Held separately from proposing, so the same person cannot do both.",
+        "axis": "platform"
+      },
+      { "id": "edm.processing.reprocess", "label": "Reprocess loads", "axis": "platform" },
+      {
+        "id": "dataQuality.view",
+        "label": "See data quality surfaces",
+        "description": "Whether the Studio shows this user data quality widgets at all. Distinct from `edm.dq.read`, which decides whether the rows come back — one is what the product offers, the other is what the data permits.",
+        "axis": "platform"
+      }
+    ],
+    "roles": [
+      {
+        "id": "edm-data-steward",
+        "label": "Data Steward",
+        "description": "Owns the golden copy. Works exceptions and proposes overrides; does not approve their own.",
+        "capabilities": [
+          "edm.processing.read",
+          "edm.security.read",
+          "edm.party.read",
+          "edm.dq.read",
+          "edm.dq.assign",
+          "edm.dq.resolve",
+          "edm.override.propose",
+          "dataQuality.view"
+        ]
+      },
+      {
+        "id": "edm-data-owner",
+        "label": "Data Owner",
+        "description": "Accountable for a data domain. Approves what a steward proposes.",
+        "capabilities": [
+          "edm.security.read",
+          "edm.party.read",
+          "edm.dq.read",
+          "edm.dq.assignee.read",
+          "edm.override.approve",
+          "dataQuality.view"
+        ]
+      },
+      {
+        "id": "edm-operations",
+        "label": "Operations",
+        "description": "Runs ingestion. Sees processing and the exceptions it raised, not the party master.",
+        "capabilities": [
+          "edm.processing.read",
+          "edm.processing.reprocess",
+          "edm.dq.read",
+          "dataQuality.view"
+        ]
+      },
+      {
+        "id": "edm-consumer",
+        "label": "Data Consumer",
+        "description": "Reads reference data. No remediation authority of any kind.",
+        "capabilities": ["edm.security.read", "edm.party.read"]
+      }
+    ]
+  },
+
+  "aiContext": {
+    "terminology": [
+      {
+        "term": "security",
+        "means": "A tradable financial instrument in the master — an equity, bond or fund with identifiers, pricing and issuer relationships.",
+        "notToBeConfusedWith": "Information security. In this product 'security' almost never means access control, and a request to 'add security data' is asking for instruments."
+      },
+      {
+        "term": "party",
+        "means": "A legal entity, counterparty, issuer or account holder in the party master.",
+        "notToBeConfusedWith": "A person, or a party to a transaction in the legal sense. A party here is a mastered record with a hierarchy position."
+      },
+      {
+        "term": "exception",
+        "means": "A rule breach raised during validation or reconciliation that somebody has to clear, carrying a severity, an age and an assignee.",
+        "notToBeConfusedWith": "A software error or a thrown exception. An EDM exception is a unit of work, and 'how many exceptions' asks about a queue, not about failures."
+      },
+      {
+        "term": "override",
+        "means": "A steward's recorded substitution of a value the reconciliation rules chose.",
+        "notToBeConfusedWith": "A correction or a fix. An override does not mean the rules were wrong — it means a person's judgement takes precedence in this instance, and the rule's result is retained alongside it."
+      },
+      {
+        "term": "golden copy",
+        "means": "The single approved value for an attribute after reconciling every vendor's value for it.",
+        "notToBeConfusedWith": "A backup, an archive, or a snapshot. It is the current authoritative value, not a copy kept aside."
+      },
+      {
+        "term": "source value",
+        "means": "One vendor's value for an attribute before reconciliation, retained for lineage."
+      },
+      {
+        "term": "file load",
+        "means": "One delivery of one vendor file through ingestion, with a step history and an outcome.",
+        "notToBeConfusedWith": "Loading a page. 'Late loads' is about vendor files arriving after their expected time."
+      },
+      {
+        "term": "rule",
+        "means": "A data quality or reconciliation test evaluated on ingestion; when it fires it raises an exception.",
+        "notToBeConfusedWith": "A business rule in a workflow. A rule here is a test over data, not a branch in a process."
+      },
+      {
+        "term": "vendor",
+        "means": "A reference data supplier whose feeds are ingested and reconciled.",
+        "notToBeConfusedWith": "A software supplier. Vendors here are data sources with feeds, timeliness expectations and quality histories."
+      },
+      {
+        "term": "attention",
+        "means": "The count of things a steward is expected to act on now — open exceptions plus late or failed loads. A composite figure, not a single table's row count."
+      }
+    ],
+    "instructions": [
+      "Prefer 'golden copy' over 'master value' and 'exception' over 'error' — these are the words the product's users use, and a page labelled in generic terms reads as though it belongs to a different system.",
+      "A count of exceptions is nearly always wanted as open-and-unresolved, not all-time. Say which you used.",
+      "Ageing matters more than volume in this domain: an exception open for two weeks is a worse fact than fifty raised this morning. When a queue is on a page, put its ageing next to its count.",
+      "Never propose a page that shows an assignee without checking `edm.dq.assignee.read` — who is working what is personnel information in some deployments."
+    ],
+    "intentSignals": [
+      "security master",
+      "golden copy",
+      "source value",
+      "vendor feed",
+      "file load",
+      "late files",
+      "failed files",
+      "data quality exception",
+      "exception queue",
+      "override queue",
+      "reference data",
+      "instrument reference",
+      "sedol",
+      "isin",
+      "cusip",
+      "figi",
+      "price tolerance",
+      "legal entity hierarchy",
+      "party master",
+      "data steward",
+      "data quality rule"
+    ],
+    "hints": {
+      "whenToUse": "Any request about instrument or party reference data, vendor feed processing, data quality exceptions, overrides, or lineage back to a vendor's value.",
+      "exampleQuestions": [
+        "Create a Security Master Operations Dashboard showing today's files processed, late files, failed files, exceptions, new securities, and data quality KPIs",
+        "Show me the oldest unassigned data quality exceptions by severity",
+        "Which vendor feeds were late this week and what did they break"
+      ]
+    }
+  }
+}

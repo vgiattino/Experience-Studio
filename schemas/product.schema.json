@@ -1,0 +1,318 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.opus.gresham.com/experience-studio/v1/product.schema.json",
+  "title": "Product Registration",
+  "description": "One product's contribution to Experience Studio — the Product Integration Contract (PRD §4.5, FR-20…FR-24) expressed as a schema so that \"adding a product is a registration exercise, not a platform code change\" is a checkable statement rather than an aspiration.\n\nThe platform core has no notion of Opus EDM, Prime, Control or Pulse. It has a notion of *a product*, and everything product-specific arrives through this document: which slice of the catalog the product owns, which components and actions it contributes, which templates and System Pages it ships, which roles and capabilities it defines, and which vocabulary its users speak. A capability the core would otherwise have to special-case is a field here instead.\n\nWhat this deliberately is NOT: a deployment descriptor. There is no host, no endpoint, no package coordinate and no version negotiation. Registration says what a product *contributes*; how it is delivered is an operational concern the PRD flags as unspecified (FR-20's assumption note), and inventing an answer here would freeze the wrong one into the contract.",
+  "type": "object",
+
+  "properties": {
+    "schemaVersion": { "$ref": "common.schema.json#/$defs/majorMinor" },
+
+    "id": {
+      "description": "Stable product identifier, e.g. `opus-edm`. Referenced by an Experience's `productId` and by every registration this product owns. Lower-case and hyphenated because it appears in identifiers, file names and URLs.",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$",
+      "maxLength": 64
+    },
+    "name": { "$ref": "common.schema.json#/$defs/i18nString" },
+    "description": { "type": "string", "maxLength": 2048 },
+    "productVersion": {
+      "description": "The product's own release version, not the contract's. Recorded so a registry entry can be traced to what shipped it.",
+      "type": "string",
+      "maxLength": 64
+    },
+    "icon": { "type": "string", "maxLength": 64 },
+
+    "status": {
+      "description": "`active` participates in identification, grounding and the palette. `registered` is known to the platform but contributes nothing yet — the honest state for a product whose metadata has not been ingested into this tenant. `deprecated` still renders existing experiences and is withheld from new ones.",
+      "type": "string",
+      "enum": ["active", "registered", "deprecated"],
+      "default": "active"
+    },
+
+    "metadata": {
+      "description": "FR-21. What the product contributes to the semantic catalog. This is a *claim*, not a copy: entities and attributes live in the catalog, where ingestion put them, and the product asserts which of them are its own. Duplicating them here would create a second answer to \"what is a Security\" and the two would drift within a release.",
+      "type": "object",
+      "properties": {
+        "domains": {
+          "description": "Catalog domains this product owns. A domain resolves to exactly one product — two products claiming the same domain makes product identification undecidable, and the registry refuses the pair rather than picking.",
+          "type": "array",
+          "items": { "type": "string", "maxLength": 128 },
+          "maxItems": 100
+        },
+        "entities": {
+          "description": "Individual entity references this product owns beyond its domains. Present for the case a domain does not carve cleanly; a product that lists every entity it owns and no domains is legal but loses the property that a new entity in an owned domain is claimed automatically.",
+          "type": "array",
+          "items": { "$ref": "common.schema.json#/$defs/qualifiedRef" },
+          "maxItems": 1000
+        },
+        "dataSources": {
+          "description": "Physical sources the product's metadata is ingested from, by the id `@opus/catalog-ingest` registered them under. The link exists so drift detected on a source can name the product it affects.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string", "maxLength": 128 },
+              "label": { "type": "string", "maxLength": 256 }
+            },
+            "required": ["id"],
+            "additionalProperties": false
+          },
+          "maxItems": 200
+        },
+        "glossary": {
+          "description": "The product's business glossary. Distinct from `aiContext.terminology`: a glossary entry is for a human reading the catalog, a terminology entry is an instruction to the AI about what a familiar word means here. They overlap in practice and are kept separate because they are edited by different people for different reasons.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "term": { "type": "string", "maxLength": 128 },
+              "definition": { "type": "string", "maxLength": 2048 },
+              "seeAlso": {
+                "type": "array",
+                "items": { "type": "string", "maxLength": 128 },
+                "maxItems": 20
+              }
+            },
+            "required": ["term", "definition"],
+            "additionalProperties": false
+          },
+          "maxItems": 500
+        },
+        "apis": {
+          "description": "Product APIs an Experience's actions may reach. Declarative only in v1 — nothing invokes them, and the field exists so an action registered below can name what it calls instead of hiding it in a config file.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string", "maxLength": 128 },
+              "label": { "type": "string", "maxLength": 256 },
+              "purpose": { "type": "string", "maxLength": 1024 }
+            },
+            "required": ["id"],
+            "additionalProperties": false
+          },
+          "maxItems": 200
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "components": {
+      "description": "FR-22, FR-31. Component types this product contributes, by the `type` in their manifest. A registered product component is an ordinary registry entry — selectable in the builder and eligible for AI recommendation on the same terms as a platform-native one. The registry refuses a type no manifest defines, and refuses two products claiming the same type.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "type": { "$ref": "common.schema.json#/$defs/componentTypeRef" },
+          "family": {
+            "description": "Which of the six families (FR-30) the component composes as. `extension` is the explicit escape hatch FR-30 allows — an extension family is declared, never assumed, so a component that does not fit is visible rather than silently miscategorised.",
+            "type": "string",
+            "enum": ["layout", "data", "visualization", "forms", "business", "extension"]
+          },
+          "extensionFamily": {
+            "description": "Required when `family` is `extension`: the name of the family this product is adding.",
+            "type": "string",
+            "maxLength": 64
+          }
+        },
+        "required": ["type"],
+        "additionalProperties": false
+      },
+      "maxItems": 500
+    },
+
+    "templates": {
+      "description": "FR-9, FR-22. Templates the product ships as a Product-scoped baseline. `definitionRef` points at the artifact; the registration records ownership and scope, which is the part FR-9 says is the substance of a template catalog.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "$ref": "common.schema.json#/$defs/identifier" },
+          "name": { "$ref": "common.schema.json#/$defs/i18nString" },
+          "definitionRef": {
+            "description": "Where the definition lives. A path or an experience id — resolved by whoever loads the registry, not by the contract.",
+            "type": "string",
+            "maxLength": 512
+          },
+          "intent": {
+            "description": "What the template is for, so AI template selection has something to match against beyond the name.",
+            "type": "string",
+            "maxLength": 1024
+          }
+        },
+        "required": ["id", "name"],
+        "additionalProperties": false
+      },
+      "maxItems": 500
+    },
+
+    "systemPages": {
+      "description": "FR-25. Pages the product ships so every customer starts with a baseline. A System Page is an ordinary Experience Definition owned at the product level — the registration is what makes it product-owned, and `override` records what a customer is permitted to do to it.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "$ref": "common.schema.json#/$defs/identifier" },
+          "name": { "$ref": "common.schema.json#/$defs/i18nString" },
+          "definitionRef": { "type": "string", "maxLength": 512 },
+          "override": {
+            "description": "`extend` lets a customer create a derived Experience that inherits and adds (FR-27's tracked extension). `replace` permits a full organization-scoped substitute. `none` is the product-owned baseline nobody may alter. The PRD flags the exact permission model as unconfirmed, so this records the intent rather than enforcing a model that may change.",
+            "type": "string",
+            "enum": ["extend", "replace", "none"],
+            "default": "extend"
+          }
+        },
+        "required": ["id", "name"],
+        "additionalProperties": false
+      },
+      "maxItems": 500
+    },
+
+    "systemJourneys": {
+      "description": "FR-26. An ordered path through System Pages that the product ships as a coherent flow, e.g. Security Search → Security Overview → Pricing → Related Parties → Overrides → Audit. Every step must name a System Page this product registered; a journey pointing at a page nobody ships is a broken journey the registry refuses.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "$ref": "common.schema.json#/$defs/identifier" },
+          "name": { "$ref": "common.schema.json#/$defs/i18nString" },
+          "description": { "type": "string", "maxLength": 1024 },
+          "steps": {
+            "type": "array",
+            "items": { "$ref": "common.schema.json#/$defs/identifier" },
+            "minItems": 2,
+            "maxItems": 40
+          }
+        },
+        "required": ["id", "name", "steps"],
+        "additionalProperties": false
+      },
+      "maxItems": 200
+    },
+
+    "actions": {
+      "description": "FR-22. Product-specific operations an Experience may wire into navigation, drill-downs and Workflows. The contract records what exists and what it requires; execution is the product's, not the platform's.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "$ref": "common.schema.json#/$defs/identifier" },
+          "label": { "$ref": "common.schema.json#/$defs/i18nString" },
+          "description": { "type": "string", "maxLength": 1024 },
+          "capability": {
+            "description": "The capability a caller must hold. Must be one this product registered under `security.capabilities` — an action gated on a capability nobody defined is an action gated on nothing.",
+            "type": "string",
+            "maxLength": 128
+          },
+          "api": {
+            "description": "The `metadata.apis` entry this action calls, when it calls one.",
+            "type": "string",
+            "maxLength": 128
+          },
+          "mutates": {
+            "description": "Whether the action changes data. Recorded because a workflow step invoking a mutating action is the case governance cares about, and a boolean here is cheaper than inferring it later.",
+            "type": "boolean",
+            "default": true
+          }
+        },
+        "required": ["id", "label"],
+        "additionalProperties": false
+      },
+      "maxItems": 500
+    },
+
+    "security": {
+      "description": "FR-23. The product's own roles and capabilities. This is the registration FR-18's Security element resolves against: an Experience may only reference roles and capabilities a product actually registered, which is what stops ad hoc role invention at the Experience layer.",
+      "type": "object",
+      "properties": {
+        "capabilities": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string", "maxLength": 128 },
+              "label": { "type": "string", "maxLength": 256 },
+              "description": { "type": "string", "maxLength": 1024 },
+              "axis": {
+                "description": "`platform` is what a user may DO in the Studio; `data` is which rows and columns the product permits. Kept apart because conflating them produces either a breach or an unusable product.",
+                "type": "string",
+                "enum": ["platform", "data"],
+                "default": "platform"
+              }
+            },
+            "required": ["id"],
+            "additionalProperties": false
+          },
+          "maxItems": 500
+        },
+        "roles": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string", "maxLength": 128 },
+              "label": { "type": "string", "maxLength": 256 },
+              "description": { "type": "string", "maxLength": 1024 },
+              "capabilities": {
+                "description": "Capabilities this role grants. Each must be registered above.",
+                "type": "array",
+                "items": { "type": "string", "maxLength": 128 },
+                "maxItems": 500
+              }
+            },
+            "required": ["id"],
+            "additionalProperties": false
+          },
+          "maxItems": 200
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "aiContext": {
+      "description": "FR-23, FR-4. The vocabulary the AI is grounded in when working on this product's experiences. Same shape as an Experience's own `aiContext` (`experience.schema.json#/$defs/aiContext`), because FR-19's \"specialize or extend without replacing\" is only meaningful if the two layers are the same kind of thing.",
+      "type": "object",
+      "properties": {
+        "terminology": {
+          "description": "What a word means in THIS product. `notToBeConfusedWith` is the field that earns the element: grounding failures here are rarely unknown words, they are familiar words meaning something narrower than the model assumes.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "term": { "type": "string", "maxLength": 128 },
+              "means": { "type": "string", "maxLength": 1024 },
+              "notToBeConfusedWith": { "type": "string", "maxLength": 512 }
+            },
+            "required": ["term", "means"],
+            "additionalProperties": false
+          },
+          "maxItems": 500
+        },
+        "instructions": {
+          "description": "Standing instructions for AI working on this product's experiences.",
+          "type": "array",
+          "items": { "type": "string", "maxLength": 1024 },
+          "maxItems": 40
+        },
+        "intentSignals": {
+          "description": "Phrases that indicate a request concerns this product, used by product identification (FR-3) when a prompt names no product. A supplement, not the mechanism: identification derives its signals first from owned domain names, terminology and glossary terms, and consults this list for the vocabulary those miss. It exists so a product can improve its own identification without a platform change — which is the whole point of FR-20.",
+          "type": "array",
+          "items": { "type": "string", "maxLength": 128 },
+          "maxItems": 500
+        },
+        "hints": { "$ref": "common.schema.json#/$defs/aiHints" }
+      },
+      "additionalProperties": false
+    },
+
+    "notes": {
+      "description": "Free text for whoever maintains the registration. Not consumed by anything.",
+      "type": "string",
+      "maxLength": 8192
+    }
+  },
+
+  "required": ["schemaVersion", "id", "name"],
+  "additionalProperties": false
+}

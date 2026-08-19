@@ -25,6 +25,7 @@ const EXAMPLE_DIR = join(SCHEMA_DIR, 'examples');
 const DEFINITION_DIR = join(ROOT, 'apps/viewer/public/definitions');
 const CATALOG_DIR = join(ROOT, 'apps/viewer/public/catalog');
 const COMPONENT_DIR = join(ROOT, 'libs/components');
+const PRODUCT_DIR = join(ROOT, 'products');
 
 const BASE = 'https://schemas.opus.gresham.com/experience-studio/v1/';
 
@@ -70,6 +71,7 @@ const SUFFIX_TO_SCHEMA = [
   ['.experience.json', 'experience.schema.json'],
   ['.catalog.json', 'catalog.schema.json'],
   ['.manifest.json', 'component-manifest.schema.json'],
+  ['.product.json', 'product.schema.json'],
   // Runtime-core artifact types (schemas/README.md §10). Gated structurally here; not yet
   // wired into @opus/validator, because the runtime does not execute them pending approval.
   ['.operations.json', 'operation.schema.json'],
@@ -120,6 +122,7 @@ function validateArtifacts(label, dir) {
 validateArtifacts('Schema examples', EXAMPLE_DIR);
 validateArtifacts('Runtime definitions', DEFINITION_DIR);
 validateArtifacts('Runtime catalog', CATALOG_DIR);
+validateArtifacts('Product registrations', PRODUCT_DIR);
 
 // ── 3. component manifests ──────────────────────────────────────────────────
 console.log('\nComponent manifests');
