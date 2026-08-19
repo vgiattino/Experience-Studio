@@ -107,3 +107,21 @@ export {
   type AssistProposalKind,
   type AssistResponse,
 } from './assist';
+
+export {
+  REFINE_RESPONSE_SCHEMA,
+  ground,
+  interpret,
+  pageViewFor,
+  refine,
+  resolveField,
+  resolveWidget,
+  type MovePosition,
+  type RefineOutcome,
+  type RefinePageView,
+  type RefineWidget,
+  type RefinementIntent,
+  type RefinementVerb,
+  type ResolutionScore,
+  type ResolvedRefinement,
+} from './refine';

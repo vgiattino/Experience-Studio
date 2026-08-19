@@ -72,11 +72,11 @@ have no component.
 |---|---|---|---|
 | FR-06 AI search | **Absent** | — | Nothing translates business language into filter criteria. The pieces exist and are unusually well-placed: `intake()` already extracts concepts and refuses out-of-scope requests, the catalog carries semantic types and synonyms, and the gateway enforces entitlements on every query — so §13's "without bypassing existing security" is free rather than hard. What is missing is the translation itself |
 | FR-07 AI page creation | **Built** | `libs/generation` — 8 stages, `POST /api/ai/generate`, verified 7 widgets over 2 entities in 883 ms with a Grounding tab showing what was offered and what was withheld | Note the priority inversion: this is the one AI requirement that is *finished*, and §30 prices ground-up creation **P2**. The prototype's front door leads here |
-| FR-08 AI page modification | **Partial** | `AssistService` and the ★ panel answer *"what is this page missing?"* as strict `AssistProposal`s, each applied as one undoable patch | **The central gap of this PRD.** Assist proposes *additions from the catalog*. It cannot move a widget, change a chart type, add or remove a column, group, sort, apply conditional formatting, or add a filter — and those are the examples §11, §12 and §15 give. Every worked prompt in §28 is currently impossible |
+| FR-08 AI page modification | **Partial** | The engine exists and is verified against the shipped standard pages: nine verbs, reference resolution, grounding, and §19's sentence per change — `libs/generation/src/refine.ts`, [`CONVERSATIONAL-REFINEMENT.md`](./CONVERSATIONAL-REFINEMENT.md). The §11/§12/§15 prompts resolve or refuse with a reason on the real Security Master Dashboard and Exception Management pages | **Not wired into the builder.** The engine returns proposals and nothing calls it, so from a user's seat FR-08 is still unavailable. That plus FR-09's conversation state is the next step. Also: one verb per turn ("add issuer and currency" is two), and `move-widget` reorders within a section rather than across the page |
 | FR-09 Conversational context | **Absent** | — | Each prompt is independent. Nothing holds the conversation, so §14's "start with a standard page and progressively describe changes" has no state to progress. §28's nine-turn walkthrough is nine unrelated requests |
-| FR-10 Grid configuration through AI | **Partial** | The *model* supports all of it: `conditionalFormats` on a field binding (`binding.schema.json:46`), `sort` on the data source, per-column formatting, and the builder's Data panel edits columns by hand | No AI path to any of it, and **grouping has no model support at all** — `data.table` has no `groupBy` property. `business.exception-queue` does, which is the shape to copy |
-| FR-11 Visualization configuration through AI | **Partial** | `analytics.chart` carries `mark` (the chart type), `stacking`, `legend`, `gridlines`; encoding bindings carry the channels; layout placement is per-breakpoint in the schema | No AI path. "Change the pie chart to a bar chart" is a one-property patch the platform can already validate and render — it is the cheapest win in this document and it is not wired |
-| FR-12 Navigation and drill-down through AI | **Partial** | `drilldownTargets` on the experience, verified click-through Security Operations → Security Overview carrying parameters | No AI path. §9's "when the user double-clicks a security, take them to a security detail page" is expressible in the model and unreachable by prompt |
+| FR-10 Grid configuration through AI | **Partial** | Columns, sort, grouping and conditional formatting are all in the vocabulary and all resolve on real pages. Grouping resolves against the component's declared **enum** rather than against data fields, which is what makes "group the queue by assignee" work when the field behind it is spelled `assigned-to` | Still no path from a user's seat until the builder calls it. `data.table` still declares no `groupBy`, so grouping refuses on a table and says which component does offer it — manifest-driven, so adding the property later needs no engine change |
+| FR-11 Visualization configuration through AI | **Partial** | `change-chart-type` and `move-widget` both resolve and explain themselves on real pages — "Changed “Coverage by asset class and review state” from a bar chart to a line chart." | **§11's own first example is impossible**: it asks for a pie chart and `analytics.chart` offers bar, line, area, point. Refused by name with the list, which is honest and is a component gap rather than an engine one. Chart *grouping* and a time window are named in §11 and not in the vocabulary yet |
+| FR-12 Navigation and drill-down through AI | **Partial** | §9's sentence resolves: "Activating a row in “Recently added instruments” now opens the security-overview page." The captured noun is treated as the row's *subject* rather than as a widget reference, which is what makes "double-clicks a security" land on the grid | Not wired into the builder. Parameter mapping for the destination is not part of the verb — the drill-down is set, and which parameter carries the row's key is still the builder's job |
 | FR-13 Detail experiences | **Partial** | `security-overview` and `party-overview` are real detail pages with parameters, and the drill-down that reaches them works | Not *creatable or configurable* by prompt. §10's detail-page composition (header, key attributes, current record, contributing sources, exceptions, history, audit) exists as one hand-built page, not as a pattern |
 | FR-14 Tabs and related data through AI | **Partial** | `tabs` containers are in the layout schema, static and data-driven, and render | No AI path. "Add a tab showing contributing sources" needs FR-15 as well as a verb |
 | FR-15 Source comparison | **Absent** | — | `securities.source-value` is in the catalog and bound on two pages as ordinary rows. There is **no side-by-side comparison component**, which §5.1 asks for in four places (Security, Party, Price, ESG Source Comparison), §10 asks for as a tab, and §28 asks for by prompt. This is the clearest missing *component* in the document |
@@ -106,10 +106,11 @@ supported components, approved data sources, audit — is satisfied except tenan
 hard-coded (`demo-tenant`).
 
 **§19 Explainability — Partial.** The generation path explains itself well: a stage timeline, a
-grounding tab naming entities kept and withheld, and the full JSON. The *modification* path does not,
-because it barely exists — and §19's example ("I've added an Exception Status column to the Security
-grid and configured rows with unresolved exceptions to display as highlighted") is a sentence about a
-refinement, in the register the refinement engine has to produce.
+grounding tab naming entities kept and withheld, and the full JSON. The modification path now produces
+§19's sentence for every change it resolves — "Grouped “Full queue” by assignee.", "Sorted “Breaks for
+this rule” by severity, highest first." — generated where the change is decided rather than in a
+template, because the wording is a requirement. What is missing is the surface that shows it, and the
+"inspect the resulting configuration" affordance §19 asks for on complex changes.
 
 ---
 
@@ -140,11 +141,13 @@ The order that follows from the document rather than from convenience:
 
 1. ~~**FR-20 lineage**~~ **Done** — see [`STANDARD-LIFECYCLE.md`](./STANDARD-LIFECYCLE.md). FR-21 and
    FR-24 came with it: update detection, and a release that provably cannot touch client work.
-2. **FR-08/10/11/12/14 the refinement vocabulary** — retarget the parked builder's plan → assemble →
-   ground → review architecture at `PageDefinition`. FR-11 first: changing a chart's mark is one
-   validated property and proves the whole path.
-3. **FR-09 conversational context** — cheap once the verbs exist, and it is what turns nine prompts into
-   one conversation.
+2. ~~**FR-08/10/11/12 the refinement vocabulary**~~ **Engine done** — see
+   [`CONVERSATIONAL-REFINEMENT.md`](./CONVERSATIONAL-REFINEMENT.md). Nine verbs, reference resolution
+   that asks rather than guesses, refusals that name what is available, and §19's sentence per change.
+3. **Wire it into the builder, with FR-09's conversation state.** The engine is complete and nothing
+   calls it, so none of §28's walkthrough is available from a user's seat yet. This is now the single
+   highest-value step in the document, and it is the builder revamp: library-first entry, a conversation
+   panel, accept/discard, and the lineage banner from §16.3.
 4. **FR-22 comparison** — P1. `detectDrift` is the precedent to follow, and §16.5's deferred *selective*
    synchronisation is the constraint that matters: a comparison must be per-change rather than a single
    blob, or selective sync can never be built on it.
