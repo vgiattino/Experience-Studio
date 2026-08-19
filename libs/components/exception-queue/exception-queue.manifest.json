@@ -1,0 +1,254 @@
+{
+  "schemaVersion": "1.0",
+  "type": "business.exception-queue",
+  "version": "1.0.0",
+  "name": "Exception Queue",
+  "category": "business",
+  "description": "A work queue for data-quality exceptions: what is broken, how badly, how long it has been broken, and who owns it.",
+  "icon": "warning",
+  "generation": {
+    "purpose": "Give somebody a prioritised list of exceptions to work through, with the ageing and ownership that decide what to pick up next.",
+    "whenToUse": "When the page's job is remediation rather than reporting \u2014 an exception management workspace, a triage queue, a 'my open items' panel. Choose this over data.table whenever the rows represent work somebody has to do: it orders by severity and age by default, marks items past their ageing threshold, and separates unassigned work from somebody else's.",
+    "whenNotToUse": "Do not use it as a general grid. If the rows are records rather than work \u2014 a security master listing, a file load history \u2014 use data.table, which does not impose a triage ordering or an ownership column.",
+    "keyProperties": [
+      "groupBy",
+      "ageBreachHours",
+      "unassignedFirst",
+      "pageSize"
+    ],
+    "eligible": true,
+    "exampleConfig": {
+      "groupBy": "severity",
+      "ageBreachHours": 48,
+      "unassignedFirst": true,
+      "pageSize": 25
+    }
+  },
+  "properties": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "groupBy": {
+        "description": "How the queue is grouped. `severity` is the default because it is the ordering a person working the queue actually wants; `none` gives a flat list.",
+        "type": "string",
+        "enum": [
+          "severity",
+          "rule",
+          "assignee",
+          "none"
+        ],
+        "default": "severity"
+      },
+      "ageBreachHours": {
+        "description": "Hours after which an exception is marked as breaching. There is no sensible universal default, so the absence of this property means no breach marking rather than a guessed threshold \u2014 a queue that invents its own SLA teaches people to ignore the flag.",
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 8760
+      },
+      "unassignedFirst": {
+        "description": "Float unassigned exceptions to the top of their group. On by default: unowned work is the work most likely to go unnoticed.",
+        "type": "boolean",
+        "default": true
+      },
+      "pageSize": {
+        "type": "integer",
+        "minimum": 5,
+        "maximum": 200,
+        "default": 25
+      },
+      "allowBulkSelection": {
+        "description": "Offer row selection and a count, so a page can bind a bulk action. The component never performs the action \u2014 it reports the selection and the page decides what it means.",
+        "type": "boolean",
+        "default": false
+      },
+      "showDetail": {
+        "description": "Render the exception's message under its subject. Off for a compact side panel, on for a full workspace.",
+        "type": "boolean",
+        "default": true
+      }
+    },
+    "additionalProperties": false
+  },
+  "dataRequirement": {
+    "shape": "tabular",
+    "roles": [
+      {
+        "role": "subject",
+        "label": "Subject",
+        "required": true,
+        "accepts": [
+          "attribute"
+        ],
+        "dataTypes": [
+          "string",
+          "identifier"
+        ]
+      },
+      {
+        "role": "severity",
+        "label": "Severity",
+        "required": true,
+        "accepts": [
+          "attribute"
+        ],
+        "dataTypes": [
+          "string",
+          "enum"
+        ]
+      },
+      {
+        "role": "status",
+        "label": "Status",
+        "required": true,
+        "accepts": [
+          "attribute"
+        ],
+        "dataTypes": [
+          "string",
+          "enum"
+        ]
+      },
+      {
+        "role": "age",
+        "label": "Age (hours)",
+        "accepts": [
+          "attribute",
+          "measure"
+        ],
+        "dataTypes": [
+          "integer",
+          "decimal"
+        ]
+      },
+      {
+        "role": "assignee",
+        "label": "Assigned to",
+        "accepts": [
+          "attribute"
+        ],
+        "dataTypes": [
+          "string",
+          "identifier"
+        ]
+      },
+      {
+        "role": "rule",
+        "label": "Detected by",
+        "accepts": [
+          "attribute"
+        ],
+        "dataTypes": [
+          "string",
+          "identifier"
+        ]
+      },
+      {
+        "role": "detail",
+        "label": "Detail",
+        "accepts": [
+          "attribute"
+        ],
+        "dataTypes": [
+          "string"
+        ]
+      }
+    ],
+    "maxRows": 500
+  },
+  "events": {
+    "exceptionActivated": {
+      "label": "Exception activated",
+      "description": "Emitted when a row is opened. Typically mapped to a drill-down to the record the exception is about.",
+      "payload": {
+        "subject": {
+          "dataType": "string",
+          "description": "The activated row's subject value."
+        }
+      }
+    },
+    "triageRequested": {
+      "label": "Triage requested",
+      "description": "Emitted when the user asks to act on a row or on the current selection. The component does not know what triage means \u2014 the page binds it to an action.",
+      "payload": {
+        "count": {
+          "dataType": "integer",
+          "description": "How many exceptions the request covers."
+        }
+      }
+    },
+    "selectionChanged": {
+      "label": "Selection changed",
+      "description": "Emitted when bulk selection changes, so a page can enable a bulk action.",
+      "payload": {
+        "count": {
+          "dataType": "integer"
+        }
+      }
+    },
+    "retryRequested": {
+      "label": "Retry requested",
+      "description": "Emitted when the user activates Retry in the error state."
+    }
+  },
+  "states": [
+    "ready",
+    "loading",
+    "empty",
+    "error",
+    "denied"
+  ],
+  "breakpoints": {
+    "xs": {
+      "supported": true,
+      "minColSpan": 12,
+      "behaviour": "condensed",
+      "note": "Rule and assignee move under the subject; the queue becomes a list of cards rather than a row grid, because a triage decision needs severity and age legible on a phone."
+    },
+    "sm": {
+      "supported": true,
+      "minColSpan": 12,
+      "behaviour": "condensed"
+    },
+    "md": {
+      "supported": true,
+      "minColSpan": 8,
+      "behaviour": "full"
+    },
+    "lg": {
+      "supported": true,
+      "minColSpan": 6,
+      "behaviour": "full"
+    },
+    "xl": {
+      "supported": true,
+      "minColSpan": 6,
+      "behaviour": "full"
+    }
+  },
+  "accessibility": {
+    "wcagLevel": "AA",
+    "keyboardContract": "The queue is a list. Arrow keys move between rows, Enter activates the focused row, Space toggles its selection when bulk selection is on. Group headers are not focus stops.",
+    "requiredLabels": [
+      "title"
+    ],
+    "colourIndependent": true,
+    "notes": "Severity and breach are carried by text and an icon as well as emphasis colour \u2014 a red row is never the only signal. Each row announces its subject, severity, age and assignment state as one label rather than as seven unlabelled cells."
+  },
+  "performance": {
+    "renderBudgetMs": 120,
+    "virtualized": false,
+    "skeleton": {
+      "minHeight": "240px",
+      "shape": "list"
+    }
+  },
+  "capabilities": [],
+  "lifecycle": {
+    "stability": "experimental",
+    "since": "1.0.0"
+  },
+  "bundle": {
+    "libraryPath": "@opus/components/exception-queue",
+    "exportName": "ExceptionQueueComponent"
+  }
+}

@@ -61,6 +61,20 @@ const ENTRIES: Readonly<Record<ComponentTypeRef, RegistryEntry>> = {
       return { component: m.FilterBarComponent, manifest: m.manifest as unknown as ComponentManifest };
     },
   },
+  /*
+    The first of the PRD's Enterprise family (FR-30). Registered like any other component, which is
+    the claim FR-31 makes: a governance-carrying component is an ordinary registry entry, not a
+    special case the framework knows about.
+  */
+  'business.exception-queue': {
+    load: async () => {
+      const m = await import('@opus/components/exception-queue');
+      return {
+        component: m.ExceptionQueueComponent,
+        manifest: m.manifest as unknown as ComponentManifest,
+      };
+    },
+  },
 };
 
 export type ResolvedComponent = { component: Type<unknown>; manifest: ComponentManifest };

@@ -648,6 +648,11 @@
           {
             "attribute": "security-id",
             "alias": "security-id"
+          },
+          {
+            "attribute": "detail",
+            "alias": "detail",
+            "label": "Detail"
           }
         ]
       },
@@ -1044,77 +1049,42 @@
         }
       }
     },
-    "all-table": {
-      "id": "all-table",
-      "type": "data.table",
+    "all-queue": {
+      "id": "all-queue",
+      "type": "business.exception-queue",
       "typeVersion": "1.0.0",
       "title": "Full queue",
+      "description": "The whole backlog as work rather than as rows: severity first, unassigned above owned, and anything open beyond ten days marked. The threshold is set where it separates \u2014 against this backlog 48 hours flags 85% of rows, and a flag that fires on everything is one people learn to ignore. The rule tabs above still use a grid, because there the rows are evidence for one rule rather than a list of jobs.",
       "dataSource": "all-exceptions",
       "config": {
-        "density": "compact",
-        "maxHeight": "460px",
-        "zebra": true
+        "groupBy": "severity",
+        "ageBreachHours": 240,
+        "unassignedFirst": true,
+        "pageSize": 40,
+        "allowBulkSelection": true,
+        "showDetail": true
       },
       "bindings": {
-        "columns": [
-          {
-            "field": "security-name",
-            "label": "Security",
-            "renderAs": "link"
-          },
-          {
-            "field": "rule-name",
-            "label": "Rule"
-          },
-          {
-            "field": "severity",
-            "label": "Severity"
-          },
-          {
-            "field": "exception-status",
-            "label": "Status"
-          },
-          {
-            "field": "age-hours",
-            "label": "Age",
-            "format": {
-              "style": "duration"
-            },
-            "align": "end"
-          },
-          {
-            "field": "assigned-to",
-            "label": "Assigned To",
-            "emptyValue": "unassigned"
-          },
-          {
-            "field": "detected-at",
-            "label": "Detected",
-            "format": {
-              "style": "datetime"
-            }
-          },
-          {
-            "field": "exception-id",
-            "hidden": true
-          },
-          {
-            "field": "security-id",
-            "hidden": true
-          }
-        ]
-      },
-      "eventActions": {
-        "rowActivated": "drill-to-security"
-      },
-      "stateOverrides": {
-        "empty": {
-          "title": "Queue is clear",
-          "message": "No exception matches the current narrowing."
+        "subject": {
+          "field": "security-name"
         },
-        "partial": {
-          "title": "Assignee hidden",
-          "message": "You are not entitled to see who a break is assigned to."
+        "severity": {
+          "field": "severity"
+        },
+        "status": {
+          "field": "exception-status"
+        },
+        "age": {
+          "field": "age-hours"
+        },
+        "assignee": {
+          "field": "assigned-to"
+        },
+        "rule": {
+          "field": "rule-name"
+        },
+        "detail": {
+          "field": "detail"
         }
       }
     }
@@ -1337,8 +1307,8 @@
             "children": [
               {
                 "kind": "widget",
-                "id": "w-all-table",
-                "component": "all-table",
+                "id": "w-all-queue",
+                "component": "all-queue",
                 "placement": {
                   "colStart": 1,
                   "colSpan": 12

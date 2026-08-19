@@ -103,7 +103,7 @@ The prototype is a strong vertical slice of one persona doing one thing once.
 
 | FR | Status | Evidence | Gap |
 |---|---|---|---|
-| FR-30 Five-family component library | **Partial** | Layout is complete in the model — grid, stack, panel, split, drawer, tabs, repeater (`schemas/layout.schema.json`). Six component manifests exist against roughly 35 named in the PRD | **The entire Enterprise family is missing** — Exception Queue, Approval, Workflow, Notifications, Audit, Data Quality. The PRD calls these "the ones that carry governance-relevant behavior", and they are the ones with none. Also absent: Tree, Relationship Viewer, Timeline, Heat Map, Gauge, and every Forms component except via the EDM builder's own separate palette |
+| FR-30 Five-family component library | **Partial** | Layout is complete in the model — grid, stack, panel, split, drawer, tabs, repeater. Seven component manifests, and the **Enterprise family is no longer empty**: `business.exception-queue` is registered, palette-listed, manifest-validated and rendering the shipped `exception-management` page over 164 real exception rows, where it replaced the `data.table` that was serving as the full queue | Five of the six Enterprise components remain: Approval, Workflow, Notifications, Audit, Data Quality. Three of them are blocked on a contract decision rather than on effort — see the note below. Also still absent: Tree, Relationship Viewer, Timeline, Heat Map, Gauge, and the Forms family except via the EDM builder's separate palette |
 | FR-31 Product extension without forking | **Partial** | The registry accepts manifests without core changes | No product scoping, no extension-family registration |
 | FR-32 Responsive across devices | **Built** | Per-breakpoint direction and placement in the schema; `breakpointForWidth` tested at 320/600/900/1350; verified **zero horizontal overflow at 430 px** | Known limitation carried from earlier work: below 900 px the studio shell hides the nav rail (`chrome.scss`), making Catalog and the EDM Page Builder unreachable on a phone. That is the *authoring* surface, not a published Experience |
 
@@ -242,6 +242,33 @@ Ordered by how much else they unblock, not by size.
    the concept is absent*, which is the easiest kind of architectural claim to believe and the least
    tested. The first genuinely second product is what validates the build-once promise.
 
+## What blocks the rest of the Enterprise family
+
+Worth recording as a finding rather than as remaining effort, because three of the five outstanding
+components are not waiting on work.
+
+**Approval, Workflow and Audit are about the artifact, not about data.** An Approval component shows
+*this experience's* approval state and offers approve/reject; a Workflow component renders the steps
+`workflows` now declares; an Audit component renders the `governance` chain that `applyTransition` now
+writes. All three exist on the artifact — and `ComponentContext` has no access to it. Its fields are
+pageId, params, filters, selections, breakpoint, user, locale, density, `evaluate` and `format`. There
+is no route from a component to the experience it sits in.
+
+So there is a decision to make before those three, and it is not a small one:
+
+1. **Extend the runtime contract** with a governance view on `ComponentContext` — read-only, scoped to
+   what a governance component needs. Deliberate and bounded, but it is still a new grant to every
+   component, and the PRD does not ask for it.
+2. **Leave the family data-bound**, and accept that "Enterprise" means components over governed *data*
+   rather than over the artifact. Exception Queue and Data Quality fit that reading; Approval and
+   Workflow do not, which would make FR-18's "an Approval Workspace carries its approval" renderable
+   only through a bespoke page rather than a component.
+
+`Notifications` is blocked on something simpler: nothing produces a notification yet (FR-55/56 are
+Absent), so a component would render an empty list. `Data Quality` is buildable today — the PRD is
+explicit that it *renders* signal computed elsewhere — but there is no data-quality source in the
+catalog to bind it to, so it needs a source before a component.
+
 ## Where the PRD and the code use the same word differently
 
 Worth fixing in one direction or the other before these terms reach engineering tickets.
@@ -253,6 +280,7 @@ Worth fixing in one direction or the other before these terms reach engineering 
 | **Template** | A catalog artifact with a scope, promotable (FR-9…11) | A JSON page definition file in `apps/viewer/public/definitions/` |
 | **Journey** | An authorable System Journey object (FR-26) | An emergent property of drill-down wiring between four templates |
 | **Registry** | The Product Experience Registry (FR-20) | `libs/component-registry` — the component manifest registry |
+| **Enterprise** (component family) | The fifth component family — Exception Queue, Approval, Workflow, Notifications, Audit, Data Quality (FR-30) | `business` — the category name already in `component-manifest.schema.json`. The first Enterprise component uses it rather than adding `enterprise` as a synonym, since two names for one family is worse than either. The palette labels it "Enterprise" so the user-facing word is the PRD's |
 
 ## PRD open questions the prototype has already answered de facto
 
@@ -280,9 +308,9 @@ A recommendation, not a plan — sequencing across products is explicitly out of
    runner.
 3. **Make the lifecycle a gate** (FR-33): Validate as a precondition, Approve requiring a named
    approver, both recorded immutably. The validator already exists — this is wiring plus refusal.
-4. **The Enterprise component family** (FR-30): Exception Queue, Approval, Workflow, Notifications,
-   Audit, Data Quality. These are the governance-carrying components and the ones the four EDM
-   templates most obviously want.
+4. **The Enterprise component family** (FR-30). Exception Queue is done and on the page. The next
+   step is not another component — it is the `ComponentContext` decision above, which determines
+   whether three of the remaining five are components at all.
 5. **Studio Access Tiers** (FR-45…FR-48), extending the existing server-side capability check rather
    than adding a parallel one.
 6. **The Navigation Model** (FR-38…FR-43), renaming the existing schema first to free the term.

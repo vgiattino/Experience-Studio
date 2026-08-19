@@ -15,7 +15,8 @@ import type { ComponentTypeRef } from '@opus/contracts';
 export interface PaletteEntry {
   type: ComponentTypeRef;
   label: string;
-  category: 'analytics' | 'data' | 'content' | 'input' | 'layout';
+  /** `business` is the PRD's Enterprise family — the contract's own name for it. */
+  category: 'analytics' | 'data' | 'content' | 'input' | 'layout' | 'business';
   /** Material icon name. */
   icon: string;
   description: string;
@@ -65,6 +66,15 @@ export const PALETTE: readonly PaletteEntry[] = [
     description: 'Headings and prose with token substitution from data. Interpolated, never injected.',
     generates: '“with a summary line”, “explain what this shows”',
   },
+  {
+    type: 'business.exception-queue',
+    label: 'Exception queue',
+    category: 'business',
+    icon: 'warning',
+    description:
+      'A work queue, not a grid: ordered by severity then age, unassigned work first, and items past their ageing threshold marked.',
+    generates: '“a triage queue”, “open breaks by severity”, “what needs working on”',
+  },
 ];
 
 const CATEGORY_LABELS: Record<PaletteEntry['category'], string> = {
@@ -73,6 +83,7 @@ const CATEGORY_LABELS: Record<PaletteEntry['category'], string> = {
   content: 'Content',
   input: 'Input',
   layout: 'Layout',
+  business: 'Enterprise',
 };
 
 export function categoryLabel(category: PaletteEntry['category']): string {
