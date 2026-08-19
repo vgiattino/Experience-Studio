@@ -1,4 +1,31 @@
 /**
+ * ── PARKED ────────────────────────────────────────────────────────────────────────────
+ *
+ * This workspace is no longer on the nav rail and is not bundled. Nothing was deleted: the component,
+ * its model, its AI panel and all of their tests are intact and still run under `npm test`.
+ *
+ * WHY. The EDM Experience Framework PRD (`docs/PRD.md`) supersedes the requirement this served. Its
+ * §16 makes every standard page a product-owned, product-versioned artifact that a client derives from,
+ * compares against and synchronises with. This builder edits its own page model — ad-hoc widget props,
+ * literal data arrays, `localStorage` — and a page that cannot carry a standard version cannot be
+ * compared to one. FR-16 needs enforced security and FR-13 needs real search; neither is reachable
+ * without the catalog binding this model does not have.
+ *
+ * The file header below already made this argument as a follow-on. The PRD forced it.
+ *
+ * MINED FIRST, NOT AFTER. The `ai/` folder beside this file is the best conversational-refinement
+ * architecture in the repository, and its ideas are the foundation of the new refinement engine:
+ * a proposal is not an action; the model emits decisions and code assembles the page; the model names
+ * things and never invents numbers; grounding drops what the design cannot support and keeps the
+ * reason. `docs/PARKED.md` §4 records where each of those went.
+ *
+ * TO BRING BACK. Re-add the rail entry and the `edm-page-builder` workspace member in
+ * `apps/studio/src/app/app.ts`. It remains the only side-by-side reference for how the customer's
+ * actual console behaves, which is worth keeping for as long as anyone is still comparing the two.
+ * ─────────────────────────────────────────────────────────────────────────────────────
+ */
+
+/**
  * EDM Page Builder — the console's low-code studio, recreated natively.
  *
  * Ported from `vgiattino/MDE`, branch **`opus-angular-port`**,

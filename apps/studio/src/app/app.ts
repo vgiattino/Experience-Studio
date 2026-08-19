@@ -76,7 +76,6 @@ import {
 import type { ValidationReport } from '@opus/validator';
 
 import { CatalogWorkspaceComponent } from './catalog/catalog-workspace.component';
-import { EdmPageBuilderComponent } from './edm/page-builder/page-builder.component';
 import { AUTHOR } from './session';
 
 const DEFINITIONS_BASE = 'definitions';
@@ -90,13 +89,17 @@ type LeftPanel = 'pages' | 'add' | 'structure';
 /**
  * Which workspace fills the main panel.
  *
- * A workspace is a coarser thing than a left panel: `builder` is this application's authoring surface,
- * `catalog` is the governed vocabulary it binds to, and `edm-page-builder` is a recreation of another
- * product's studio. Separate state rather than more `LeftPanel` values, because none of these has the
- * builder's left panel, page or selection — collapsing the two would put "which panel" and "which
- * surface" in one signal and every consumer would have to know the difference anyway.
+ * A workspace is a coarser thing than a left panel: `builder` is this application's authoring surface
+ * and `catalog` is the governed vocabulary it binds to. Separate state rather than more `LeftPanel`
+ * values, because neither has the builder's left panel, page or selection — collapsing the two would
+ * put "which panel" and "which surface" in one signal and every consumer would have to know the
+ * difference anyway.
+ *
+ * A third member, `edm-page-builder`, was removed with the parked reference workspace. Dropping it
+ * from the union rather than leaving an unreachable branch is what keeps the parked builder out of
+ * this application's bundle — see `docs/PARKED.md` §4.
  */
-type Workspace = 'builder' | 'catalog' | 'edm-page-builder';
+type Workspace = 'builder' | 'catalog';
 
 /** What the right dock holds. */
 type RightTab = 'inspector' | 'history' | 'json';
@@ -136,19 +139,19 @@ const NAV_SECTIONS: readonly NavSection[] = [
     mini: 'DATA',
     items: [{ id: 'catalog', label: 'Catalog', icon: 'database' }],
   },
-  {
-    /**
-     * Reference, not navigation to a feature.
-     *
-     * The Opus EDM console's Page Builder, recreated natively in this application's own design system
-     * so the two products can be compared without switching applications. Its own rail section rather
-     * than an authoring destination, because it edits its own model rather than the page definition
-     * this application's builder edits.
-     */
-    label: 'Reference',
-    mini: 'REF',
-    items: [{ id: 'edm-page-builder', label: 'EDM Page Builder', icon: 'page' }],
-  },
+  /*
+    ── PARKED: the EDM Page Builder reference workspace ──────────────────────────────────
+    A 'Reference' section used to sit here, offering the Opus EDM console's Page Builder recreated in
+    this application's design system, so the two products could be compared without switching apps.
+
+    It is off the rail because the EDM Experience Framework PRD supersedes the requirement it served.
+    Every §16 requirement — lineage, versioning, comparison, synchronisation — operates on an artifact
+    the product ships and versions, and that builder edits its own model: ad-hoc widget props, literal
+    data arrays, localStorage. A page that cannot carry a standard version cannot be compared to one.
+
+    The component and its tests are untouched under `edm/page-builder/`; `docs/PARKED.md` §4 records
+    what was mined out of it first and what re-adding this entry would take.
+  */
 ];
 
 /**
@@ -177,7 +180,6 @@ const PREVIEW_ICONS: Record<PreviewSize['id'], { name: string; size: number }> =
     AssistPanelComponent,
     CanvasComponent,
     CatalogWorkspaceComponent,
-    EdmPageBuilderComponent,
     HistoryPanelComponent,
     IconComponent,
     InspectorComponent,
@@ -235,14 +237,7 @@ const PREVIEW_ICONS: Record<PreviewSize['id'], { name: string; size: number }> =
             </p>
           }
 
-          @if (workspace() === 'edm-page-builder') {
-            <!--
-              The console's Page Builder, recreated. A separate workspace rather than a panel: it is a
-              whole studio with its own pages, palette and canvas, and it edits its own model rather
-              than the page definition this application's builder edits.
-            -->
-            <opus-edm-page-builder />
-          } @else if (workspace() === 'catalog') {
+          @if (workspace() === 'catalog') {
             <!--
               The catalog, browsable. Rendered instead of the workbench rather than beside it: two full
               surfaces in one viewport is a screenshot, not something either can be used in. The
@@ -1008,13 +1003,13 @@ export class StudioApp {
    * an invisible panel would read as a dead control.
    */
   protected onRailSelect(id: string): void {
-    if (id === 'catalog' || id === 'edm-page-builder') {
+    if (id === 'catalog') {
       this.workspace.set(id);
       return;
     }
     if (id !== 'pages' && id !== 'add' && id !== 'structure') return;
     // Any authoring destination comes back to the builder: the rail is one list, and a click on
-    // "Pages" while the console is open plainly means "show me the pages again".
+    // "Pages" while the catalog is open plainly means "show me the pages again".
     this.workspace.set('builder');
     this.leftPanel.set(id);
     this.listCollapsed.set(false);

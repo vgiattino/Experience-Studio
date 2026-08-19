@@ -177,9 +177,11 @@ a feature branch. Being one major behind is the cheap time to move; two is not, 
 | [`architecture/`](./architecture/) | Target architecture: frontend, backend, AI, runtime, security, plus the pre-implementation review and roadmap |
 | [`architecture/runtime/`](./architecture/runtime/) | The core runtime specification: object model, the seven answers, sequence diagrams, degradation contract |
 | [`schemas/`](./schemas/) | The core metadata model — ten models as JSON Schemas, three proposed runtime-core models, the expression grammar, worked examples |
-| [`docs/PRD.md`](./docs/PRD.md) | **The requirements of record** — FR-1…FR-57, UJ-1…UJ-13, NFRs, open questions. Extracted from `docs/source/`, which holds the authoritative .docx |
-| [`docs/PRD-TRACEABILITY.md`](./docs/PRD-TRACEABILITY.md) | All 57 FRs reconciled against the code: what is built, partial, scaffolded, and absent — read this before starting a feature |
-| [`docs/PRODUCT-REGISTRY.md`](./docs/PRODUCT-REGISTRY.md) | The Product Integration Contract and the Product Experience Registry: what a product registers, how a prompt is attributed to one, and how FR-20's build-once claim is held to account |
+| [`docs/PRD.md`](./docs/PRD.md) | **The requirements of record** — the EDM Experience Framework & AI-Powered Page Builder PRD, FR-01…FR-26, extracted verbatim from `docs/source/`. Read §2 (Levels 1–2 are the priority), §16 (the Standard ↔ Client lifecycle) and §26 (this is not a page builder) first |
+| [`docs/PRD-TRACEABILITY.md`](./docs/PRD-TRACEABILITY.md) | All 26 FRs reconciled against the code, priced against §30's P0/P1/P2 — read this before starting a feature. It also names the one thing that must be built first, and why |
+| [`docs/PARKED.md`](./docs/PARKED.md) | What the supersession set aside and why: the portfolio product layer, the Navigation Model, access tiers, and the EDM Page Builder's parallel page model. Nothing deleted; every item says what bringing it back takes |
+| [`docs/superseded/`](./docs/superseded/) | The 57-FR Opus Experience Studio PRD and its reconciliation. Read it for evidence of what the code does; its requirement numbers are stale |
+| [`docs/PRODUCT-REGISTRY.md`](./docs/PRODUCT-REGISTRY.md) | The Product Integration Contract: how EDM declares its domains, glossary, AI Context, actions, roles and standard pages. Its portfolio half is parked — see `PARKED.md` §1 |
 | [`docs/`](./docs/) | Product vision documents, personas, journeys, and the implementation records |
 | `apps/experience-studio/` | The Experience Builder prototype — prompt, generate, preview, save, run |
 | `apps/viewer/` | Runtime shell, the AI generation panel, and the page definitions, fixtures and catalog all apps serve |

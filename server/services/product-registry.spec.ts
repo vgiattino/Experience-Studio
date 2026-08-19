@@ -19,7 +19,6 @@ import type { ExperienceDefinition } from '@opus/contracts';
 
 import {
   entitiesRead,
-  identifyProductFromPrompt,
   productOf,
   productProblems,
   productViews,
@@ -150,24 +149,10 @@ describe('resolving an experience’s product from what it reads', () => {
   });
 });
 
-describe('FR-3 through the service', () => {
-  it('identifies EDM from the PRD’s worked prompt', () => {
-    const outcome = identifyProductFromPrompt(
-      'Create a Security Master Operations Dashboard showing today’s files processed, late files, failed files, exceptions, new securities, and data quality KPIs.',
-    );
-    expect(outcome.outcome).toBe('resolved');
-    if (outcome.outcome === 'resolved') expect(outcome.productId).toBe('opus-edm');
-  });
-
-  it('identifies Control, even though Control has no metadata here', () => {
-    // Identification is about intent; grounding is about the catalog. Conflating the two is how a
-    // platform answers a reconciliation question with a securities dashboard.
-    const outcome = identifyProductFromPrompt('aged reconciliation breaks by custodian');
-    expect(outcome.outcome).toBe('resolved');
-    if (outcome.outcome === 'resolved') expect(outcome.productId).toBe('opus-control');
-  });
-
-  it('asks when the prompt names no product', () => {
-    expect(identifyProductFromPrompt('a dashboard with some charts').outcome).toBe('unresolved');
-  });
-});
+/*
+  Identification from intent is PARKED with the portfolio requirement it served — the EDM Experience
+  Framework PRD is single-product, so the route is gone and only one registration remains active.
+  `libs/product-registry/src/identify.spec.ts` still exercises the scorer in full, including the
+  synthetic multi-product cases, so nothing is untested; what is not asserted here any more is a
+  server route that no longer exists. See `docs/PARKED.md` §1.
+*/

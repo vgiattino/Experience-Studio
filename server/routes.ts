@@ -7,7 +7,7 @@
  *   /api/ai/*          Generation Service   — the model seam
  *   /api/data/batch    Data Gateway         — the single path to data
  *   /api/sources       Catalog Ingestion    — register, scan and publish a database's vocabulary
- *   /api/products      Product Registry     — what each Opus product contributes (FR-20…FR-24)
+ *   /api/products      Product Registry     — the EDM product's own declaration and its standard pages
  *
  * Conventions kept from §3.4 because calling code branches on them: one batch per render, a
  * machine-readable error category on every failure, and a correlation id threaded through.
@@ -22,7 +22,6 @@ import { activeProvider, providerCatalogue, type MockSimulationInput } from './a
 import { catalogVersion, projectionFor } from './services/catalog';
 import { validateExperience, type ExperienceValidation } from './services/validate-experience';
 import {
-  identifyProductFromPrompt,
   productOf,
   productProblems,
   productViews,
@@ -206,17 +205,18 @@ api.get('/products', (_req, res) => {
   });
 });
 
-/**
- * FR-3 on its own, so the identification can be seen without generating anything.
- *
- * A GET with the prompt as a query parameter: this reads nothing and writes nothing, and making it a
- * POST would imply otherwise.
- */
-api.get('/products/identify', (req, res) => {
-  const prompt = String(req.query['prompt'] ?? '').trim();
-  if (!prompt) return problem(res, 400, 'validation', 'Pass the prompt as ?prompt=…');
-  res.json(identifyProductFromPrompt(prompt));
-});
+/*
+  ── PARKED: GET /products/identify ─────────────────────────────────────────────────────
+  Product identification from intent served the superseded portfolio PRD, whose FR-3 asked the AI to
+  work out which of several Opus products a prompt concerned. The EDM Experience Framework PRD is
+  single-product: with one product registered the answer is always that product, and a route that
+  cannot be wrong cannot be useful.
+
+  `identifyProduct` and its signal index are untouched in `@opus/product-registry`, still tested, and
+  still the cheapest proof that the platform core carries no product-specific branching. `docs/PARKED.md`
+  §1 records what un-parking takes: register a second product and restore this route.
+  ──────────────────────────────────────────────────────────────────────────────────────
+*/
 
 // ── experiences ─────────────────────────────────────────────────────────────
 /**

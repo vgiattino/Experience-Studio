@@ -1,7 +1,18 @@
 # The Product Experience Registry
 
-Status: **Implemented, two products registered**
-Requirements: FR-3, FR-20 · FR-21 · FR-22 · FR-23 · FR-24, and the product half of FR-12/FR-28/FR-31
+> **Partly parked.** The EDM Experience Framework PRD ([`PRD.md`](./PRD.md)) supersedes the portfolio
+> PRD this document was written against, and it is single-product. What survives is EDM's own
+> declaration — domains, glossary, AI Context, actions, roles, and the **standard pages** its §16
+> lifecycle builds on. What is parked is the portfolio machinery: the second registration, product
+> identification from intent (§4 below), and the cross-product composition rules (§3). The code is
+> untouched and still tested; [`PARKED.md`](./PARKED.md) §1 records the split and what un-parking takes.
+>
+> FR numbers below refer to the **superseded** PRD. The mapping to the current one:
+> its FR-20…FR-24 are now the standard-page half of FR-01 and the lineage of FR-20…FR-24 in
+> [`PRD-TRACEABILITY.md`](./PRD-TRACEABILITY.md).
+
+Status: **Implemented; portfolio half parked**
+Requirements (superseded numbering): FR-3, FR-20 · FR-21 · FR-22 · FR-23 · FR-24, and the product half of FR-12/FR-28/FR-31
 Contract: [`../schemas/product.schema.json`](../schemas/product.schema.json)
 Code: `libs/product-registry/`, `server/services/product-registry.ts`, `products/`
 
