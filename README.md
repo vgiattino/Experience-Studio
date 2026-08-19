@@ -179,12 +179,14 @@ a feature branch. Being one major behind is the cheap time to move; two is not, 
 | [`schemas/`](./schemas/) | The core metadata model — ten models as JSON Schemas, three proposed runtime-core models, the expression grammar, worked examples |
 | [`docs/PRD.md`](./docs/PRD.md) | **The requirements of record** — FR-1…FR-57, UJ-1…UJ-13, NFRs, open questions. Extracted from `docs/source/`, which holds the authoritative .docx |
 | [`docs/PRD-TRACEABILITY.md`](./docs/PRD-TRACEABILITY.md) | All 57 FRs reconciled against the code: what is built, partial, scaffolded, and absent — read this before starting a feature |
+| [`docs/PRODUCT-REGISTRY.md`](./docs/PRODUCT-REGISTRY.md) | The Product Integration Contract and the Product Experience Registry: what a product registers, how a prompt is attributed to one, and how FR-20's build-once claim is held to account |
 | [`docs/`](./docs/) | Product vision documents, personas, journeys, and the implementation records |
 | `apps/experience-studio/` | The Experience Builder prototype — prompt, generate, preview, save, run |
 | `apps/viewer/` | Runtime shell, the AI generation panel, and the page definitions, fixtures and catalog all apps serve |
 | `apps/studio/` | The visual builder — a second app sharing one renderer |
 | `server/` | Node + Express backend: catalog, definition store, model seam, data gateway |
-| `libs/` | Layered libraries: contracts, platform, design system, components, registry, renderer, data client, validator, catalog, generation, studio-core, studio-ui, plus the prototype's experience-model, page-renderer, component-library, ai-service and metadata-service |
+| `libs/` | Layered libraries: contracts, platform, design system, components, registry, renderer, data client, validator, catalog, generation, product-registry, studio-core, studio-ui, plus the prototype's experience-model, page-renderer, component-library, ai-service and metadata-service |
+| `products/` | Product registrations — one JSON document per Opus product, read at runtime. Adding a product is a file here, not a code change |
 | `tools/` | Metadata validation gate |
 
 Start with [`architecture/system-overview.md`](./architecture/system-overview.md).

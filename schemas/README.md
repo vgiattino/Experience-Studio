@@ -29,6 +29,7 @@ That has a consequence worth stating before the detail: **these schemas should b
 | `action.schema.json` | **7. Action** | Declarative behaviour, incl. reserved write-back and workflow seams |
 | `navigation.schema.json` | **8. Navigation** | Experience shell, page-local navigation, drill-down graph |
 | `security.schema.json` | **9. Security** | Authoring intent, roles, capabilities — **not enforcement** |
+| `product.schema.json` | — | The Product Integration Contract: what one Opus product registers into the platform (FR-20…FR-24). See [`../docs/PRODUCT-REGISTRY.md`](../docs/PRODUCT-REGISTRY.md) |
 | `versioning.schema.json` | **10. Versioning** | Version envelope, lifecycle, provenance, patch log, compatibility policy |
 | `operation.schema.json` | **11. Operation** | The write vocabulary — what an `invoke` action may target. **Proposed; see §10** |
 | `agent.schema.json` | **12. Agent** | A non-human actor and the grant that bounds it. **Proposed; see §10** |
