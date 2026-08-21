@@ -31,6 +31,7 @@ import {
 import { executeBatch, servedEntities } from './services/gateway';
 import {
   applyTransition,
+  compareWithStandard,
   declineUpdate,
   derivedIdFor,
   deriveClientExperience,
@@ -435,6 +436,57 @@ api.get('/experiences/:id/standard-update', (req, res) => {
       : shipped.name.default
     : update.standardId;
   res.json({ update, message: describeUpdate(update, name) });
+});
+
+/**
+ * FR-22 — §16.4's comparison.
+ *
+ * The three artifacts are assembled here because only the store knows where they are: the variant, the
+ * shipped standard, and — the one that used to be impossible — the **baseline**, the standard version
+ * the variant was derived from. `standardAtVersion` reads it from the archive `deployStandards` writes.
+ *
+ * Refuses with the model's own code rather than flattening to a 409, because `baselineUnavailable` and
+ * `notDerived` call for different things from the caller: the first means "this cannot be compared,
+ * offer Keep My Version", the second means "you asked about the wrong artifact".
+ */
+api.get('/experiences/:id/compare-standard', (req, res) => {
+  const record = store.get(req.params.id);
+  if (!record) return problem(res, 404, 'semantic', `No experience "${req.params.id}"`, 'notFound');
+
+  const lineage = record.definition.derivedFrom;
+  if (!lineage) {
+    return problem(
+      res,
+      409,
+      'semantic',
+      `“${req.params.id}” is not derived from a product standard, so there is nothing to compare it against.`,
+      'notDerived',
+    );
+  }
+
+  const shipped = standardDefinitions().find((s) => s.standard?.standardId === lineage.standardId);
+  if (!shipped) {
+    return problem(
+      res,
+      409,
+      'semantic',
+      `The standard “${lineage.standardId}” is not installed, so there is nothing newer to compare against.`,
+      'standardNotShipped',
+    );
+  }
+
+  const outcome = compareWithStandard({
+    client: record.definition,
+    standard: shipped,
+    baseline: store.standardAtVersion(shipped.id, lineage.standardVersion),
+  });
+
+  if (!outcome.ok) {
+    // 409 for every refusal: each says the artifacts are not in a state this question can be asked of,
+    // which is a semantic conflict rather than a bad request. The `code` is what a caller branches on.
+    return problem(res, 409, 'semantic', outcome.detail, outcome.code);
+  }
+  res.json(outcome.comparison);
 });
 
 /**

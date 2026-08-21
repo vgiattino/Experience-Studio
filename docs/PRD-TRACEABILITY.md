@@ -22,7 +22,7 @@ the layers underneath is not re-derived here; it is cited, and the account itsel
 | Priority | FRs | Built | Partial | Absent |
 |---|---|---|---|---|
 | **P0** | FR-01…FR-19 less FR-06 | 8 | 5 | 5 |
-| **P1** | FR-20…FR-24 | 3 | 1 | 1 |
+| **P1** | FR-20…FR-24 | 4 | 0 | 1 |
 | **P2** | FR-25, FR-26 | 0 | 0 | 2 |
 
 FR-20, FR-21 and FR-24 moved from Absent to Built in the first change made under this PRD, because
@@ -46,8 +46,9 @@ The other shape worth naming: **§16's lifecycle was the largest genuinely-absen
 upstream of everything else** — which is why it was built first rather than in P1 order. Principle 2 is
 *"client customization must never modify the product standard"*, and an AI modification to a shipped
 page used to write back over the shipped page. Every FR-08 refinement would have been a violation of
-Principle 2, so lineage came before the refinement engine. What remains of §16 is the P1 half:
-comparison and synchronisation.
+Principle 2, so lineage came before the refinement engine. What remains of §16 is synchronisation: the
+comparison it needs is built, and every difference in it is individually addressable, which is what makes
+§16.5's deferred *selective* sync reachable rather than a rewrite.
 
 ---
 
@@ -99,8 +100,8 @@ The section that carries the most architectural weight, and the one with the lea
 | FR-19 Versioning and rollback | **Partial** | Append-only version history under `versions/`, `artifactVersion` per save, published versions immutable and a save against one refused, four governed lifecycle transitions, and now the product version line beside the client one (§16.6's two lines) | **No rollback operation.** Superseded bodies are on disk and nothing restores one. §16.5's "revert to standard" is a different thing again and also absent |
 | FR-20 Product lineage | **Built** | `standard` and `derivedFrom` on the experience; `libs/experience-model/src/lineage.ts`; `POST /api/experiences/:id/derive`. Two version lines, deliberately different types so no arithmetic can mix them. The store refuses every write to a standard — both the incoming definition carrying `standard` **and** the stored one, which is the case that actually happens when a client PUTs a body it stripped the field from. See [`STANDARD-LIFECYCLE.md`](./STANDARD-LIFECYCLE.md) | The unit of the standard is the **experience**, not the screen: §5.1 names thirty screens and the shipped library is two multi-page experiences. Aligning them means splitting the library into single-page experiences with cross-experience drill-down — part of the library work below, not of the lineage |
 | FR-21 Standard updates | **Built** | `updateAvailableFor` + `GET /api/experiences/:id/standard-update`, returning §16.3's sentence with `customised` set from `artifactVersion > 1`, rendered on the variant it concerns rather than in a global tray. `deployStandards()` installs a newer standard without touching client work. **Three of §16.3's five actions work**: Preview New Version opens the standard, Keep My Version records `derivedFrom.declinedVersion` so the notification stays quiet until something newer than the declined version ships, and Review Later records nothing — which is the difference between it and Keep My Version. See [`STANDARD-LIFECYCLE.md`](./STANDARD-LIFECYCLE.md) §7 | Compare Changes and Sync with Standard are FR-22 and FR-23, named in a sentence on the card rather than rendered as disabled buttons. A decline cannot be undone from the UI — the next release re-asks, so it is time-limited rather than permanent |
-| FR-22 Comparison | **Absent** | — | §16.4 asks for a diff classified into nine named categories. `detectDrift` in `catalog-ingest` is a genuine precedent for the *shape* of that answer — it diffs a re-scan against a promoted baseline and reports what changed and what it breaks — but it is about metadata, not layouts |
-| FR-23 Synchronization | **Absent** | — | Needs FR-20 and FR-22 |
+| FR-22 Comparison | **Built** | A **three-way** comparison — baseline → standard is what the product did, baseline → client is what the client did, and a subject both touched is a conflict: `libs/experience-model/src/compare.ts`, `GET /api/experiences/:id/compare-standard`, rendered grouped by side with conflicts first. §16.4's eight kinds of change are all detected; its ninth item, "client-specific customizations", is the `side: 'client'` slice rather than a tenth category. Verified against a real v2.0 release of the shipped standard: 3 product changes, 1 client change, 1 conflict, each named. See [`STANDARD-LIFECYCLE.md`](./STANDARD-LIFECYCLE.md) §8 | A column is compared on its `field`, so a column that kept its field and changed its format reads as unchanged. A rename has no slot in §16.4's eight and is reported under `layout-changed` — a recorded stretch, taken because omitting it would let a sync silently discard the client's own name for a widget |
+| FR-23 Synchronization | **Absent** | — | Sync all, keep client, revert to standard, preview before sync. Its hard prerequisite is met: the comparison exists and every difference in it carries a stable, addressable id, which is what makes §16.5's deferred *selective* sync reachable rather than a rewrite |
 | FR-24 Upgrade safety | **Built** | Satisfied by construction rather than by a check, which is the stronger form: `deployStandards()` only ever writes an artifact carrying `standard`, and the store refuses every client write to such an artifact — so the set a release can overwrite and the set a client can have edited are provably disjoint. Asserted end to end in `experience-store.spec.ts`: ship v1.0, derive, customise, ship v2.0, redeploy, and the variant's name, baseline and artifact version are all unchanged | Nothing, at this scope. What is still absent is the *selective* synchronisation §16.5 defers, which is a different requirement |
 
 **FR-16 Security — Built.** Enforced, not declared. The persona switch turns widgets `denied` while the
@@ -154,13 +155,16 @@ The order that follows from the document rather than from convenience:
    fills the one reference it asked about. §28's kind of session now runs from a user's seat.
 4. ~~**The frame around the conversation (§2, §26)**~~ **Done.** The library is grouped by §2's three
    levels, a standard is customised rather than edited, and §16.1's lineage plus §16.3's notification —
-   with the three of its five actions that can work — sit on the variant they concern. See
+   with the four of its five actions that can work — sit on the variant they concern. See
    [`STANDARD-LIFECYCLE.md`](./STANDARD-LIFECYCLE.md) §8. What is left of §26 is the *builder's* own
    shell, which still opens on a page list rather than on an experience.
-5. **FR-22 comparison** — P1. `detectDrift` is the precedent to follow, and §16.5's deferred *selective*
-   synchronisation is the constraint that matters: a comparison must be per-change rather than a single
-   blob, or selective sync can never be built on it.
-6. **FR-23 sync and revert** — P1.
+5. ~~**FR-22 comparison**~~ **Done.** Three-way, per-change, grouped by side — see
+   [`STANDARD-LIFECYCLE.md`](./STANDARD-LIFECYCLE.md) §8. It also closed the hole that made it
+   impossible: `deployStandards` was overwriting the standard in place, destroying the baseline every
+   correct answer here depends on.
+6. **FR-23 sync and revert** — P1, and now unblocked. Sync all, keep client, revert to standard, preview
+   before sync. The three-way shape is what makes "adopt this, keep that" expressible: a product-side
+   difference can be applied, a client-side one left alone, and a conflict has to ask.
 7. **FR-15 source comparison** — the missing component, and it unblocks four named screens plus §28.
 8. **FR-06 AI search** — well-placed, as noted.
 9. **FR-01/02/03 the library** — the largest volume of work and the least architectural risk, which is

@@ -1,10 +1,11 @@
 # Product Standard ↔ Client Experience
 
-Status: **Lineage, deployment, update detection and the notification's three working actions are
-built and reachable from the library. Compare and sync not yet.**
-Requirements: [`PRD.md`](./PRD.md) §16 · §16.1 · §16.2 · §16.3 · §16.6 · §2 · §26, FR-01 · FR-19 · FR-20 · FR-21 · FR-24
+Status: **Lineage, deployment, update detection and the three-way comparison are built and reachable
+from the library. Four of §16.3's five actions work. Synchronisation not yet.**
+Requirements: [`PRD.md`](./PRD.md) §16 · §16.1 · §16.2 · §16.3 · §16.4 · §16.6 · §2 · §26, FR-01 · FR-19 · FR-20 · FR-21 · FR-22 · FR-24
 Contract: `schemas/experience.schema.json` — `standard`, `derivedFrom`
-Code: `libs/experience-model/src/lineage.ts`, `server/store/experience-store.ts`, `server/routes.ts`,
+Code: `libs/experience-model/src/lineage.ts`, `libs/experience-model/src/compare.ts`,
+`server/store/experience-store.ts`, `server/routes.ts`,
 `apps/experience-studio/src/app/library/library.component.ts`
 
 ---
@@ -221,7 +222,111 @@ sibling for the §16 relationship, and the general rule both express is worth st
 
 ---
 
-## 8. The library is where a person meets all of this
+## 8. Compare — §16.4, FR-22
+
+`GET /api/experiences/:id/compare-standard`
+
+### It is a three-way comparison, and that is the whole design
+
+§16.4's goal sentence is the specification:
+
+> *"The goal is to clearly show **what the product changed** and **what the client changed**."*
+
+A two-way diff of the variant against the new standard cannot answer that. Shown a column that is on the
+standard and not on the variant, it has no way to tell *the product added it* from *the client removed
+it* — and those call for opposite decisions. So the comparison takes three artifacts:
+
+```
+BASELINE   the standard version the variant was derived from   (derivedFrom.standardVersion)
+   │  └────── product change ──→  STANDARD   what the product ships now
+   └───────── client change  ──→  CLIENT     the variant as it stands
+```
+
+A subject **both** sides touched is a conflict, and it is the only kind of difference a synchronisation
+cannot decide on its own.
+
+### The baseline had been getting destroyed
+
+`deployStandards` overwrote the standard in place. So a v2.0 release deleted the only artifact that makes
+this function correct, and the platform could have diffed a variant against v2.0 forever without ever
+being able to say which side of a difference each half came from.
+
+It now archives the replaced standard as `versions/<id>.standard-v<version>.json`, keyed on the
+**standard** version because that is the line that moved. `standardAtVersion` reads it back, and returns
+`null` — never the currently-installed one — when the baseline genuinely is not there. A comparison with
+a substituted baseline would look complete and attribute the product's changes to the client, in a screen
+somebody acts on.
+
+That is `baselineUnavailable`, and it is the refusal that will actually happen in a store created before
+archival existed. It says what the reader can still do:
+
+```
+This experience is based on v1.0 of securities-operations, and that version is no longer in the
+store — so which side of a difference each change came from cannot be established. Keeping your
+version needs no comparison, and a comparison will be available for the next release.
+```
+
+### Per change, not one blob — because §16.5 says so
+
+§16.5 defers *selective* synchronisation and gives the example: adopt the new AI Search, keep the custom
+columns, adopt the new exception visualisation, keep the custom navigation. That is only ever buildable on
+a comparison whose output is a list of **individually addressable** changes. So every difference carries a
+stable `id`, keyed on its subject rather than its position — the same change has the same id whether it is
+the third row or the eleventh — and nothing returns a diff of whole documents.
+
+The comparison being per-change is not a nicety. It is the constraint that decides whether §16.5's future
+half is reachable at all.
+
+### §16.4's nine items are not nine categories
+
+The ninth — "Client-specific customizations" — is not a *kind* of change like the other eight. It is a
+*provenance*: every difference with `side: 'client'` is a client-specific customisation, whichever of the
+eight kinds it is. As a tenth category it would double-count every client change, and a reader could not
+tell whether twelve differences meant twelve or six. So: **eight categories, three sides**, and the ninth
+item is the `side: 'client'` slice.
+
+| §16.4 | Category | Read from |
+|---|---|---|
+| Added / removed capabilities | `capability-added`, `capability-removed` | components, and whole pages — a page is the largest capability an experience has |
+| Changed layouts | `layout-changed` | the flattened widget **order**, not the container tree |
+| New/removed columns | `columns-changed` | the column binding |
+| Changed filters | `filters-changed` | the page's filter channels, and an `input.*` component's own config |
+| Changed charts | `chart-changed` | the mark, and the encodings — what it plots is a bigger change than how it draws it |
+| Changed navigation | `navigation-changed` | experience nav, drill-down targets, and a component's event actions |
+| Changed business rules | `business-rules-changed` | actions (by **kind** as well as name), and `visible` conditions |
+| Client-specific customizations | — | the `side: 'client'` slice of all of the above |
+
+Two of those rows are decisions worth stating:
+
+- **Layout is compared as the widget order**, and only among widgets present on both sides. A structural
+  diff would report a panel gaining a `gap` as "the layout changed", and a comparison that says that for a
+  spacing tweak is one whose layout rows get skipped. Excluding added and removed widgets matters too:
+  inserting one shifts everything after it, so every added widget in every release would otherwise produce
+  a spurious layout row alongside its real one.
+- **An action is compared by kind as well as by name.** An action that kept its name and moved from
+  `navigate` to `mutate` is the most consequential change in this list, and a name-only comparison misses
+  exactly it.
+
+### A rename has no slot in the eight, and is reported anyway
+
+Found by running the comparison against the real shipped standard, not in a test: a client had retitled a
+chart, the product had changed its mark, and only the product's half was reported. §16.4's list has no
+"renamed" entry — so this is reported under `layout-changed`, which is a stretch, and the stretch is
+recorded rather than hidden.
+
+Leaving it out is worse by a distance. A synchronisation that adopted the product's version would silently
+discard the client's own name for the widget, which is precisely the class of loss §16 exists to prevent.
+It is evidence that §16.4's list is a reader's list rather than an exhaustive one.
+
+### Grouped by side, because that is the requirement
+
+One merged list of differences would satisfy the word "comparison" and none of §16.4's sentence. The
+library renders three groups, and **conflicts lead** — they are the only rows where a synchronisation
+cannot decide on its own, so sorting them in among the rest buries the one thing that needs a person.
+
+---
+
+## 9. The library is where a person meets all of this
 
 `§2` names three levels of interaction — **Use**, **Configure**, **Create** — and says the initial
 priority is the first two. The library is grouped by exactly that, because the group an experience is in
@@ -242,15 +347,15 @@ The membership test is `derivedFrom`, not `origin`. `origin` says how the bytes 
 `human` — while `derivedFrom` says whether there is a standing relationship to a standard. A variant
 somebody then refined conversationally has `origin: 'aiRefined'` and is still a variant.
 
-### Three of §16.3's five actions work, and the other two are named
+### Four of §16.3's five actions work, and the fifth is named
 
 | Action | |
 |---|---|
 | **Preview New Version** | Opens the standard itself, which is what "the new version" is |
 | **Keep My Version** | Records the decline. The version is sent from the client, not inferred, so what is recorded is what was on the screen when the person decided |
 | **Review Later** | Hides the notice for this visit and records nothing |
-| **Compare Changes** | §16.4, P1. Named in a sentence rather than rendered disabled |
-| **Sync with Standard** | §16.5, P1. Same |
+| **Compare Changes** | §16.4's three-way comparison, grouped by side, expanding the card to the full row — a comparison is a list of rows, not a card-sized thing |
+| **Sync with Standard** | §16.5. Named in a sentence rather than rendered disabled |
 
 A disabled control teaches the reader the feature is broken; a sentence teaches them it is next.
 
@@ -267,7 +372,7 @@ Holding at v1.0 — you declined v2.0. You will hear about the next release.
 
 ---
 
-## 9. Verified
+## 10. Verified
 
 Against the running API, on a clean store:
 
@@ -313,7 +418,23 @@ Against the running API, on a clean store:
    decline with no version        400  versionRequired
    decline with body actorId      400  validation
 
-7. The library, in a browser (both themes, no console errors)
+7. §16.4, against a real v2.0 release of the shipped standard
+   the release              a new ESG KPI, +currency on the recent-instruments grid, the coverage
+                            chart to a line chart, a new "Escalate" action
+   the client had already   removed the "sedol" column from the SAME grid, and retitled the chart
+   baseline archived        versions/securities.operations.standard-v1.0.json
+   GET /compare-standard    v1.0 → v2.0 · 3 from the product, 1 of yours, 1 conflict
+
+     [both]     columns   Both the product and this experience changed “Recently added instruments”.
+                          product: added “currency”      client: removed “sedol”
+     [product]  rules     A new action, “Escalate”.
+     [product]  added     A new kpi card, “ESG coverage”.
+     [product]  chart     “Coverage by asset class and review state” is now a line chart, was a bar.
+     [client]   layout    Renamed “Coverage by asset class and review state” to “Coverage — Acme view”.
+
+   delete the archive       409  baselineUnavailable, shown in place on the card rather than in a toast
+
+8. The library, in a browser (both themes, no console errors)
    Product standards              "Securities Operations · Standard v2.0 · release 2026.11 · 6 pages"
                                   → Use, Open your version
    Your versions                  "Securities Operations — Acme · Your v2 · draft"
@@ -331,20 +452,21 @@ would demo. To reproduce it, edit `standard.version` in
 
 ---
 
-## 10. What is not built
+## 11. What is not built
 
 | | |
 |---|---|
-| **§16.4 Compare** — P1 | The diff classified into the nine categories the PRD names. `detectDrift` in `catalog-ingest` is the precedent for the shape of the answer: it diffs a re-scan against a promoted baseline and reports what changed and what it breaks |
-| **§16.5 Sync / revert** — P1 | Sync all, keep client, revert to standard, preview before sync. Needs the comparison first |
-| **Selective synchronisation** — future | §16.5 defers it explicitly: adopt the new AI Search, keep custom columns. The design constraint it implies is that a comparison must be *per change*, not a single blob, which is why §16.4 is worth building carefully |
+| **§16.5 Sync / revert** — P1 | Sync all, keep client, revert to standard, preview before sync. The comparison it needs now exists, and every difference in it is addressable |
+| **Selective synchronisation** — future | §16.5 defers it explicitly: adopt the new AI Search, keep custom columns. Its one hard prerequisite — a per-change comparison rather than a blob — is met |
+| **Comparing a page a client ADDED** | The comparison walks pages present on both sides plus additions and removals. A page the *client* added is reported as a client-side capability, and its contents are not walked against anything, because there is nothing to walk it against |
+| **Field-level column changes** | A column is compared on its `field`. A column that kept its field and changed its format, width or conditional formatting reads as unchanged. Deliberate for now: the alternative is a row per binding property, and §16.4 asks for "new/removed columns" |
 | **§16.6 Version history as a surface** | The library card shows the two current version numbers and the declined one. The *history* — the append-only version files, `syncedFromVersion` — is all there and nothing renders it |
 | **Undoing a decline** | §16.3 does not ask for it, and a decision with no way back is still a trap. The next release re-asks, so the trap is time-limited rather than permanent; clearing `declinedVersion` is one route away |
 | **A standard per screen** | The unit of the standard here is the **experience**, because that is the unit of publication in this model and a variant that forked one page out of a journey would break the drill-downs into it. §5.1 names thirty *screens*, so aligning the two means splitting the shipped library into single-page experiences with cross-experience drill-down. Recorded in `PRD-TRACEABILITY.md` as part of the library work |
 
 ---
 
-## 11. Environment
+## 12. Environment
 
 | | |
 |---|---|

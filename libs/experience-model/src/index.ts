@@ -174,6 +174,16 @@ export {
 } from './lineage';
 
 export {
+  compareWithStandard,
+  type Comparison,
+  type ComparisonOutcome,
+  type ComparisonRefusal,
+  type Difference,
+  type DifferenceCategory,
+  type DifferenceSide,
+} from './compare';
+
+export {
   blockingElementProblems,
   checkExperienceElements,
   testsCovering,

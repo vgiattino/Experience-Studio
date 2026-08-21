@@ -1,5 +1,5 @@
 /**
- * The experience library — §5 · §16 · §26, FR-01 · FR-20 · FR-21.
+ * The experience library — §5 · §16 · §26, FR-01 · FR-20 · FR-21 · FR-22.
  *
  * ── WHY THIS IS THREE LISTS AND NOT ONE ──────────────────────────────────────
  *
@@ -28,9 +28,16 @@
  * experience — a notification the reader has to go and find the subject of is a notification that gets
  * dismissed unread.
  *
- * Two of those five actions are Compare Changes and Sync with Standard, which are §16.4 and §16.5 and
- * are not built. They are named as what is coming rather than rendered as buttons that do nothing: a
- * disabled control teaches the reader the feature is broken, and a sentence teaches them it is next.
+ * Four of the five work. The fifth, Sync with Standard, is §16.5 and is named in a sentence rather than
+ * rendered as a disabled button: a disabled control teaches the reader the feature is broken, and a
+ * sentence teaches them it is next.
+ *
+ * ── AND THE COMPARISON IS GROUPED BY SIDE, WHICH IS THE REQUIREMENT ──────────
+ *
+ * §16.4: *"The goal is to clearly show what the product changed and what the client changed."* One
+ * merged list of differences would satisfy the word "comparison" and none of that sentence. So the
+ * answer is rendered in three groups — conflicts, then the product's changes, then the reader's own —
+ * and conflicts lead because they are the only rows where a synchronisation cannot decide on its own.
  */
 
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
@@ -47,7 +54,13 @@ import {
   type StandardListing,
   type StandardUpdateNotice,
 } from '@opus/metadata-service';
-import type { ExperienceSummary } from '@opus/experience-model';
+import type {
+  Comparison,
+  Difference,
+  DifferenceCategory,
+  DifferenceSide,
+  ExperienceSummary,
+} from '@opus/experience-model';
 
 /** A client variant with §16.3's answer attached, once it has been asked for. */
 interface VariantRow {
@@ -192,7 +205,16 @@ interface VariantRow {
 
         <div class="cards">
           @for (row of variants(); track row.summary.id) {
-            <mat-card appearance="outlined" class="card">
+            <!--
+              A card holding an open comparison spans the whole row. A comparison is a list of rows,
+              not a card-sized thing: in one grid column its sentences wrap four deep and the reader
+              cannot scan the categories down the left edge, which is the whole point of the tags.
+            -->
+            <mat-card
+              appearance="outlined"
+              class="card"
+              [class.expanded]="!!comparisons()[row.summary.id]"
+            >
               <mat-card-header>
                 <mat-icon mat-card-avatar class="avatar">edit_note</mat-icon>
                 <mat-card-title>{{ row.summary.name }}</mat-card-title>
@@ -228,6 +250,15 @@ interface VariantRow {
                     <div class="notice-actions">
                       <button
                         mat-button
+                        [disabled]="comparing() === row.summary.id"
+                        (click)="toggleCompare(row)"
+                        matTooltip="Shows what the product changed and what you changed, separately"
+                      >
+                        <mat-icon>difference</mat-icon>
+                        {{ comparisons()[row.summary.id] ? 'Hide changes' : 'Compare changes' }}
+                      </button>
+                      <button
+                        mat-button
                         (click)="preview(row)"
                         matTooltip="Opens the new standard so you can see it before deciding"
                       >
@@ -243,15 +274,76 @@ interface VariantRow {
                         Review later
                       </button>
                     </div>
+
+                    @if (compareProblems()[row.summary.id]) {
+                      <p class="notice-problem">{{ compareProblems()[row.summary.id] }}</p>
+                    }
+
+                    @if (comparisons()[row.summary.id]; as comparison) {
+                      <!--
+                        §16.4's answer, and the grouping IS the requirement: "clearly show what the
+                        product changed and what the client changed". One merged list of differences
+                        would satisfy the word "comparison" and none of the sentence.
+                      -->
+                      <div class="compare">
+                        <p class="compare-head">
+                          v{{ comparison.baselineVersion }} → v{{ comparison.standardVersion }} ·
+                          {{ comparison.counts.product }} from the product,
+                          {{ comparison.counts.client }} of yours,
+                          {{ comparison.counts.conflicts }}
+                          {{ comparison.counts.conflicts === 1 ? 'conflict' : 'conflicts' }}
+                        </p>
+
+                        @if (!comparison.differences.length) {
+                          <p class="compare-none">
+                            Nothing differs. The release renumbered this standard without changing it.
+                          </p>
+                        }
+
+                        <!--
+                          Conflicts first, always. They are the only rows where a synchronisation
+                          cannot decide on its own, so they are the only rows that need a person —
+                          putting them in alphabetical order among the rest buries the decision.
+                        -->
+                        @for (group of groupsOf(comparison); track group.side) {
+                          @if (group.differences.length) {
+                            <section class="compare-group" [class]="group.side">
+                              <h4>
+                                <mat-icon inline>{{ group.icon }}</mat-icon>
+                                {{ group.heading }}
+                              </h4>
+                              <ul>
+                                @for (difference of group.differences; track difference.id) {
+                                  <li>
+                                    <span class="tag">{{ label(difference.category) }}</span>
+                                    <span class="what">
+                                      {{ difference.summary }}
+                                      @if (difference.productChange) {
+                                        <span class="halves">
+                                          <span
+                                            ><b>Product:</b> {{ difference.productChange }}</span
+                                          >
+                                          <span><b>Yours:</b> {{ difference.clientChange }}</span>
+                                        </span>
+                                      }
+                                    </span>
+                                  </li>
+                                }
+                              </ul>
+                            </section>
+                          }
+                        }
+                      </div>
+                    }
+
                     <!--
-                      Said rather than shown as two dead buttons. §16.3 lists five actions; three of
-                      them work, and a disabled control would read as broken where a sentence reads as
-                      forthcoming.
+                      One dead action left, said rather than shown as a disabled button: a disabled
+                      control reads as broken where a sentence reads as forthcoming.
                     -->
                     <p class="notice-next">
-                      Compare Changes and Sync with Standard are the next step — they need the
-                      per-change comparison §16.4 describes, so that synchronising can be selective
-                      rather than all-or-nothing.
+                      Sync with Standard is the next step. The comparison above is deliberately
+                      per-change so that synchronising can be selective — adopt the new chart, keep
+                      your columns — rather than all-or-nothing.
                     </p>
                   </div>
                 } @else if (row.notice && !row.notice.update) {
@@ -482,6 +574,10 @@ interface VariantRow {
       border-color: var(--mat-sys-primary);
     }
 
+    .card.expanded {
+      grid-column: 1 / -1;
+    }
+
     .avatar {
       display: grid;
       place-items: center;
@@ -563,6 +659,98 @@ interface VariantRow {
       opacity: 0.72;
     }
 
+    .notice-problem {
+      margin: 8px 0 0;
+      font-size: 0.78rem;
+      line-height: 1.5;
+    }
+
+    /*
+      The comparison carries its own surface rather than inheriting the notice's.
+
+      Nested in the notice it inherited a saturated container colour, which is right for four lines of
+      "an update is available" and wrong for a dozen rows of detail — in the dark theme the tags all but
+      vanished into it. The notice is an announcement; this is a document, and a document needs paper.
+    */
+    .compare {
+      margin-block-start: 10px;
+      padding: 12px 14px;
+      border-radius: 8px;
+      background: var(--mat-sys-surface);
+      color: var(--mat-sys-on-surface);
+    }
+
+    .compare-head {
+      margin: 0 0 8px;
+      font-size: 0.74rem;
+      font-weight: 600;
+      letter-spacing: 0.01em;
+      opacity: 0.8;
+    }
+
+    .compare-none {
+      margin: 0;
+      font-size: 0.78rem;
+      opacity: 0.8;
+    }
+
+    .compare-group {
+      margin-block-end: 10px;
+    }
+
+    .compare-group h4 {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin: 0 0 4px;
+      font-size: 0.74rem;
+      font-weight: 600;
+    }
+
+    .compare-group ul {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .compare-group li {
+      display: flex;
+      gap: 7px;
+      align-items: flex-start;
+      font-size: 0.76rem;
+      line-height: 1.45;
+    }
+
+    /* The category, as a fixed-width tag: §16.4's kinds scan down the left edge instead of hiding
+       inside prose, which is what makes "what kind of change was that" answerable at a glance. */
+    .compare-group .tag {
+      flex: none;
+      min-inline-size: 6.5rem;
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-size: 0.66rem;
+      font-weight: 600;
+      text-align: center;
+      background: color-mix(in srgb, currentColor 12%, transparent);
+    }
+
+    .compare-group .halves {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      margin-block-start: 3px;
+      font-size: 0.73rem;
+      opacity: 0.9;
+    }
+
+    /* A conflict is the only row a person has to decide, so it is the only one that is emphasised. */
+    .compare-group.both h4 {
+      color: var(--mat-sys-error);
+    }
+
     .prompt {
       display: flex;
       gap: 6px;
@@ -591,6 +779,10 @@ export class LibraryComponent {
   /** §16.3 answers, keyed by variant id. Fetched per variant because the route is per experience. */
   private readonly notices = signal<Readonly<Record<string, StandardUpdateNotice>>>({});
   private readonly deferred = signal<readonly string[]>([]);
+  /** §16.4 answers, per variant, fetched on demand — see `toggleCompare`. */
+  protected readonly comparisons = signal<Readonly<Record<string, Comparison>>>({});
+  protected readonly compareProblems = signal<Readonly<Record<string, string>>>({});
+  protected readonly comparing = signal<string | null>(null);
 
   /**
    * Client variants — §2's Level 2.
@@ -681,6 +873,87 @@ export class LibraryComponent {
       this.snack.open(this.reason(error, 'Could not create your version'), 'Dismiss', { duration: 6000 });
     } finally {
       this.deriving.set(null);
+    }
+  }
+
+  /**
+   * §16.4 — Compare Changes.
+   *
+   * Fetched on demand rather than with the notification: a comparison is three artifacts and a walk of
+   * every page in them, and loading one per variant on every visit to the library would pay for an
+   * answer most readers never ask for.
+   */
+  protected async toggleCompare(row: VariantRow): Promise<void> {
+    const id = row.summary.id;
+    if (this.comparisons()[id]) {
+      this.comparisons.update((all) => {
+        const { [id]: _closed, ...rest } = all;
+        return rest;
+      });
+      return;
+    }
+
+    this.comparing.set(id);
+    this.compareProblems.update((all) => ({ ...all, [id]: '' }));
+    try {
+      const comparison = await this.repository.compareWithStandard(id);
+      this.comparisons.update((all) => ({ ...all, [id]: comparison }));
+    } catch (error) {
+      /*
+        Shown in place rather than in a toast. `baselineUnavailable` is the refusal that will actually
+        happen — a store that predates version archival has no baseline — and its message names what
+        the reader can still do. A toast would take that away after four seconds.
+      */
+      this.compareProblems.update((all) => ({
+        ...all,
+        [id]: this.reason(error, 'The comparison could not be produced.'),
+      }));
+    } finally {
+      this.comparing.set(null);
+    }
+  }
+
+  /**
+   * §16.4's two halves, plus conflicts — and conflicts come first.
+   *
+   * "The goal is to clearly show what the product changed and what the client changed", so the grouping
+   * is the requirement rather than a presentation choice. Conflicts lead because they are the only rows
+   * where a synchronisation cannot decide on its own; sorting them in among the rest buries the one
+   * thing that needs a person.
+   */
+  protected groupsOf(comparison: Comparison): readonly {
+    side: DifferenceSide;
+    heading: string;
+    icon: string;
+    differences: readonly Difference[];
+  }[] {
+    const of = (side: DifferenceSide) => comparison.differences.filter((d) => d.side === side);
+    return [
+      { side: 'both', heading: 'Both changed these — you decide', icon: 'warning', differences: of('both') },
+      { side: 'product', heading: 'The product changed', icon: 'inventory_2', differences: of('product') },
+      { side: 'client', heading: 'You changed', icon: 'edit_note', differences: of('client') },
+    ];
+  }
+
+  /** §16.4's category names, in a reader's words rather than the model's slugs. */
+  protected label(category: DifferenceCategory): string {
+    switch (category) {
+      case 'capability-added':
+        return 'added';
+      case 'capability-removed':
+        return 'removed';
+      case 'layout-changed':
+        return 'layout';
+      case 'columns-changed':
+        return 'columns';
+      case 'filters-changed':
+        return 'filters';
+      case 'chart-changed':
+        return 'chart';
+      case 'navigation-changed':
+        return 'navigation';
+      case 'business-rules-changed':
+        return 'rules';
     }
   }
 

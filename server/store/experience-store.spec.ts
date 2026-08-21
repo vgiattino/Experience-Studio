@@ -296,6 +296,56 @@ describe('§16 — a standard is deployed, never saved', () => {
     expect(after?.definition.version.artifactVersion).toBe(1);
   });
 
+  it('archives the standard it replaces, because §16.4 needs the baseline', async () => {
+    /*
+      The load-bearing half of FR-22, and it was missing. `deployStandards` overwrote the standard in
+      place, so a v2.0 release destroyed the only artifact a three-way comparison can be correct
+      against: the version the client variant was derived from. Without it the platform can diff a
+      variant against v2.0 and can never say which side of the difference each half came from.
+
+      Keyed on the STANDARD version, not the artifact version, because that is the line that moved.
+    */
+    const s = await store();
+    ship('1.0');
+    s.deployStandards();
+    ship('2.0');
+    s.deployStandards();
+
+    const baseline = s.standardAtVersion('shipped-thing', '1.0');
+    expect(baseline?.standard?.version).toBe('1.0');
+    expect(baseline?.name).toBe('Shipped Thing v1.0');
+    // And the installed one moved on, so the two are genuinely different artifacts.
+    expect(s.get('shipped-thing')?.definition.standard?.version).toBe('2.0');
+  });
+
+  it('answers for the CURRENTLY installed version without needing an archive', async () => {
+    // A variant derived from the version still installed has a baseline too, and asking for it must not
+    // depend on a release having happened since.
+    const s = await store();
+    ship('1.0');
+    s.deployStandards();
+    expect(s.standardAtVersion('shipped-thing', '1.0')?.standard?.version).toBe('1.0');
+  });
+
+  it('reports a missing baseline as missing rather than substituting the current one', async () => {
+    /*
+      The refusal `compareWithStandard` turns into `baselineUnavailable`. Returning the installed
+      standard here would produce a comparison that looked complete and attributed the product's
+      changes to the client — confidently, in a screen somebody acts on.
+    */
+    const s = await store();
+    ship('2.0');
+    s.deployStandards();
+    expect(s.standardAtVersion('shipped-thing', '1.0')).toBeNull();
+  });
+
+  it('does not archive on a first install, because there is nothing being replaced', async () => {
+    const s = await store();
+    ship('1.0');
+    s.deployStandards();
+    expect(s.standardAtVersion('shipped-thing', '0.9')).toBeNull();
+  });
+
   it('refuses a save of a standard, and names the derive target', async () => {
     const s = await store();
     ship('1.0');

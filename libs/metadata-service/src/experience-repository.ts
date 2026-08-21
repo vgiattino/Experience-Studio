@@ -11,7 +11,7 @@
 
 import { Injectable, inject, signal } from '@angular/core';
 import type { ExperienceDefinition } from '@opus/experience-model';
-import type { ExperienceSummary, StoredExperience } from '@opus/experience-model';
+import type { Comparison, ExperienceSummary, StoredExperience } from '@opus/experience-model';
 
 import { apiRequest } from './api';
 import { IdentityClient } from './identity-client';
@@ -87,6 +87,19 @@ export class ExperienceRepository {
     );
     await this.refresh();
     return derived;
+  }
+
+  /**
+   * FR-22 — §16.4's comparison, through the baseline both sides descend from.
+   *
+   * Refusals come back as thrown errors carrying the server's `code`, because the four of them call for
+   * different things from the caller: `baselineUnavailable` means offer Keep My Version and say why a
+   * comparison is not possible, where `notDerived` means the caller asked about the wrong artifact.
+   */
+  async compareWithStandard(id: string): Promise<Comparison> {
+    return apiRequest<Comparison>(`/experiences/${id}/compare-standard`, {
+      persona: this.identity.personaId(),
+    });
   }
 
   /** FR-21 — §16.3's notification for one client variant. `update: null` means nothing to say. */

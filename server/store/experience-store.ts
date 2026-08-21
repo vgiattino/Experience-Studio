@@ -193,6 +193,28 @@ export function deployStandards(): { installed: string[]; upgraded: { id: string
     const from = existing?.definition.standard?.version;
     if (existing && compareStandardVersions(from, definition.standard.version) >= 0) continue;
 
+    /*
+      ARCHIVE THE STANDARD BEING REPLACED, and this is not housekeeping.
+
+      §16.4 asks a comparison to show "what the product changed and what the client changed" — which is
+      a THREE-way question. Answering it needs the client's baseline: the standard version the variant
+      was derived from. Overwriting the standard in place destroyed exactly that, so a v2.0 deployment
+      left the platform able to diff a variant against v2.0 and permanently unable to say which side of
+      the difference each half came from.
+
+      Keyed on the STANDARD version rather than the artifact version, because that is the line that
+      moved. `save`'s archive is keyed on `artifactVersion` for the same reason, and the two never
+      collide because a standard is never saved.
+    */
+    if (existing && from) {
+      ensureDirs();
+      writeFileSync(
+        join(experiencesDir(), VERSIONS, `${definition.id}.standard-v${from}.json`),
+        `${JSON.stringify(existing, null, 2)}\n`,
+        'utf8',
+      );
+    }
+
     const resolved = resolvePageRefs(definition);
     write({
       id: definition.id,
@@ -268,6 +290,24 @@ export function summarize(record: StoredExperience): ExperienceSummary {
 
 export function get(id: string): StoredExperience | null {
   return read(id);
+}
+
+/**
+ * A product standard at a *past* version — the baseline a client variant was derived from.
+ *
+ * Returns the currently-installed record when the version asked for is the one installed, so a caller
+ * asking for "the baseline" gets an answer whether or not the standard has moved since. `null` means
+ * the baseline is genuinely unavailable — a store that predates archival, or a version that was never
+ * installed here — which a comparison must report rather than paper over: a three-way comparison with
+ * a guessed baseline attributes the product's changes to the client and the client's to the product.
+ */
+export function standardAtVersion(id: string, version: string): ExperienceDefinition | null {
+  const current = read(id);
+  if (current?.definition.standard?.version === version) return current.definition;
+
+  const path = join(experiencesDir(), VERSIONS, `${id}.standard-v${version}.json`);
+  if (!existsSync(path)) return null;
+  return (JSON.parse(readFileSync(path, 'utf8')) as StoredExperience).definition;
 }
 
 export interface SaveRequest {
