@@ -27,66 +27,25 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 
-import type { ExperienceDefinition, ProvenanceOrigin } from '@opus/contracts';
-import { compareStandardVersions, refuseStandardWrite } from '@opus/experience-model';
+import type { ExperienceDefinition } from '@opus/contracts';
+import {
+  compareStandardVersions,
+  refuseStandardWrite,
+  type ExperienceSummary,
+  type StoredExperience,
+} from '@opus/experience-model';
 
 import { DATA_ROOT, PATHS, seedDir } from '../config';
 
-export interface StoredExperience {
-  id: string;
-  definition: ExperienceDefinition;
-  updatedAt: string;
-  updatedBy: string;
-  /**
-   * Every provenance the contract allows, plus `seed`.
-   *
-   * Derived from the contract rather than restated, because a restated copy is a copy that drifts —
-   * this one had already lost `import`, `migration` and `copy`, so a record saved from an imported
-   * definition carried an origin this type declared impossible. `seed` is added here and not in the
-   * contract because being seeded is a fact about the store, not about the definition.
-   */
-  origin: ProvenanceOrigin | 'seed';
-}
+/*
+  The wire shapes are IMPORTED, not declared here.
 
-export interface ExperienceSummary {
-  id: string;
-  name: string;
-  description?: string;
-  kind?: string;
-  pageCount: number;
-  artifactVersion: number;
-  lifecycleState: string;
-  origin: string;
-  updatedAt: string;
-  /**
-   * Who answers for it. Absent on a seeded artifact, and that is not an oversight — a baseline the
-   * product ships has no individual owner until somebody adopts it by saving it, at which point
-   * `ownerFor` assigns one.
-   */
-  owner?: string;
-  /**
-   * Which Opus product it belongs to — FR-12's and FR-28's product filter.
-   *
-   * Read from the definition rather than recomputed here, because the route derives it on save from the
-   * entities the experience reads and the store has no catalog to derive it from. Absent means one of
-   * three things the route distinguishes and this field cannot: nothing claims what it reads, it spans
-   * two products, or it was saved before any catalog was promoted.
-   */
-  product?: string;
-  /**
-   * §16 lineage, flattened for a list row.
-   *
-   * `standard` is set on a product-owned artifact and carries its product version; `derivedFromStandard`
-   * and `basedOnVersion` are set on a client variant. A row can be neither — an experience somebody
-   * created from scratch is not part of the standard lifecycle at all, and that is a third state rather
-   * than a missing value.
-   */
-  standard?: { standardId: string; version: string; productRelease?: string };
-  derivedFromStandard?: string;
-  basedOnVersion?: string;
-  prompt?: string;
-  tags: readonly string[];
-}
+  They used to be declared here as well, and the two copies drifted exactly as `store-types.ts` warned
+  they would: `owner`, `product` and all three §16 lineage fields were on the wire and invisible to
+  every client, because a server returning a supertype is always assignable and TypeScript had nothing
+  to complain about. Re-exported so every existing importer of this module still resolves them.
+*/
+export type { ExperienceSummary, StoredExperience } from '@opus/experience-model';
 
 const VERSIONS = 'versions';
 
@@ -296,7 +255,11 @@ export function summarize(record: StoredExperience): ExperienceSummary {
         }
       : {}),
     ...(d.derivedFrom
-      ? { derivedFromStandard: d.derivedFrom.standardId, basedOnVersion: d.derivedFrom.standardVersion }
+      ? {
+          derivedFromStandard: d.derivedFrom.standardId,
+          basedOnVersion: d.derivedFrom.standardVersion,
+          ...(d.derivedFrom.declinedVersion ? { acknowledgedVersion: d.derivedFrom.declinedVersion } : {}),
+        }
       : {}),
     prompt: d.version?.provenance?.generation?.prompt,
     tags: d.tags ?? [],
@@ -491,6 +454,67 @@ export function saveTransition(request: {
     artifactVersion: request.version?.artifactVersion,
     actorId: request.actorId,
     owner: record.definition.owner?.userId,
+  });
+  return record;
+}
+
+/**
+ * Persist a change to the §16 lineage — the standing relationship, not the experience.
+ *
+ * ── WHY THIS IS NOT `save`, AND THE BUG THAT PROVED IT ──────────────────────────────────
+ *
+ * The same three reasons `saveTransition` gives, and the first one is not theoretical here. §16.3's
+ * notification says *"Your current experience contains customizations"*, and `customised` is
+ * `artifactVersion > 1` — the fork is version 1, so anything above it is a save somebody made.
+ *
+ * Recording **Keep My Version** through `save` bumped that counter. So declining an update on an
+ * untouched variant took it to version 2, and the *next* notification then told its owner their
+ * experience contained customizations they had never made — a lie produced by the act of reading the
+ * previous notification. Verified against a live API before this function existed.
+ *
+ * The general rule the bug illustrates: a write that records a decision **about** an experience must
+ * not move the version line **of** that experience. Archiving is skipped for the same reason it is in
+ * `saveTransition` — the version number does not move, so two lineage writes would produce two files
+ * with one name.
+ */
+export function saveLineage(request: {
+  id: string;
+  derivedFrom: NonNullable<ExperienceDefinition['derivedFrom']>;
+  actorId: string;
+  event: string;
+}): StoredExperience {
+  const previous = read(request.id);
+  if (!previous) {
+    throw Object.assign(new Error(`No experience "${request.id}"`), { status: 404 });
+  }
+
+  // A standard has no `derivedFrom` to write, so this is unreachable through the decline route — kept
+  // for the reason `saveTransition` keeps it: every path that writes an artifact checks.
+  const standardWrite = refuseStandardWrite(previous.definition);
+  if (standardWrite) {
+    throw Object.assign(new Error(standardWrite.detail), {
+      status: 409,
+      code: standardWrite.code,
+      deriveTo: standardWrite.deriveTo,
+    });
+  }
+
+  const record: StoredExperience = {
+    ...previous,
+    definition: { ...previous.definition, derivedFrom: request.derivedFrom },
+    updatedAt: new Date().toISOString(),
+    updatedBy: request.actorId,
+  };
+  write(record);
+  audit({
+    event: request.event,
+    id: record.id,
+    standardId: request.derivedFrom.standardId,
+    basedOnVersion: request.derivedFrom.standardVersion,
+    declinedVersion: request.derivedFrom.declinedVersion,
+    // Logged so the trail shows the version line did NOT move, which is the property under test.
+    artifactVersion: record.definition.version?.artifactVersion,
+    actorId: request.actorId,
   });
   return record;
 }

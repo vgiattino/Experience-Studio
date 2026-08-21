@@ -94,7 +94,13 @@
           "description": "The baseline this experience held immediately before the last synchronisation. With `standardVersion` it gives the step that was taken, which is what a reviewer asks about a sync.",
           "$ref": "common.schema.json#/$defs/majorMinor"
         },
-        "syncedBy": { "type": "string", "maxLength": 256 }
+        "syncedBy": { "type": "string", "maxLength": 256 },
+        "declinedVersion": {
+          "description": "The standard version that was offered and turned down — §16.3's \"Keep My Version\".\n\nDeliberately NOT written into `standardVersion`. Advancing the baseline would silence the notification in one line and would be untrue: the experience is still derived from what it was derived from, and §16.4's comparison needs that baseline to say what changed. Recorded beside it, so the artifact answers both \"what am I based on\" and \"what have I already said no to\".\n\nAbsent means never asked. The notification returns as soon as the product ships something newer than this, so a decline is a decision about a version rather than a permanent opt-out — which is also what separates it from \"Review Later\", where nothing is recorded at all.",
+          "$ref": "common.schema.json#/$defs/majorMinor"
+        },
+        "declinedAt": { "type": "string", "format": "date-time" },
+        "declinedBy": { "type": "string", "maxLength": 256 }
       },
       "required": ["standardId", "standardVersion", "derivedAt", "derivedBy"],
       "additionalProperties": false

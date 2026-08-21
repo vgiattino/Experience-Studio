@@ -31,6 +31,7 @@ import {
 import { executeBatch, servedEntities } from './services/gateway';
 import {
   applyTransition,
+  declineUpdate,
   derivedIdFor,
   deriveClientExperience,
   describeUpdate,
@@ -434,6 +435,60 @@ api.get('/experiences/:id/standard-update', (req, res) => {
       : shipped.name.default
     : update.standardId;
   res.json({ update, message: describeUpdate(update, name) });
+});
+
+/**
+ * FR-21 — §16.3's **Keep My Version**.
+ *
+ * A POST rather than a PATCH on the experience, because the decision is not a property of the
+ * experience the way its name is: it is an act with an actor and a time, and the body carries the one
+ * thing the server must not infer — *which* version was on offer when the person decided. Inferring it
+ * from the shipped standard would record a decline of whatever happens to be current at the moment the
+ * request lands, which is not necessarily what was on the screen.
+ *
+ * Written through `saveLineage` rather than `save`, and that is not a detail. `save` increments
+ * `artifactVersion`, which is what `customised` counts — so recording a decline through it made the
+ * *next* notification claim customizations the owner had never made. A write that records a decision
+ * about an experience must not move the version line of that experience.
+ *
+ * §16.3's "Review Later" has no route at all: it records nothing, which is the difference between it
+ * and this.
+ */
+api.post('/experiences/:id/decline-update', (req, res) => {
+  const record = store.get(req.params.id);
+  if (!record) return problem(res, 404, 'semantic', `No experience "${req.params.id}"`, 'notFound');
+
+  const actorId = actorFor(req, res);
+  if (!actorId) return;
+
+  const version = (req.body as { version?: unknown } | undefined)?.version;
+  if (typeof version !== 'string' || !version.trim()) {
+    return problem(
+      res,
+      400,
+      'validation',
+      'A "version" is required — the standard version that was offered and is being declined.',
+      'versionRequired',
+    );
+  }
+
+  const outcome = declineUpdate(record.definition, version.trim(), actorId, new Date().toISOString());
+  if (!outcome.ok) {
+    return problem(res, 409, 'semantic', outcome.detail, outcome.code);
+  }
+
+  try {
+    res.json(
+      store.saveLineage({
+        id: record.id,
+        derivedFrom: outcome.definition.derivedFrom!,
+        actorId,
+        event: 'declineStandardUpdate',
+      }),
+    );
+  } catch (error) {
+    return refuseSave(res, error);
+  }
 });
 
 // ── lifecycle transitions ───────────────────────────────────────────────────

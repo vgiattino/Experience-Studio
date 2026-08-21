@@ -281,6 +281,21 @@ export interface StandardLineage {
   syncedAt?: string;
   syncedFromVersion?: string;
   syncedBy?: string;
+  /**
+   * §16.3's "Keep My Version" — the standard version whose update was offered and declined.
+   *
+   * A separate field from `standardVersion`, and the distinction is the whole point: declining an
+   * update must not pretend the variant is now based on it. `standardVersion` says what this was
+   * derived from; this says what was offered and turned down. Writing the decision into
+   * `standardVersion` would silence the notification *and* lose the baseline a future comparison needs.
+   *
+   * Absent means never asked. Equal to the shipped version means asked and declined, and the
+   * notification stays quiet until the product releases something newer than what was declined — which
+   * is what makes "Keep My Version" different from "Review Later", where nothing is recorded at all.
+   */
+  declinedVersion?: string;
+  declinedAt?: string;
+  declinedBy?: string;
 }
 
 /**

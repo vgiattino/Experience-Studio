@@ -158,6 +158,7 @@ export {
 
 export {
   compareStandardVersions,
+  declineUpdate,
   deriveClientExperience,
   derivedIdFor,
   describeUpdate,
@@ -165,6 +166,7 @@ export {
   isStandard,
   refuseStandardWrite,
   updateAvailableFor,
+  type DeclineOutcome,
   type DeriveOutcome,
   type DeriveRequest,
   type StandardUpdate,

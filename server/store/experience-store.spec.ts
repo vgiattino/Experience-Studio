@@ -376,3 +376,118 @@ describe('§16 — a standard is deployed, never saved', () => {
     ).not.toThrow();
   });
 });
+
+describe('§16.3 — recording a decision must not author the experience', () => {
+  /*
+    The defect this exists to prevent, found against a live API rather than here.
+
+    §16.3's notification says "Your current experience contains customizations", and `customised` is
+    `artifactVersion > 1` — the fork is version 1, so anything above it is a save somebody made.
+    Recording **Keep My Version** through `save()` bumped that counter, so declining an update on an
+    untouched variant took it to version 2 and the NEXT notification told its owner about
+    customizations they had never made. Reading one notification made the following one untrue.
+  */
+  const lineage = {
+    standardId: 'shipped-thing',
+    standardVersion: '1.0',
+    derivedAt: '2026-08-19T12:00:00.000Z',
+    derivedBy: 'ana@demo-tenant',
+  };
+
+  async function variant(): Promise<typeof import('./experience-store')> {
+    const s = await store();
+    s.save({
+      definition: definition({
+        id: 'shipped-thing.client',
+        name: 'Shipped Thing — Acme',
+        derivedFrom: lineage,
+      } as Partial<ExperienceDefinition>),
+      actorId: 'ana@demo-tenant',
+    });
+    return s;
+  }
+
+  it('leaves the client version line exactly where it was', async () => {
+    const s = await variant();
+    expect(s.get('shipped-thing.client')?.definition.version.artifactVersion).toBe(1);
+
+    s.saveLineage({
+      id: 'shipped-thing.client',
+      derivedFrom: { ...lineage, declinedVersion: '2.0', declinedBy: 'ana@demo-tenant', declinedAt: 'now' },
+      actorId: 'ana@demo-tenant',
+      event: 'declineStandardUpdate',
+    });
+
+    // The property the bug violated. Anything other than 1 here and §16.3 starts lying.
+    expect(s.get('shipped-thing.client')?.definition.version.artifactVersion).toBe(1);
+    expect(s.get('shipped-thing.client')?.definition.derivedFrom?.declinedVersion).toBe('2.0');
+  });
+
+  it('does not touch anything else about the experience', async () => {
+    // A lineage write is not a definition write: it replaces `derivedFrom` and nothing more.
+    const s = await variant();
+    const before = s.get('shipped-thing.client')!.definition;
+
+    s.saveLineage({
+      id: 'shipped-thing.client',
+      derivedFrom: { ...lineage, declinedVersion: '2.0' },
+      actorId: 'someone-else@demo-tenant',
+      event: 'declineStandardUpdate',
+    });
+
+    const after = s.get('shipped-thing.client')!.definition;
+    expect(after.name).toBe(before.name);
+    expect(after.pages).toEqual(before.pages);
+    // Ownership survives: recording a decision is not adopting the artifact.
+    expect(after.owner?.userId).toBe('ana@demo-tenant');
+  });
+
+  it('keeps the baseline, because §16.4 needs it to say what changed', async () => {
+    /*
+      The one-line implementation of "stop telling me" is to write the declined version into
+      `standardVersion`. `lineage.spec.ts` proves the pure function does not; this proves the stored
+      artifact does not either.
+    */
+    const s = await variant();
+    s.saveLineage({
+      id: 'shipped-thing.client',
+      derivedFrom: { ...lineage, declinedVersion: '2.0' },
+      actorId: 'ana@demo-tenant',
+      event: 'declineStandardUpdate',
+    });
+    expect(s.get('shipped-thing.client')?.definition.derivedFrom?.standardVersion).toBe('1.0');
+  });
+
+  it('records who and what in the audit log, including that the version did not move', async () => {
+    const s = await variant();
+    s.saveLineage({
+      id: 'shipped-thing.client',
+      derivedFrom: { ...lineage, declinedVersion: '2.0' },
+      actorId: 'ana@demo-tenant',
+      event: 'declineStandardUpdate',
+    });
+    const log = readFileSync(join(directory, 'audit.log.jsonl'), 'utf8')
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line) as Record<string, unknown>);
+    const entry = log.find((e) => e['event'] === 'declineStandardUpdate');
+    expect(entry).toMatchObject({
+      id: 'shipped-thing.client',
+      declinedVersion: '2.0',
+      artifactVersion: 1,
+      actorId: 'ana@demo-tenant',
+    });
+  });
+
+  it('refuses on an id that does not exist', async () => {
+    const s = await variant();
+    expect(() =>
+      s.saveLineage({
+        id: 'no-such-thing',
+        derivedFrom: lineage,
+        actorId: 'ana@demo-tenant',
+        event: 'declineStandardUpdate',
+      }),
+    ).toThrow(/No experience/);
+  });
+});

@@ -16,7 +16,11 @@
  */
 
 export { API_BASE, ApiError, apiRequest } from './api';
-export { ExperienceRepository } from './experience-repository';
+export {
+  ExperienceRepository,
+  type StandardListing,
+  type StandardUpdateNotice,
+} from './experience-repository';
 export { CatalogClient } from './catalog-client';
 export { IdentityClient, type PersonaSummary } from './identity-client';
 export { HttpGatewayTransport, createHttpGatewayTransport } from './gateway-transport';

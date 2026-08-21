@@ -17,6 +17,7 @@ import type { ExperienceDefinition } from '@opus/contracts';
 
 import {
   compareStandardVersions,
+  declineUpdate,
   deriveClientExperience,
   derivedIdFor,
   describeUpdate,
@@ -290,6 +291,89 @@ describe('detecting an available standard update', () => {
     // A renamed artifact is still the same standard — which is why standardId exists separately.
     const renamed = { ...standard('2.0'), id: 'renamed-in-a-later-release' } as ExperienceDefinition;
     expect(updateAvailableFor(clientOn('1.0'), [renamed])?.availableVersion).toBe('2.0');
+  });
+});
+
+// ── §16.3: Keep My Version ──────────────────────────────────────────────────
+
+describe('declining an update — §16.3’s Keep My Version', () => {
+  function clientOn(version: string, artifactVersion = 1): ExperienceDefinition {
+    const derived = deriveClientExperience({ standard: standard(version), actorId: 'ana' }, NOW);
+    if (!derived.ok) throw new Error(derived.detail);
+    return {
+      ...derived.definition,
+      version: { ...derived.definition.version, artifactVersion },
+    } as ExperienceDefinition;
+  }
+
+  it('silences the notification for the version that was declined', () => {
+    const client = clientOn('1.0');
+    expect(updateAvailableFor(client, [standard('2.0')])).not.toBeNull();
+
+    const declined = declineUpdate(client, '2.0', 'ana', NOW);
+    expect(declined.ok).toBe(true);
+    if (!declined.ok) return;
+    expect(updateAvailableFor(declined.definition, [standard('2.0')])).toBeNull();
+  });
+
+  it('does NOT move the baseline, because the comparison needs it', () => {
+    /*
+      The one-line implementation of "stop telling me" is to write 2.0 into standardVersion. It
+      silences the notification and loses what the variant is actually derived from, so §16.4 could
+      then only diff against the version the client declined — the opposite of what it needs.
+    */
+    const declined = declineUpdate(clientOn('1.0'), '2.0', 'ana', NOW);
+    if (!declined.ok) throw new Error(declined.detail);
+    expect(declined.definition.derivedFrom?.standardVersion).toBe('1.0');
+    expect(declined.definition.derivedFrom?.declinedVersion).toBe('2.0');
+  });
+
+  it('speaks again when the product ships something newer than what was declined', () => {
+    // A decline is a decision about a version, not a permanent opt-out. A client who never hears about
+    // a standard again is a client §29's lifecycle has stopped applying to.
+    const declined = declineUpdate(clientOn('1.0'), '2.0', 'ana', NOW);
+    if (!declined.ok) throw new Error(declined.detail);
+    expect(updateAvailableFor(declined.definition, [standard('3.0')])?.availableVersion).toBe('3.0');
+  });
+
+  it('stays quiet for a version below the one declined', () => {
+    // Which happens on a rollback: 1.5 arriving after 2.0 was declined is not news.
+    const declined = declineUpdate(clientOn('1.0'), '2.0', 'ana', NOW);
+    if (!declined.ok) throw new Error(declined.detail);
+    expect(updateAvailableFor(declined.definition, [standard('1.5')])).toBeNull();
+  });
+
+  it('records who declined and when, because it is a decision rather than a setting', () => {
+    const declined = declineUpdate(clientOn('1.0'), '2.0', 'ana', NOW);
+    if (!declined.ok) throw new Error(declined.detail);
+    expect(declined.definition.derivedFrom).toMatchObject({ declinedBy: 'ana', declinedAt: NOW });
+  });
+
+  it('refuses to decline something that is not an update', () => {
+    /*
+      Not a no-op to wave through: it means the caller and the server disagree about what was on offer,
+      and recording it would set declinedVersion low enough to silence nothing while looking as though
+      a decision had been made.
+    */
+    const outcome = declineUpdate(clientOn('2.0'), '1.0', 'ana', NOW);
+    expect(outcome.ok).toBe(false);
+    if (outcome.ok) return;
+    expect(outcome.code).toBe('notAnUpdate');
+    expect(outcome.detail).toContain('not newer');
+  });
+
+  it('refuses on an experience that derives from no standard', () => {
+    const outcome = declineUpdate(experience(), '2.0', 'ana', NOW);
+    expect(outcome.ok).toBe(false);
+    if (outcome.ok) return;
+    expect(outcome.code).toBe('notDerived');
+  });
+
+  it('leaves the input untouched', () => {
+    const client = clientOn('1.0');
+    const before = JSON.stringify(client);
+    declineUpdate(client, '2.0', 'ana', NOW);
+    expect(JSON.stringify(client)).toBe(before);
   });
 });
 

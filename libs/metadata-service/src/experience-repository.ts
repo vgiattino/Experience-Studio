@@ -60,4 +60,83 @@ export class ExperienceRepository {
     await apiRequest<void>(`/experiences/${id}`, { method: 'DELETE', persona: this.identity.personaId() });
     await this.refresh();
   }
+
+  // ── §16: the standard lifecycle ───────────────────────────────────────────
+
+  /**
+   * Every product standard installed in this tenant — §5's library, as the store holds it.
+   *
+   * Read from the store rather than from the definitions directory, and the server's comment on that
+   * route says why: the store is the authority on which version is *installed*, and reading the files
+   * would answer what the release *contains*, which is a different question.
+   */
+  async standards(): Promise<readonly StandardListing[]> {
+    return apiRequest<StandardListing[]>('/standards', { persona: this.identity.personaId() });
+  }
+
+  /**
+   * FR-20 — fork a standard into a client variant. §2's Level 1 → Level 2 step.
+   *
+   * Idempotent server-side: asking twice returns the existing variant rather than making a second one,
+   * because §16 speaks of "your current experience" in the singular.
+   */
+  async derive(standardExperienceId: string): Promise<StoredExperience & { derived?: boolean }> {
+    const derived = await apiRequest<StoredExperience & { derived?: boolean }>(
+      `/experiences/${standardExperienceId}/derive`,
+      { method: 'POST', persona: this.identity.personaId(), body: {} },
+    );
+    await this.refresh();
+    return derived;
+  }
+
+  /** FR-21 — §16.3's notification for one client variant. `update: null` means nothing to say. */
+  async standardUpdate(id: string): Promise<StandardUpdateNotice> {
+    return apiRequest<StandardUpdateNotice>(`/experiences/${id}/standard-update`, {
+      persona: this.identity.personaId(),
+    });
+  }
+
+  /**
+   * §16.3's **Keep My Version**.
+   *
+   * The version is sent rather than inferred, because the server must record what was *on offer when
+   * the person decided* — inferring it would record a decline of whatever happens to be current when
+   * the request lands. §16.3's "Review Later" has no method here: it records nothing, and that is the
+   * difference between the two buttons.
+   */
+  async declineUpdate(id: string, version: string): Promise<StoredExperience> {
+    const saved = await apiRequest<StoredExperience>(`/experiences/${id}/decline-update`, {
+      method: 'POST',
+      persona: this.identity.personaId(),
+      body: { version },
+    });
+    await this.refresh();
+    return saved;
+  }
+}
+
+/** One row of `GET /standards`. */
+export interface StandardListing {
+  id: string;
+  name: string;
+  standardId: string;
+  version: string;
+  productRelease?: string;
+  releaseNotes?: string;
+  pageCount: number;
+  /** The client variant of this standard, when this tenant has already forked it. */
+  derivedId: string | null;
+}
+
+export interface StandardUpdateNotice {
+  update: {
+    standardId: string;
+    currentVersion: string;
+    availableVersion: string;
+    availableRelease?: string;
+    releaseNotes?: string;
+    customised: boolean;
+  } | null;
+  /** §16.3's sentence, generated on the server because the wording is a requirement. */
+  message?: string;
 }

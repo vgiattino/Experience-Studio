@@ -236,6 +236,21 @@ export function updateAvailableFor(
 
   if (compareStandardVersions(lineage.standardVersion, shipped.standard.version) >= 0) return null;
 
+  /*
+    Already offered and declined — §16.3's "Keep My Version".
+
+    Compared with `>=` rather than `===` so that declining v2.0 also silences a v1.5 that arrives late
+    out of a rollback, and so that the notification comes back the moment v3.0 ships. A decline is a
+    decision about a version, not a permanent opt-out: a client who never hears about a standard again
+    is a client the lifecycle in §29 has stopped applying to.
+  */
+  if (
+    lineage.declinedVersion &&
+    compareStandardVersions(lineage.declinedVersion, shipped.standard.version) >= 0
+  ) {
+    return null;
+  }
+
   return {
     standardId: lineage.standardId,
     currentVersion: lineage.standardVersion,
@@ -253,6 +268,63 @@ export function updateAvailableFor(
  * and a requirement that lives in a template is a requirement that gets reworded by whoever is
  * adjusting the spacing.
  */
+export type DeclineOutcome =
+  | { ok: true; definition: ExperienceDefinition }
+  | { ok: false; code: string; detail: string };
+
+/**
+ * §16.3's **Keep My Version** — record that an update was offered and turned down.
+ *
+ * The one thing this deliberately does not touch is `standardVersion`. Silencing the notification by
+ * advancing the baseline would be the obvious one-line implementation and it would be a lie: the
+ * variant is still derived from what it was derived from, and §16.4's comparison needs that baseline to
+ * say what changed. So the decline is recorded beside it, and the two together answer both questions —
+ * "what am I based on" and "what have I already said no to".
+ *
+ * `Review Later` has no function here on purpose. It records nothing, so the notification returns next
+ * time, which is exactly what a reader of §16.3's list would expect the difference to be.
+ */
+export function declineUpdate(
+  client: ExperienceDefinition,
+  version: string,
+  actorId: string,
+  now: string,
+): DeclineOutcome {
+  const lineage = client.derivedFrom;
+  if (!lineage) {
+    return {
+      ok: false,
+      code: 'notDerived',
+      detail: `“${client.id}” is not derived from a product standard, so there is no standard update to decline.`,
+    };
+  }
+  if (compareStandardVersions(version, lineage.standardVersion) <= 0) {
+    /*
+      Declining something at or below the current baseline is not a no-op to accept quietly — it means
+      the caller and the server disagree about which version is on offer, and recording it would set
+      `declinedVersion` low enough to silence nothing while looking as though a decision was made.
+    */
+    return {
+      ok: false,
+      code: 'notAnUpdate',
+      detail: `v${version} is not newer than the v${lineage.standardVersion} this experience is based on.`,
+    };
+  }
+
+  return {
+    ok: true,
+    definition: {
+      ...client,
+      derivedFrom: {
+        ...lineage,
+        declinedVersion: version,
+        declinedAt: now,
+        declinedBy: actorId,
+      },
+    } as ExperienceDefinition,
+  };
+}
+
 export function describeUpdate(update: StandardUpdate, experienceName: string): string {
   const base = `A new version of ${experienceName} is available (v${update.availableVersion}, up from v${update.currentVersion}).`;
   return update.customised
