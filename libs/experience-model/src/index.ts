@@ -181,7 +181,16 @@ export {
   type Difference,
   type DifferenceCategory,
   type DifferenceSide,
+  type DifferenceTarget,
 } from './compare';
+
+export {
+  revertToStandard,
+  synchronise,
+  type SyncOutcome,
+  type SyncRefusal,
+  type SyncResult,
+} from './synchronise';
 
 export {
   blockingElementProblems,

@@ -1,5 +1,5 @@
 /**
- * The experience library — §5 · §16 · §26, FR-01 · FR-20 · FR-21 · FR-22.
+ * The experience library — §5 · §16 · §26, FR-01 · FR-20 · FR-21 · FR-22 · FR-23.
  *
  * ── WHY THIS IS THREE LISTS AND NOT ONE ──────────────────────────────────────
  *
@@ -28,9 +28,9 @@
  * experience — a notification the reader has to go and find the subject of is a notification that gets
  * dismissed unread.
  *
- * Four of the five work. The fifth, Sync with Standard, is §16.5 and is named in a sentence rather than
- * rendered as a disabled button: a disabled control teaches the reader the feature is broken, and a
- * sentence teaches them it is next.
+ * All five work. Sync with Standard and Revert to Standard each go through a **mandatory preview** —
+ * §16.5 lists "Preview before sync" as one of its four minimum actions, and a separate optional button
+ * for it would mean the common path skips the one step that makes the others safe.
  *
  * ── AND THE COMPARISON IS GROUPED BY SIDE, WHICH IS THE REQUIREMENT ──────────
  *
@@ -53,6 +53,7 @@ import {
   ExperienceRepository,
   type StandardListing,
   type StandardUpdateNotice,
+  type SyncReport,
 } from '@opus/metadata-service';
 import type {
   Comparison,
@@ -206,14 +207,15 @@ interface VariantRow {
         <div class="cards">
           @for (row of variants(); track row.summary.id) {
             <!--
-              A card holding an open comparison spans the whole row. A comparison is a list of rows,
-              not a card-sized thing: in one grid column its sentences wrap four deep and the reader
-              cannot scan the categories down the left edge, which is the whole point of the tags.
+              A card holding an open comparison or a merge report spans the whole row. Both are lists of
+              rows rather than card-sized things: in one grid column the sentences wrap four deep, the
+              reader cannot scan the categories down the left edge, and six notice actions stack into a
+              column of single buttons.
             -->
             <mat-card
               appearance="outlined"
               class="card"
-              [class.expanded]="!!comparisons()[row.summary.id]"
+              [class.expanded]="!!comparisons()[row.summary.id] || !!reports()[row.summary.id]"
             >
               <mat-card-header>
                 <mat-icon mat-card-avatar class="avatar">edit_note</mat-icon>
@@ -337,13 +339,42 @@ interface VariantRow {
                     }
 
                     <!--
-                      One dead action left, said rather than shown as a disabled button: a disabled
-                      control reads as broken where a sentence reads as forthcoming.
+                      §16.5's Sync and Revert, each behind a mandatory preview.
+
+                      "Preview before sync" is one of §16.5's four minimum actions, and making it a
+                      separate optional button would mean the common path skips it. So the first press
+                      previews and the second commits — the same shape the refinement panel uses, for the
+                      same reason: an author who cannot predict what a button will do stops pressing it.
+                    -->
+                    <div class="notice-actions">
+                      <button
+                        mat-button
+                        [disabled]="syncing() === row.summary.id"
+                        (click)="previewSync(row, 'sync')"
+                      >
+                        <mat-icon>sync</mat-icon>
+                        Sync with standard
+                      </button>
+                      <button
+                        mat-button
+                        class="danger"
+                        [disabled]="syncing() === row.summary.id"
+                        (click)="previewSync(row, 'revert')"
+                      >
+                        <mat-icon>restart_alt</mat-icon>
+                        Revert to standard
+                      </button>
+                    </div>
+
+                    <!--
+                      Selective synchronisation is §16.5's deferred half. The engine takes an adopt-set,
+                      so it is a filter over the list above rather than new machinery — said here because
+                      a reader looking at a per-change comparison will reasonably ask why they cannot pick.
                     -->
                     <p class="notice-next">
-                      Sync with Standard is the next step. The comparison above is deliberately
-                      per-change so that synchronising can be selective — adopt the new chart, keep
-                      your columns — rather than all-or-nothing.
+                      Choosing individual changes — adopt the new chart, keep your columns — is a later
+                      phase. The comparison above is per-change so that it stays a matter of picking from
+                      this list rather than a rebuild.
                     </p>
                   </div>
                 } @else if (row.notice && !row.notice.update) {
@@ -367,6 +398,84 @@ interface VariantRow {
                     </p>
                   }
                 }
+
+                <!--
+                  The merge report sits OUTSIDE the update notice, and that is a fix rather than a
+                  layout choice. Inside it, applying a sync removed the very update the notice was
+                  about — so the notice unmounted and took the confirmation with it. The reader pressed
+                  Apply and everything vanished: no record of what was adopted, what was kept, or what
+                  was lost. A report about an act must outlive the thing that prompted it.
+                -->
+                @if (reports()[row.summary.id]; as report) {
+                  <div class="merge" [class.destructive]="pendingKind()[row.summary.id] === 'revert'">
+                    <p class="merge-head">
+                      @if (pendingKind()[row.summary.id] === 'revert') {
+                        Reverting to the product standard v{{ report.to }}
+                      } @else {
+                        Synchronising v{{ report.from }} → v{{ report.to }}
+                      }
+                      @if (report.preview) {
+                        — nothing has been written yet
+                      }
+                    </p>
+
+                    @if (report.applied.length) {
+                      <p class="merge-line">
+                        <b>Adopting {{ report.applied.length }}:</b>
+                        {{ subjectsOf(report.applied) }}
+                      </p>
+                    }
+                    @if (report.keptCustomisations.length) {
+                      <p class="merge-line keep">
+                        <b>Keeping your {{ report.keptCustomisations.length }}:</b>
+                        {{ subjectsOf(report.keptCustomisations) }}
+                      </p>
+                    }
+                    <!--
+                      The cost, always stated. §16.5 offers no third option for a conflict, so a
+                      report that said "done" would leave the reader to discover the loss.
+                    -->
+                    @if (report.supersededCustomisations.length) {
+                      <p class="merge-line lose">
+                        <b>Losing your {{ report.supersededCustomisations.length }}:</b>
+                        {{ subjectsOf(report.supersededCustomisations) }}
+                      </p>
+                    }
+                    @if (report.skipped.length) {
+                      <p class="merge-line lose">
+                        <b>Could not apply {{ report.skipped.length }}:</b>
+                        {{ reasonsOf(report.skipped) }}
+                      </p>
+                    }
+                    @if (report.note) {
+                      <p class="merge-line lose">{{ report.note }}</p>
+                    }
+
+                    @if (report.preview) {
+                      <div class="notice-actions">
+                        <button
+                          mat-flat-button
+                          [disabled]="syncing() === row.summary.id"
+                          (click)="commitSync(row)"
+                        >
+                          {{
+                            pendingKind()[row.summary.id] === 'revert'
+                              ? 'Revert now'
+                              : 'Apply this sync'
+                          }}
+                        </button>
+                        <button mat-button (click)="cancelSync(row)">Cancel</button>
+                      </div>
+                    } @else {
+                      <p class="merge-line done">Done. The previous version is kept in the store’s history.</p>
+                    }
+                  </div>
+                }
+
+                @if (syncProblems()[row.summary.id]) {
+                  <p class="notice-problem">{{ syncProblems()[row.summary.id] }}</p>
+                }
+
               </mat-card-content>
 
               <mat-card-actions align="end">
@@ -751,6 +860,51 @@ interface VariantRow {
       color: var(--mat-sys-error);
     }
 
+    /* The merge report gets its own surface for the same reason the comparison does: it is a document
+       inside an announcement, and it has to be read carefully before a button is pressed. */
+    .merge {
+      margin-block-start: 10px;
+      padding: 12px 14px;
+      border-radius: 8px;
+      background: var(--mat-sys-surface);
+      color: var(--mat-sys-on-surface);
+      border: 1px solid var(--mat-sys-outline-variant);
+    }
+
+    /* A destructive action looks destructive before it is pressed, not after. */
+    .merge.destructive {
+      border-color: var(--mat-sys-error);
+    }
+
+    .merge-head {
+      margin: 0 0 8px;
+      font-size: 0.78rem;
+      font-weight: 600;
+    }
+
+    .merge-line {
+      margin: 0 0 4px;
+      font-size: 0.76rem;
+      line-height: 1.5;
+    }
+
+    .merge-line.keep {
+      color: var(--mat-sys-primary);
+    }
+
+    .merge-line.lose {
+      color: var(--mat-sys-error);
+    }
+
+    .merge-line.done {
+      margin-block-start: 8px;
+      font-weight: 600;
+    }
+
+    .notice-actions button.danger {
+      color: var(--mat-sys-error);
+    }
+
     .prompt {
       display: flex;
       gap: 6px;
@@ -783,6 +937,11 @@ export class LibraryComponent {
   protected readonly comparisons = signal<Readonly<Record<string, Comparison>>>({});
   protected readonly compareProblems = signal<Readonly<Record<string, string>>>({});
   protected readonly comparing = signal<string | null>(null);
+  /** §16.5 sync/revert reports, per variant, and which act each was a preview of. */
+  protected readonly reports = signal<Readonly<Record<string, SyncReport>>>({});
+  protected readonly pendingKind = signal<Readonly<Record<string, 'sync' | 'revert'>>>({});
+  protected readonly syncProblems = signal<Readonly<Record<string, string>>>({});
+  protected readonly syncing = signal<string | null>(null);
 
   /**
    * Client variants — §2's Level 2.
@@ -955,6 +1114,86 @@ export class LibraryComponent {
       case 'business-rules-changed':
         return 'rules';
     }
+  }
+
+  /**
+   * §16.5 — Preview before sync, for either action.
+   *
+   * The kind is remembered because the commit has to be the *same* act the reader read about: previewing
+   * a revert and then committing a sync would be the worst possible confusion in this whole feature.
+   */
+  protected async previewSync(row: VariantRow, kind: 'sync' | 'revert'): Promise<void> {
+    const id = row.summary.id;
+    this.syncing.set(id);
+    this.syncProblems.update((all) => ({ ...all, [id]: '' }));
+    this.pendingKind.update((all) => ({ ...all, [id]: kind }));
+    try {
+      const report =
+        kind === 'revert'
+          ? await this.repository.revertToStandard(id, { preview: true })
+          : await this.repository.syncWithStandard(id, { preview: true });
+      this.reports.update((all) => ({ ...all, [id]: report }));
+    } catch (error) {
+      this.reports.update((all) => {
+        const { [id]: _cleared, ...rest } = all;
+        return rest;
+      });
+      this.syncProblems.update((all) => ({ ...all, [id]: this.reason(error, 'That could not be previewed.') }));
+    } finally {
+      this.syncing.set(null);
+    }
+  }
+
+  /** §16.5 — commit the act that was previewed, and only that act. */
+  protected async commitSync(row: VariantRow): Promise<void> {
+    const id = row.summary.id;
+    const kind = this.pendingKind()[id];
+    if (!kind) return;
+
+    this.syncing.set(id);
+    try {
+      const report =
+        kind === 'revert'
+          ? await this.repository.revertToStandard(id)
+          : await this.repository.syncWithStandard(id);
+      this.reports.update((all) => ({ ...all, [id]: report }));
+      // The comparison the reader was looking at describes a state that no longer exists.
+      this.comparisons.update((all) => {
+        const { [id]: _stale, ...rest } = all;
+        return rest;
+      });
+      await this.loadNotices();
+      this.snack.open(
+        kind === 'revert' ? 'Reverted to the product standard.' : 'Synchronised with the product standard.',
+        undefined,
+        { duration: 5000 },
+      );
+    } catch (error) {
+      this.syncProblems.update((all) => ({ ...all, [id]: this.reason(error, 'That could not be applied.') }));
+    } finally {
+      this.syncing.set(null);
+    }
+  }
+
+  protected cancelSync(row: VariantRow): void {
+    const id = row.summary.id;
+    this.reports.update((all) => {
+      const { [id]: _cancelled, ...rest } = all;
+      return rest;
+    });
+    this.pendingKind.update((all) => {
+      const { [id]: _cleared, ...rest } = all;
+      return rest;
+    });
+  }
+
+  /** Subjects, deduplicated — a report lists what moved, not one line per operation. */
+  protected subjectsOf(differences: readonly Difference[]): string {
+    return [...new Set(differences.map((d) => d.subject))].join(', ');
+  }
+
+  protected reasonsOf(skipped: readonly { difference: Difference; reason: string }[]): string {
+    return skipped.map((s) => `${s.difference.subject} — ${s.reason}`).join('; ');
   }
 
   /** §16.3 — Preview New Version. Opens the standard itself, which is what "the new version" is. */

@@ -37,6 +37,8 @@ import {
   deriveClientExperience,
   describeUpdate,
   isStandard,
+  revertToStandard,
+  synchronise,
   updateAvailableFor,
 } from '@opus/experience-model';
 
@@ -450,36 +452,10 @@ api.get('/experiences/:id/standard-update', (req, res) => {
  * offer Keep My Version", the second means "you asked about the wrong artifact".
  */
 api.get('/experiences/:id/compare-standard', (req, res) => {
-  const record = store.get(req.params.id);
-  if (!record) return problem(res, 404, 'semantic', `No experience "${req.params.id}"`, 'notFound');
+  const context = lifecycleContext(req.params.id, res);
+  if (!context) return;
 
-  const lineage = record.definition.derivedFrom;
-  if (!lineage) {
-    return problem(
-      res,
-      409,
-      'semantic',
-      `“${req.params.id}” is not derived from a product standard, so there is nothing to compare it against.`,
-      'notDerived',
-    );
-  }
-
-  const shipped = standardDefinitions().find((s) => s.standard?.standardId === lineage.standardId);
-  if (!shipped) {
-    return problem(
-      res,
-      409,
-      'semantic',
-      `The standard “${lineage.standardId}” is not installed, so there is nothing newer to compare against.`,
-      'standardNotShipped',
-    );
-  }
-
-  const outcome = compareWithStandard({
-    client: record.definition,
-    standard: shipped,
-    baseline: store.standardAtVersion(shipped.id, lineage.standardVersion),
-  });
+  const outcome = compareWithStandard(context);
 
   if (!outcome.ok) {
     // 409 for every refusal: each says the artifacts are not in a state this question can be asked of,
@@ -488,6 +464,179 @@ api.get('/experiences/:id/compare-standard', (req, res) => {
   }
   res.json(outcome.comparison);
 });
+
+/**
+ * The three artifacts a §16.4 / §16.5 question needs, or the reason there is no answer.
+ *
+ * Shared by compare and sync because they must never disagree about which baseline they are working
+ * from: a sync computed against a different baseline than the comparison the reader was shown would
+ * apply changes they never saw.
+ */
+function lifecycleContext(
+  id: string,
+  res: Response,
+): { client: ExperienceDefinition; standard: ExperienceDefinition; baseline: ExperienceDefinition | null } | null {
+  const record = store.get(id);
+  if (!record) {
+    problem(res, 404, 'semantic', `No experience "${id}"`, 'notFound');
+    return null;
+  }
+
+  const lineage = record.definition.derivedFrom;
+  if (!lineage) {
+    problem(
+      res,
+      409,
+      'semantic',
+      `“${id}” is not derived from a product standard, so there is nothing to compare or synchronise it with.`,
+      'notDerived',
+    );
+    return null;
+  }
+
+  const shipped = standardDefinitions().find((s) => s.standard?.standardId === lineage.standardId);
+  if (!shipped) {
+    problem(
+      res,
+      409,
+      'semantic',
+      `The standard “${lineage.standardId}” is not installed, so there is nothing newer to compare against.`,
+      'standardNotShipped',
+    );
+    return null;
+  }
+
+  return {
+    client: record.definition,
+    standard: shipped,
+    baseline: store.standardAtVersion(shipped.id, lineage.standardVersion),
+  };
+}
+
+/**
+ * FR-23 — §16.5's **Sync all changes**, and its **Preview before sync**.
+ *
+ * One route for both, and `?preview=true` is the whole difference: the merge is computed identically and
+ * simply not saved. Two routes would let the previewed result and the saved result diverge, which would
+ * make the preview worse than none — a reader who cannot trust a preview stops reading it and presses
+ * the button.
+ *
+ * `adopt` in the body is §16.5's deferred *selective* synchronisation. Omitted means every change the
+ * product made, which is "Sync all changes".
+ */
+api.post('/experiences/:id/sync-standard', (req, res) => {
+  const actorId = actorFor(req, res);
+  if (!actorId) return;
+
+  const context = lifecycleContext(req.params.id, res);
+  if (!context) return;
+
+  const comparison = compareWithStandard(context);
+  if (!comparison.ok) return problem(res, 409, 'semantic', comparison.detail, comparison.code);
+
+  const body = (req.body ?? {}) as { adopt?: unknown; preview?: unknown };
+  if (body.adopt !== undefined && !Array.isArray(body.adopt)) {
+    return problem(res, 400, 'validation', '`adopt` must be an array of difference ids.', 'adoptInvalid');
+  }
+
+  const outcome = synchronise({
+    client: context.client,
+    standard: context.standard,
+    comparison: comparison.comparison,
+    ...(Array.isArray(body.adopt) ? { adopt: body.adopt.map(String) } : {}),
+    actorId,
+    now: new Date().toISOString(),
+  });
+  if (!outcome.ok) return problem(res, 409, 'semantic', outcome.detail, outcome.code);
+
+  return respondToMerge(res, outcome.result, actorId, {
+    preview: body.preview === true || req.query['preview'] === 'true',
+    event: 'syncStandard',
+    from: comparison.comparison.baselineVersion,
+    to: comparison.comparison.standardVersion,
+  });
+});
+
+/**
+ * FR-23 — §16.5's **Revert to standard**.
+ *
+ * The destructive one, so it previews the same way: the response names what will be lost before anything
+ * is written. Recoverable afterwards regardless, because `save` archives the superseded body — but
+ * "recoverable by whoever knows about the versions directory" is not the same as being told first.
+ */
+api.post('/experiences/:id/revert-to-standard', (req, res) => {
+  const actorId = actorFor(req, res);
+  if (!actorId) return;
+
+  const context = lifecycleContext(req.params.id, res);
+  if (!context) return;
+
+  const outcome = revertToStandard({
+    client: context.client,
+    standard: context.standard,
+    actorId,
+    now: new Date().toISOString(),
+  });
+  if (!outcome.ok) return problem(res, 409, 'semantic', outcome.detail, outcome.code);
+
+  /*
+    What a revert costs, computed from the comparison rather than asserted. When the baseline is missing
+    the comparison cannot run — and a revert still can, because it needs no baseline. So the cost is
+    reported when it is knowable and omitted when it is not, rather than the whole action being refused
+    for want of a number.
+  */
+  const comparison = compareWithStandard(context);
+  const discarding = comparison.ok
+    ? comparison.comparison.differences.filter((d) => d.side === 'client' || d.side === 'both')
+    : undefined;
+
+  return respondToMerge(res, { ...outcome.result, supersededCustomisations: discarding ?? [] }, actorId, {
+    preview: (req.body as { preview?: unknown } | undefined)?.preview === true || req.query['preview'] === 'true',
+    event: 'revertToStandard',
+    from: context.client.derivedFrom!.standardVersion,
+    to: context.standard.standard?.version ?? 'unknown',
+    ...(discarding === undefined ? { note: 'The baseline is unavailable, so what this discards could not be listed.' } : {}),
+  });
+});
+
+/**
+ * Save a merged artifact, or return it unsaved.
+ *
+ * `save` rather than `saveLineage`: a synchronisation *does* change the experience, so it is a new
+ * version of it and the client's version line should move. That is the mirror of why declining an update
+ * must not — one changes the artifact and the other records a decision about it.
+ */
+function respondToMerge(
+  res: Response,
+  result: import('@opus/experience-model').SyncResult,
+  actorId: string,
+  meta: { preview: boolean; event: string; from: string; to: string; note?: string },
+): void {
+  const report = {
+    preview: meta.preview,
+    from: meta.from,
+    to: meta.to,
+    applied: result.applied,
+    skipped: result.skipped,
+    keptCustomisations: result.keptCustomisations,
+    supersededCustomisations: result.supersededCustomisations,
+    ...(meta.note ? { note: meta.note } : {}),
+  };
+
+  if (meta.preview) {
+    // A proposal is not an action. The definition comes back so a caller can render the result, and
+    // nothing is written.
+    res.json({ ...report, definition: result.definition });
+    return;
+  }
+
+  try {
+    const saved = store.save({ definition: result.definition, actorId, origin: 'migration' });
+    res.json({ ...report, ...saved });
+  } catch (error) {
+    refuseSave(res, error);
+  }
+}
 
 /**
  * FR-21 — §16.3's **Keep My Version**.

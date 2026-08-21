@@ -20,6 +20,7 @@ export {
   ExperienceRepository,
   type StandardListing,
   type StandardUpdateNotice,
+  type SyncReport,
 } from './experience-repository';
 export { CatalogClient } from './catalog-client';
 export { IdentityClient, type PersonaSummary } from './identity-client';

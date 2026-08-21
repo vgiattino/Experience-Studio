@@ -1,10 +1,10 @@
 # Product Standard ↔ Client Experience
 
-Status: **Lineage, deployment, update detection and the three-way comparison are built and reachable
-from the library. Four of §16.3's five actions work. Synchronisation not yet.**
-Requirements: [`PRD.md`](./PRD.md) §16 · §16.1 · §16.2 · §16.3 · §16.4 · §16.6 · §2 · §26, FR-01 · FR-19 · FR-20 · FR-21 · FR-22 · FR-24
+Status: **§16 is built end to end — lineage, deployment, update detection, the three-way comparison,
+and synchronisation with reversion. All five of §16.3's actions work.**
+Requirements: [`PRD.md`](./PRD.md) §16 · §16.1 · §16.2 · §16.3 · §16.4 · §16.5 · §16.6 · §2 · §26, FR-01 · FR-19 · FR-20 · FR-21 · FR-22 · FR-23 · FR-24
 Contract: `schemas/experience.schema.json` — `standard`, `derivedFrom`
-Code: `libs/experience-model/src/lineage.ts`, `libs/experience-model/src/compare.ts`,
+Code: `libs/experience-model/src/lineage.ts`, `compare.ts`, `synchronise.ts`,
 `server/store/experience-store.ts`, `server/routes.ts`,
 `apps/experience-studio/src/app/library/library.component.ts`
 
@@ -326,7 +326,151 @@ cannot decide on its own, so sorting them in among the rest buries the one thing
 
 ---
 
-## 9. The library is where a person meets all of this
+## 9. Synchronize and revert — §16.5, FR-23
+
+`POST /api/experiences/:id/sync-standard` · `POST /api/experiences/:id/revert-to-standard`
+
+### Sync is a rebase, not an overwrite
+
+Principle 5: *"Product updates must never automatically overwrite client customizations."* So "sync all
+changes" cannot mean "replace the variant with the new standard" — that is **Revert**, and §16.5 lists the
+two separately precisely because they are different acts.
+
+Sync starts from **the client's own artifact** and applies the product's changes onto it. The direction
+matters more than it looks. Starting from the standard and re-applying the client's changes would silently
+drop anything the comparison did not decompose, because whatever the applier cannot carry across is simply
+absent from the result. Starting from the client, an unhandled aspect stays as the client has it — the
+conservative direction, and the one Principle 5 asks for.
+
+### The target is carried, not re-derived
+
+Every `Difference` carries a `target` saying what to copy: a page, a component, one field of a component,
+the layout, the page's filters, an action, or one member of the navigation. It is produced by the same line
+of code that finds the difference.
+
+An applier that parsed `component:overview:grid:columns` back into a location would be a second copy of the
+comparison's decomposition, and the two would drift on the first change to either — silently, because a
+merge that writes the wrong place still produces a valid document.
+
+A target also names its **keys** when it covers only part of a field. `config` is one object holding
+independent settings, so the product's `mark` and the client's `density` can share it; copying the object
+to adopt one would take the other, and it would not appear anywhere as an adopted change.
+
+### Adopting a widget has to reach the layout
+
+The comparison deliberately reports *no* layout change for an added widget — otherwise every addition in
+every release would produce a spurious reorder row — which makes the placement the applier's job and
+nobody else's. A component the layout does not place is a page that validates and is missing something:
+the worst kind of bug here, because it looks like success.
+
+It is placed where the standard places it, anchored on the nearest preceding widget the client also has.
+Appending would be simpler and would put every adopted KPI at the bottom of the page, under the grid —
+technically present and visibly wrong.
+
+Adopting a **reorder** takes the standard's order over the client's own *membership*. Taking the tree
+wholesale would delete every widget the client added and resurrect every one they removed, as a side effect
+of adopting a reorder.
+
+### Order of application
+
+Removals, then additions, then edits, then layout. Not cosmetic: layout replaces the whole tree, so an
+addition that inserted a node into a tree the layout step then discards would leave a component that
+exists and never renders.
+
+### The baseline moves only on a full adoption
+
+This was a defect before it was a rule, and it was found by running a selective sync against a live API.
+
+A baseline is the point both sides descend from. A variant that adopted the new chart and declined the new
+KPI has cherry-picked from v2.0 and is still *based on* v1.0. Advancing the baseline anyway made the next
+comparison diff against a version the variant did not contain — so every un-adopted product change read as
+a **client** change, and the reader was told *"The kpi card ESG coverage is gone"* and *"The action Escalate
+is gone"* as if they had deleted them. Permanently.
+
+So a partial sync leaves `standardVersion` where it is and the notification keeps saying v2.0 is available
+— which is correct. A partial adoption is not an adoption of v2.0. `SyncResult.baselineMoved` says which
+happened, so no caller has to infer it from success.
+
+A **decline is cleared** by a full sync, because adopting v2.0 answers "I do not want v2.0" the other way.
+A partial sync leaves it standing, for the same reason.
+
+### Agreement is not a conflict
+
+A second defect from the same run. After adopting the chart, the variant and the standard both differ from
+the baseline in exactly the same way — which is agreement. Reported as a conflict it would ask the reader
+to decide between two identical values, every time they looked, for as long as the baseline stayed put.
+
+The first fix compared the two **summaries**, and it was wrong: a summary names its subject, so a client
+who had *also* renamed the widget produced *"“Coverage — Acme view” is now a line chart"* against the
+product's *"“Coverage by asset class” is now a line chart"* — the same change, two strings, a phantom
+conflict no synchronisation could ever clear. Differences now carry a **fingerprint** of the value at their
+own target, read from the same place the applier writes.
+
+### The cost of a sync is always stated
+
+§16.5 offers no third option for a conflict: adopting takes the product's value over the reader's. So the
+report names what it cost rather than returning a clean success.
+
+```
+Synchronising v1.0 → v2.0 — nothing has been written yet
+  Adopting 4:      ESG coverage, Escalate, Coverage by asset class and review state,
+                   Recently added instruments
+  Keeping your 1:  Coverage — Acme view
+  Losing your 1:   Recently added instruments
+  [Apply this sync]  [Cancel]
+```
+
+`skipped` is reported the same way. A synchronisation that claims to have adopted a change it did not is
+worse than one that refuses — the reader believes their page has the new capability and finds out from
+somebody else that it does not.
+
+### Preview is not a separate button
+
+§16.5 lists "Preview before sync" among its four minimum actions. Making it an optional extra control would
+mean the common path skips the one step that makes the others safe, so the **first press previews and the
+second commits** — the same shape the refinement panel uses, and for the same reason.
+
+Preview and commit are one route and one function: `?preview=true` decides only whether the merge is saved.
+Two code paths would let the previewed result and the saved result diverge, and a preview a reader cannot
+trust is worse than none.
+
+### Revert keeps the client's identity
+
+Reverting the *content* to the standard is not ceasing to be a client experience. Taking the standard's id
+would collide with the standard itself, make the variant unreachable, and — because a `standard` field
+means product-owned — make the store refuse every future save to it. So id, name and owner survive; the
+content does not.
+
+### Selective synchronisation, which §16.5 defers
+
+`synchronise` takes an `adopt` set of difference ids. Sync-all passes every product-side and conflicting
+difference; §16.5's deferred selective sync is the same call with a smaller set. That is the shape falling
+out of a per-change comparison rather than scope creep — having built the list, refusing to let a caller
+filter it would have taken extra code.
+
+Verified against the live API with §16.5's own example — *adopt the new visualisation, keep the custom
+columns*:
+
+```
+adopt: ["component:security-master-dashboard:class-chart:mark"]
+  chart mark   line     ← adopted
+  chart title  Coverage — Acme view    ← kept
+  currency     absent   ← not adopted
+  sedol        absent   ← the client's own removal survived
+  kpi-esg      absent   ← not adopted
+  baseline     1.0      ← did not move
+```
+
+What is deliberately **not** built is a UI for choosing. §16.5 defers it, and a screen for picking among
+differences needs a preview per selection to be usable rather than alarming.
+
+An `adopt` set naming one of the reader's *own* changes is refused rather than absorbed: adopting it would
+overwrite the client's value with the client's own value, and saying so is how a caller finds out they
+wanted Revert.
+
+---
+
+## 10. The library is where a person meets all of this
 
 `§2` names three levels of interaction — **Use**, **Configure**, **Create** — and says the initial
 priority is the first two. The library is grouped by exactly that, because the group an experience is in
@@ -347,7 +491,7 @@ The membership test is `derivedFrom`, not `origin`. `origin` says how the bytes 
 `human` — while `derivedFrom` says whether there is a standing relationship to a standard. A variant
 somebody then refined conversationally has `origin: 'aiRefined'` and is still a variant.
 
-### Four of §16.3's five actions work, and the fifth is named
+### All five of §16.3's actions work
 
 | Action | |
 |---|---|
@@ -355,9 +499,12 @@ somebody then refined conversationally has `origin: 'aiRefined'` and is still a 
 | **Keep My Version** | Records the decline. The version is sent from the client, not inferred, so what is recorded is what was on the screen when the person decided |
 | **Review Later** | Hides the notice for this visit and records nothing |
 | **Compare Changes** | §16.4's three-way comparison, grouped by side, expanding the card to the full row — a comparison is a list of rows, not a card-sized thing |
-| **Sync with Standard** | §16.5. Named in a sentence rather than rendered disabled |
+| **Sync with Standard** | §16.5's rebase, behind a mandatory preview. Revert to Standard sits beside it |
 
-A disabled control teaches the reader the feature is broken; a sentence teaches them it is next.
+The two merge actions preview first and commit second, and the report **outlives the notice** — which is a
+fix rather than a layout choice. Inside the notice, applying a sync removed the very update the notice was
+about, so the notice unmounted and took the confirmation with it: the reader pressed Apply and everything
+vanished, with no record of what was adopted, kept, or lost.
 
 ### And "up to date" is not said when it is not true
 
@@ -372,7 +519,7 @@ Holding at v1.0 — you declined v2.0. You will hear about the next release.
 
 ---
 
-## 10. Verified
+## 11. Verified
 
 Against the running API, on a clean store:
 
@@ -434,7 +581,26 @@ Against the running API, on a clean store:
 
    delete the archive       409  baselineUnavailable, shown in place on the card rather than in a toast
 
-8. The library, in a browser (both themes, no console errors)
+8. §16.5, on the same v2.0 release
+   POST /sync-standard?preview  nothing written; the store still at artifactVersion 2
+     adopting 4                 ESG coverage, Escalate, the line chart, the columns conflict
+     keeping 1                  "Coverage — Acme view"        ← Principle 5, the client's rename
+     losing 1                   "Recently added instruments"  ← the cost of adopting the conflict
+   POST /sync-standard          artifactVersion 3, baseline 1.0 → 2.0, syncedFromVersion 1.0
+   GET  /standard-update        null              (quiet)
+   GET  /compare-standard       1 client change   ← only the rename, correctly attributed
+   POST /revert-to-standard     content is the standard's, id/name/owner kept, comparison then empty
+
+   selective, §16.5's own example
+   adopt [the chart only]       mark=line adopted · title kept · currency NOT adopted ·
+                                the client's own `sedol` removal survived · baseline stayed at 1.0
+   compare again                2 product, 1 conflict, 1 client   ← attribution survived the partial sync
+   adopt [one of my own]        409  notAdoptable
+   adopt "not-an-array"         400  adoptInvalid
+   sync a standard              409  notDerived
+   sync with nothing new        409  nothingToAdopt
+
+9. The library, in a browser (both themes, no console errors)
    Product standards              "Securities Operations · Standard v2.0 · release 2026.11 · 6 pages"
                                   → Use, Open your version
    Your versions                  "Securities Operations — Acme · Your v2 · draft"
@@ -452,12 +618,12 @@ would demo. To reproduce it, edit `standard.version` in
 
 ---
 
-## 11. What is not built
+## 12. What is not built
 
 | | |
 |---|---|
-| **§16.5 Sync / revert** — P1 | Sync all, keep client, revert to standard, preview before sync. The comparison it needs now exists, and every difference in it is addressable |
-| **Selective synchronisation** — future | §16.5 defers it explicitly: adopt the new AI Search, keep custom columns. Its one hard prerequisite — a per-change comparison rather than a blob — is met |
+| **A UI for selective sync** — future | §16.5 defers it. The engine takes an `adopt` set and is verified against §16.5's own example, so what is missing is a picking surface — and a usable one needs a preview per selection rather than a list of checkboxes |
+| **Nested layout reconciliation** | Adopting a reorder flattens the widgets into the page's root container, so a page whose widgets sat in three panels comes back with them in one. It is the honest limit of merging two trees that may not share a shape; guessing would move widgets into sections nobody asked about |
 | **Comparing a page a client ADDED** | The comparison walks pages present on both sides plus additions and removals. A page the *client* added is reported as a client-side capability, and its contents are not walked against anything, because there is nothing to walk it against |
 | **Field-level column changes** | A column is compared on its `field`. A column that kept its field and changed its format, width or conditional formatting reads as unchanged. Deliberate for now: the alternative is a row per binding property, and §16.4 asks for "new/removed columns" |
 | **§16.6 Version history as a surface** | The library card shows the two current version numbers and the declined one. The *history* — the append-only version files, `syncedFromVersion` — is all there and nothing renders it |
@@ -466,7 +632,7 @@ would demo. To reproduce it, edit `standard.version` in
 
 ---
 
-## 12. Environment
+## 13. Environment
 
 | | |
 |---|---|

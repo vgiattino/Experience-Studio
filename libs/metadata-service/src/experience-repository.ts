@@ -11,7 +11,7 @@
 
 import { Injectable, inject, signal } from '@angular/core';
 import type { ExperienceDefinition } from '@opus/experience-model';
-import type { Comparison, ExperienceSummary, StoredExperience } from '@opus/experience-model';
+import type { Comparison, Difference, ExperienceSummary, StoredExperience } from '@opus/experience-model';
 
 import { apiRequest } from './api';
 import { IdentityClient } from './identity-client';
@@ -102,6 +102,48 @@ export class ExperienceRepository {
     });
   }
 
+  /**
+   * FR-23 — §16.5's **Sync all changes**, and its **Preview before sync**.
+   *
+   * One method for both, because they are one route: `preview` decides whether the merge is saved. Two
+   * code paths would let the previewed result and the saved result diverge, and a preview a reader cannot
+   * trust is worse than none — they stop reading it and press the button.
+   *
+   * `adopt` is §16.5's deferred *selective* synchronisation. Omitted means every change the product made.
+   */
+  async syncWithStandard(
+    id: string,
+    options: { preview?: boolean; adopt?: readonly string[] } = {},
+  ): Promise<SyncReport> {
+    const report = await apiRequest<SyncReport>(`/experiences/${id}/sync-standard`, {
+      method: 'POST',
+      persona: this.identity.personaId(),
+      body: {
+        ...(options.preview ? { preview: true } : {}),
+        ...(options.adopt ? { adopt: options.adopt } : {}),
+      },
+    });
+    if (!options.preview) await this.refresh();
+    return report;
+  }
+
+  /**
+   * FR-23 — §16.5's **Revert to standard**.
+   *
+   * The destructive one, so the preview matters more here than anywhere: it names what will be lost
+   * before anything is written. The store's append-only history makes it recoverable afterwards, but
+   * "recoverable by whoever knows about the versions directory" is not being told first.
+   */
+  async revertToStandard(id: string, options: { preview?: boolean } = {}): Promise<SyncReport> {
+    const report = await apiRequest<SyncReport>(`/experiences/${id}/revert-to-standard`, {
+      method: 'POST',
+      persona: this.identity.personaId(),
+      body: options.preview ? { preview: true } : {},
+    });
+    if (!options.preview) await this.refresh();
+    return report;
+  }
+
   /** FR-21 — §16.3's notification for one client variant. `update: null` means nothing to say. */
   async standardUpdate(id: string): Promise<StandardUpdateNotice> {
     return apiRequest<StandardUpdateNotice>(`/experiences/${id}/standard-update`, {
@@ -139,6 +181,26 @@ export interface StandardListing {
   pageCount: number;
   /** The client variant of this standard, when this tenant has already forked it. */
   derivedId: string | null;
+}
+
+/**
+ * What a sync or a revert did, or would do.
+ *
+ * `preview` is echoed back rather than assumed by the caller, so a UI rendering a report cannot get the
+ * two states confused — the one thing a preview must never be ambiguous about is whether it happened.
+ */
+export interface SyncReport {
+  preview: boolean;
+  from: string;
+  to: string;
+  applied: readonly Difference[];
+  skipped: readonly { difference: Difference; reason: string }[];
+  keptCustomisations: readonly Difference[];
+  supersededCustomisations: readonly Difference[];
+  /** Present when something could not be computed — a revert with no baseline cannot list what it drops. */
+  note?: string;
+  /** The merged artifact. Only on a preview; a real sync returns the saved record instead. */
+  definition?: ExperienceDefinition;
 }
 
 export interface StandardUpdateNotice {

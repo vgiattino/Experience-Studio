@@ -69,9 +69,43 @@ export type DifferenceCategory =
 /** Which of the two lines moved. `both` is a conflict, and the only case a sync must ask about. */
 export type DifferenceSide = 'product' | 'client' | 'both';
 
+/**
+ * Where a difference lives — what a synchronisation must copy to adopt it.
+ *
+ * Carried on the difference rather than re-derived by the applier, and that is the whole reason it
+ * exists. An applier that parsed `component:overview:grid:columns` back into a location would be a
+ * second copy of this file's decomposition, and the two would drift on the first change to either —
+ * silently, because a merge that writes the wrong place still produces a valid document. Produced by
+ * the same line of code that finds the difference, so they cannot disagree.
+ */
+export interface DifferenceTarget {
+  /**
+   *   `page`            the whole page, added or removed
+   *   `component`       the whole component, added or removed — with its layout placement
+   *   `componentField`  one field of a component; `field` names it
+   *   `layout`          the page's layout tree
+   *   `pageFilters`     the page's filter channels
+   *   `action`          one action; `memberId` names it
+   *   `navigation`      one member of the experience's navigation; `field` names it
+   */
+  kind: 'page' | 'component' | 'componentField' | 'layout' | 'pageFilters' | 'action' | 'navigation';
+  pageId?: string;
+  memberId?: string;
+  field?: string;
+  /**
+   * The keys within `field` this difference covers, when it covers only some of them.
+   *
+   * `config` is one object holding several independent settings, and two differences can share it — the
+   * product changed the chart's `mark` while the client changed its `density`. Copying the whole object
+   * to adopt one of them would silently take the other, so a `config` target names its keys and the
+   * applier writes only those. Absent means the whole field.
+   */
+  keys?: readonly string[];
+}
+
 export interface Difference {
   /**
-   * Stable and addressable — this is what selective synchronisation will name.
+   * Stable and addressable — this is what selective synchronisation names.
    *
    * Derived from the subject rather than from a position, so it survives a reordering: the same change
    * to the same component has the same id whether it is the third difference or the eleventh.
@@ -88,6 +122,8 @@ export interface Difference {
   /** On a conflict, what each side did. Absent on a one-sided difference, where `summary` says it. */
   productChange?: string;
   clientChange?: string;
+  /** What a synchronisation copies to adopt this. See `DifferenceTarget`. */
+  target: DifferenceTarget;
 }
 
 export interface Comparison {
@@ -217,21 +253,43 @@ function merge(
   clientSide: readonly OneSided[],
 ): readonly Difference[] {
   const byId = new Map<string, Difference>();
+  const productFingerprints = new Map(productSide.map((d) => [d.id, d.fingerprint]));
 
   for (const change of productSide) {
-    byId.set(change.id, { ...change, side: 'product' });
+    const { fingerprint: _internal, ...difference } = change;
+    byId.set(change.id, { ...difference, side: 'product' });
   }
 
   for (const change of clientSide) {
     const existing = byId.get(change.id);
+    const { fingerprint: _internal, ...difference } = change;
     if (!existing) {
-      byId.set(change.id, { ...change, side: 'client' });
+      byId.set(change.id, { ...difference, side: 'client' });
       continue;
     }
     /*
-      Both sides moved the same subject. The two summaries are kept side by side rather than merged
-      into one sentence, because the reader's next question is "what did each of them do" and a merged
-      sentence answers neither half.
+      BOTH SIDES MADE THE SAME CHANGE — which is agreement, not a conflict, and not a difference at all.
+
+      Common after a *partial* synchronisation: a variant that adopted the product's new chart type has
+      it, the standard has it, and both differ from the baseline in exactly the same way. Reported as a
+      conflict it would ask the reader to decide between two identical values, every time they looked,
+      for as long as the baseline stayed put.
+
+      Compared on the VALUE at the target, not on the sentence. Comparing sentences was the first
+      attempt and it was wrong: a summary names its subject, so a client that had also renamed the widget
+      produced *"“Coverage — Acme view” is now a line chart"* against the product's *"“Coverage by asset
+      class” is now a line chart"* — the same change, two strings, a phantom conflict that no
+      synchronisation could ever clear. The fingerprint reads the same place the applier writes.
+    */
+    if (productFingerprints.get(change.id) === change.fingerprint) {
+      byId.delete(change.id);
+      continue;
+    }
+
+    /*
+      Both sides moved the same subject, differently. The two summaries are kept side by side rather than
+      merged into one sentence, because the reader's next question is "what did each of them do" and a
+      merged sentence answers neither half.
     */
     byId.set(change.id, {
       ...existing,
@@ -250,8 +308,15 @@ function merge(
   );
 }
 
-/** A change before it is known which side made it. */
-type OneSided = Omit<Difference, 'side'>;
+/**
+ * A change before it is known which side made it.
+ *
+ * `fingerprint` is the value at the target *after* the change, canonicalised — the merge's test for
+ * "both sides arrived at the same place". Internal: it exists to compare two candidates for the same id
+ * and means nothing on its own, so `merge` strips it rather than exposing a field every consumer would
+ * have to be told to ignore.
+ */
+type OneSided = Omit<Difference, 'side'> & { fingerprint: string };
 
 // ── 3. one side of the comparison ───────────────────────────────────────────
 
@@ -263,7 +328,7 @@ type OneSided = Omit<Difference, 'side'>;
  * asymmetries the artifacts do not have.
  */
 function describeChanges(before: ExperienceDefinition, after: ExperienceDefinition): OneSided[] {
-  const out: OneSided[] = [];
+  const out: Omit<OneSided, 'fingerprint'>[] = [];
 
   out.push(...experienceNavigationChanges(before, after));
   out.push(...pageMembershipChanges(before, after));
@@ -277,15 +342,68 @@ function describeChanges(before: ExperienceDefinition, after: ExperienceDefiniti
     out.push(...pageChanges(pageId, beforePage, afterPage));
   }
 
-  return out;
+  /*
+    The fingerprint is stamped HERE, once, from each difference's own target — rather than at each of the
+    fourteen places a difference is created. One reader of the target means one thing to keep correct, and
+    it reads the same location the applier writes, which is the property the merge depends on.
+  */
+  return out.map((difference) => ({
+    ...difference,
+    fingerprint: fingerprintAt(after, difference.target),
+  }));
+}
+
+/**
+ * The value at a target, canonicalised — used only to tell "both sides did the same thing" from
+ * "both sides did different things".
+ *
+ * `absent` is a real answer and distinct from any value: two sides that both *removed* the same widget
+ * agree, and must not read as a conflict either.
+ */
+function fingerprintAt(definition: ExperienceDefinition, target: DifferenceTarget): string {
+  const page = target.pageId ? pageAt(definition, target.pageId) : undefined;
+
+  switch (target.kind) {
+    case 'navigation':
+      return stable((definition.navigation as Record<string, unknown> | undefined)?.[target.field ?? '']);
+    case 'page':
+      return stable(page);
+    case 'component':
+      return stable(page?.components?.[target.memberId ?? '']);
+    case 'componentField': {
+      const component = page?.components?.[target.memberId ?? ''] as unknown as Record<string, unknown>;
+      const value = component?.[target.field ?? ''];
+      if (!target.keys?.length) return stable(value);
+      const source = (value ?? {}) as Record<string, unknown>;
+      // Only the keys this difference covers, so two differences over one `config` do not share a
+      // fingerprint and cancel each other out.
+      return stable(Object.fromEntries(target.keys.map((key) => [key, source[key]])));
+    }
+    case 'layout':
+      return stable(widgetOrder(page?.layout));
+    case 'pageFilters':
+      return stable(Object.keys(page?.filters ?? {}).sort());
+    case 'action':
+      return stable(page?.actions?.[target.memberId ?? '']);
+  }
+}
+
+/** Key-ordered JSON, so two structurally equal values fingerprint identically. */
+function stable(value: unknown): string {
+  if (value === undefined) return 'absent';
+  return JSON.stringify(value, (_key, inner) =>
+    inner && typeof inner === 'object' && !Array.isArray(inner)
+      ? Object.fromEntries(Object.entries(inner as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b)))
+      : inner,
+  );
 }
 
 /** §16.4 — Changed navigation, at the experience level. */
 function experienceNavigationChanges(
   before: ExperienceDefinition,
   after: ExperienceDefinition,
-): OneSided[] {
-  const out: OneSided[] = [];
+): Omit<OneSided, 'fingerprint'>[] {
+  const out: Omit<OneSided, 'fingerprint'>[] = [];
   const b = before.navigation;
   const a = after.navigation;
 
@@ -297,6 +415,7 @@ function experienceNavigationChanges(
       category: 'navigation-changed',
       subject: 'the navigation menu',
       summary: describeList('The navigation menu', beforeItems, afterItems),
+      target: { kind: 'navigation', field: 'items' },
     });
   }
 
@@ -308,6 +427,7 @@ function experienceNavigationChanges(
       category: 'navigation-changed',
       subject: 'drill-down targets',
       summary: describeList('Drill-down', beforeTargets, afterTargets),
+      target: { kind: 'navigation', field: 'drilldownTargets' },
     });
   }
 
@@ -317,6 +437,7 @@ function experienceNavigationChanges(
       category: 'navigation-changed',
       subject: 'the landing page',
       summary: `The landing page is now ${quoted(a?.homePage ?? 'unset')}, was ${quoted(b?.homePage ?? 'unset')}.`,
+      target: { kind: 'navigation', field: 'homePage' },
     });
   }
 
@@ -333,8 +454,8 @@ function experienceNavigationChanges(
 function pageMembershipChanges(
   before: ExperienceDefinition,
   after: ExperienceDefinition,
-): OneSided[] {
-  const out: OneSided[] = [];
+): Omit<OneSided, 'fingerprint'>[] {
+  const out: Omit<OneSided, 'fingerprint'>[] = [];
   const beforeIds = Object.keys(before.pages ?? {});
   const afterIds = Object.keys(after.pages ?? {});
 
@@ -346,6 +467,7 @@ function pageMembershipChanges(
       pageId: id,
       subject: title(page?.name) || id,
       summary: `A new screen, ${quoted(title(page?.name) || id)}, with ${count(Object.keys(page?.components ?? {}).length, 'widget')}.`,
+      target: { kind: 'page', pageId: id },
     });
   }
 
@@ -357,6 +479,7 @@ function pageMembershipChanges(
       pageId: id,
       subject: title(page?.name) || id,
       summary: `The screen ${quoted(title(page?.name) || id)} is gone.`,
+      target: { kind: 'page', pageId: id },
     });
   }
 
@@ -365,8 +488,8 @@ function pageMembershipChanges(
 
 // ── 4. inside one page ──────────────────────────────────────────────────────
 
-function pageChanges(pageId: string, before: PageDefinition, after: PageDefinition): OneSided[] {
-  const out: OneSided[] = [];
+function pageChanges(pageId: string, before: PageDefinition, after: PageDefinition): Omit<OneSided, 'fingerprint'>[] {
+  const out: Omit<OneSided, 'fingerprint'>[] = [];
 
   out.push(...componentMembershipChanges(pageId, before, after));
   out.push(...componentConfigChanges(pageId, before, after));
@@ -383,8 +506,8 @@ function componentMembershipChanges(
   pageId: string,
   before: PageDefinition,
   after: PageDefinition,
-): OneSided[] {
-  const out: OneSided[] = [];
+): Omit<OneSided, 'fingerprint'>[] {
+  const out: Omit<OneSided, 'fingerprint'>[] = [];
   const b = before.components ?? {};
   const a = after.components ?? {};
 
@@ -396,6 +519,7 @@ function componentMembershipChanges(
       pageId,
       subject: nameOf(component, id),
       summary: `A new ${kindWord(component.type)}, ${quoted(nameOf(component, id))}.`,
+      target: { kind: 'component', pageId, memberId: id },
     });
   }
 
@@ -407,6 +531,7 @@ function componentMembershipChanges(
       pageId,
       subject: nameOf(component, id),
       summary: `The ${kindWord(component.type)} ${quoted(nameOf(component, id))} is gone.`,
+      target: { kind: 'component', pageId, memberId: id },
     });
   }
 
@@ -426,8 +551,8 @@ function componentConfigChanges(
   pageId: string,
   before: PageDefinition,
   after: PageDefinition,
-): OneSided[] {
-  const out: OneSided[] = [];
+): Omit<OneSided, 'fingerprint'>[] {
+  const out: Omit<OneSided, 'fingerprint'>[] = [];
   const b = before.components ?? {};
   const a = after.components ?? {};
 
@@ -448,6 +573,15 @@ function componentConfigChanges(
         pageId,
         subject: name,
         summary: describeList(`The columns on ${quoted(name)}`, beforeColumns, afterColumns),
+        // The binding ROLE, not `bindings` wholesale: a component may hold more than one, and copying
+        // the object to adopt a column change would take the others with it.
+        target: {
+          kind: 'componentField',
+          pageId,
+          memberId: id,
+          field: 'bindings',
+          keys: [columnRoleOf(afterComponent) ?? columnRoleOf(beforeComponent) ?? 'columns'],
+        },
       });
     }
 
@@ -463,6 +597,7 @@ function componentConfigChanges(
           pageId,
           subject: name,
           summary: `${quoted(name)} is now a ${afterMark} chart, was a ${beforeMark} chart.`,
+          target: { kind: 'componentField', pageId, memberId: id, field: 'config', keys: ['mark'] },
         });
       }
       const beforeEncodings = encodingLabels(beforeComponent);
@@ -474,6 +609,7 @@ function componentConfigChanges(
           pageId,
           subject: name,
           summary: describeList(`What ${quoted(name)} plots`, beforeEncodings, afterEncodings),
+          target: { kind: 'componentField', pageId, memberId: id, field: 'encodings' },
         });
       }
     }
@@ -489,6 +625,13 @@ function componentConfigChanges(
           pageId,
           subject: name,
           summary: describeList(`The filters on ${quoted(name)}`, beforeFilters, afterFilters),
+        target: {
+          kind: 'componentField',
+          pageId,
+          memberId: id,
+          field: 'config',
+          keys: changedConfigKeys(beforeComponent, afterComponent),
+        },
         });
       }
     }
@@ -510,6 +653,7 @@ function componentConfigChanges(
         pageId,
         subject: name,
         summary: `${quoted(name)} was reconfigured: ${otherKeys.join(', ')}.`,
+        target: { kind: 'componentField', pageId, memberId: id, field: 'config', keys: otherKeys },
       });
     }
 
@@ -535,6 +679,7 @@ function componentConfigChanges(
         pageId,
         subject: afterName || id,
         summary: `Renamed ${quoted(beforeName || id)} to ${quoted(afterName || id)}.`,
+        target: { kind: 'componentField', pageId, memberId: id, field: 'title' },
       });
     }
 
@@ -546,6 +691,7 @@ function componentConfigChanges(
         pageId,
         subject: name,
         summary: `When ${quoted(name)} is shown has changed.`,
+        target: { kind: 'componentField', pageId, memberId: id, field: 'visible' },
       });
     }
   }
@@ -560,7 +706,7 @@ function componentConfigChanges(
  * structural diff of the container tree would also report a panel gaining a `gap`, and a comparison
  * that says "the layout changed" for a spacing tweak is a comparison whose layout rows get skipped.
  */
-function layoutChanges(pageId: string, before: PageDefinition, after: PageDefinition): OneSided[] {
+function layoutChanges(pageId: string, before: PageDefinition, after: PageDefinition): Omit<OneSided, 'fingerprint'>[] {
   const beforeOrder = widgetOrder(before.layout);
   const afterOrder = widgetOrder(after.layout);
 
@@ -582,6 +728,7 @@ function layoutChanges(pageId: string, before: PageDefinition, after: PageDefini
       pageId,
       subject: `the ${quotedPlain(title(after.name) || pageId)} layout`,
       summary: `Widgets were reordered${moved.length ? `: ${moved.slice(0, 3).map(quoted).join(', ')}${moved.length > 3 ? ` and ${moved.length - 3} more` : ''}` : ''}.`,
+      target: { kind: 'layout', pageId },
     },
   ];
 }
@@ -591,7 +738,7 @@ function filterChannelChanges(
   pageId: string,
   before: PageDefinition,
   after: PageDefinition,
-): OneSided[] {
+): Omit<OneSided, 'fingerprint'>[] {
   const b = Object.keys(before.filters ?? {}).sort();
   const a = Object.keys(after.filters ?? {}).sort();
   if (same(b, a)) return [];
@@ -602,6 +749,7 @@ function filterChannelChanges(
       pageId,
       subject: `the ${quotedPlain(title(after.name) || pageId)} filters`,
       summary: describeList('The filters on this screen', b, a),
+      target: { kind: 'pageFilters', pageId },
     },
   ];
 }
@@ -614,8 +762,8 @@ function filterChannelChanges(
  * kind as well as by name, because an action that kept its name and changed from `navigate` to
  * `mutate` is the most consequential change in this list.
  */
-function actionChanges(pageId: string, before: PageDefinition, after: PageDefinition): OneSided[] {
-  const out: OneSided[] = [];
+function actionChanges(pageId: string, before: PageDefinition, after: PageDefinition): Omit<OneSided, 'fingerprint'>[] {
+  const out: Omit<OneSided, 'fingerprint'>[] = [];
   const b = before.actions ?? {};
   const a = after.actions ?? {};
 
@@ -627,6 +775,7 @@ function actionChanges(pageId: string, before: PageDefinition, after: PageDefini
         pageId,
         subject: actionName(a[id], id),
         summary: `A new action, ${quoted(actionName(a[id], id))}.`,
+        target: { kind: 'action', pageId, memberId: id },
       });
     } else if (a[id]!.kind !== b[id]!.kind) {
       out.push({
@@ -635,6 +784,7 @@ function actionChanges(pageId: string, before: PageDefinition, after: PageDefini
         pageId,
         subject: actionName(a[id], id),
         summary: `${quoted(actionName(a[id], id))} is now a ${a[id]!.kind} action, was ${b[id]!.kind}.`,
+        target: { kind: 'action', pageId, memberId: id },
       });
     }
   }
@@ -647,6 +797,7 @@ function actionChanges(pageId: string, before: PageDefinition, after: PageDefini
       pageId,
       subject: actionName(b[id], id),
       summary: `The action ${quoted(actionName(b[id], id))} is gone.`,
+      target: { kind: 'action', pageId, memberId: id },
     });
   }
 
@@ -658,8 +809,8 @@ function pageNavigationChanges(
   pageId: string,
   before: PageDefinition,
   after: PageDefinition,
-): OneSided[] {
-  const out: OneSided[] = [];
+): Omit<OneSided, 'fingerprint'>[] {
+  const out: Omit<OneSided, 'fingerprint'>[] = [];
   const b = before.components ?? {};
   const a = after.components ?? {};
 
@@ -675,6 +826,7 @@ function pageNavigationChanges(
       pageId,
       subject: nameOf(afterComponent, id),
       summary: `What happens when you interact with ${quoted(nameOf(afterComponent, id))} has changed.`,
+      target: { kind: 'componentField', pageId, memberId: id, field: 'eventActions' },
     });
   }
 
@@ -687,6 +839,12 @@ function pageNavigationChanges(
 function pageAt(definition: ExperienceDefinition, id: string): PageDefinition | undefined {
   const page = definition.pages?.[id];
   return page && !isPageRef(page) ? page : undefined;
+}
+
+/** The binding role holding the column array, when the component has one. */
+function columnRoleOf(component: ComponentInstance | undefined): string | undefined {
+  const bindings = (component?.bindings ?? {}) as Record<string, unknown>;
+  return Object.entries(bindings).find(([, value]) => Array.isArray(value))?.[0];
 }
 
 function columnsOf(component: ComponentInstance | undefined): string[] {
