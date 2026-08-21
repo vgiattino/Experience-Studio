@@ -126,8 +126,22 @@ export interface ResolvedRefinement {
 
 export type RefineOutcome =
   | { outcome: 'resolved'; refinements: ResolvedRefinement[]; explanation: string }
-  /** A reference matched more than one thing. FR-08's equivalent of FR-3's ask-rather-than-guess. */
-  | { outcome: 'ambiguous'; question: string; candidates: { componentId: string; label: string }[] }
+  /**
+   * A reference matched more than one thing. FR-08's equivalent of FR-3's ask-rather-than-guess.
+   *
+   * `on` names the FIELD OF THE INTENT that was ambiguous, so answering is `{ ...intent, [on]: label }`
+   * and nothing has to be re-parsed. It is not decoration: a sentence carries up to three references —
+   * "move the chart above the grid" has a target and an anchor — and a caller that had to guess which
+   * one the question was about would guess wrong. Re-parsing instead is worse still: appending the
+   * chosen name to the sentence turns "Sort by name" into "Sort by name — Securities", whose field
+   * capture is then "name — Securities".
+   */
+  | {
+      outcome: 'ambiguous';
+      on: 'target' | 'field' | 'relativeTo';
+      question: string;
+      candidates: { componentId: string; label: string }[];
+    }
   /** Understood, and cannot be done. The reason is always specific about what IS available. */
   | { outcome: 'refused'; reason: string }
   /** Not understood as a refinement at all. */
@@ -156,6 +170,22 @@ export interface RefineWidget {
   availableFields: readonly string[];
   /** Fields currently shown as columns, in order. Empty for a widget with no column role. */
   columns: readonly string[];
+  /**
+   * The binding role those columns live under — `columns` on a table, and whatever a future component
+   * calls its repeated role.
+   *
+   * Carried so the applier does not have to re-derive it from the definition. Re-deriving would mean
+   * two places deciding which binding is "the columns", and the second one would eventually disagree.
+   */
+  columnRole?: string;
+  /**
+   * Fields that hold numbers, from the data source's `select.measures`.
+   *
+   * Needed by `highlight-rows`: a condition on a count is `> 0` and a condition on a status is a
+   * comparison to a value nobody has supplied. Knowing which is which is the difference between a
+   * sensible default and a guess.
+   */
+  numericFields: readonly string[];
   /** The component's current config, for verbs that set a property. */
   config: Readonly<Record<string, unknown>>;
   /** Property names the manifest declares, so a verb cannot set one the component does not have. */
@@ -207,6 +237,8 @@ export function pageViewFor(
     return {
       componentId,
       nodeId: placed?.nodeId,
+      columnRole: columnRole?.[0],
+      numericFields: dataSource ? measuresOf(definition, dataSource) : [],
       type: component.type,
       title: text(component.title) || text(manifest?.name) || component.type,
       parentId: placed?.parentId,
@@ -244,6 +276,16 @@ function text(value: unknown): string {
  * add a column for a field nobody selected. `fieldsForDataSource` is how a caller with the catalog
  * supplies the wider set, and grounding then refuses an unavailable field by name.
  */
+/** The numeric fields a data source selects — its measures, by alias where one is given. */
+function measuresOf(definition: PageDefinition, dataSourceId: string): string[] {
+  const source = (definition.dataSources as Record<string, unknown> | undefined)?.[dataSourceId] as
+    | { select?: { measures?: { measure?: string; alias?: string }[] } }
+    | undefined;
+  return (source?.select?.measures ?? [])
+    .map((m) => m.alias ?? m.measure)
+    .filter((f): f is string => !!f);
+}
+
 function fieldsOf(definition: PageDefinition, dataSourceId: string): string[] {
   const source = (definition.dataSources as Record<string, unknown> | undefined)?.[dataSourceId] as
     | { select?: { attributes?: { attribute?: string; alias?: string }[]; measures?: { measure?: string; alias?: string }[] } }
@@ -759,7 +801,9 @@ function narrowByField(intent: RefinementIntent, eligible: readonly RefineWidget
   const field = (intent.field ?? '').trim();
   if (!field) return [...eligible];
   const pool = (widget: RefineWidget) =>
-    intent.verb === 'remove-column' ? widget.columns : widget.availableFields;
+    intent.verb === 'remove-column' || intent.verb === 'highlight-rows'
+      ? widget.columns
+      : widget.availableFields;
   const matching = eligible.filter((w) => resolveField(field, pool(w)).length > 0);
   // None matching is a refusal with a useful message, not a reason to fall back to all of them —
   // falling back would put the change on a widget that cannot carry it.
@@ -768,11 +812,23 @@ function narrowByField(intent: RefinementIntent, eligible: readonly RefineWidget
 
 function noWidgetForField(intent: RefinementIntent, eligible: readonly RefineWidget[]): string {
   const field = (intent.field ?? '').trim();
-  const where = intent.verb === 'remove-column' ? 'shows' : 'can show';
+  const shownOnly = intent.verb === 'remove-column' || intent.verb === 'highlight-rows';
+  const where = shownOnly ? 'shows' : 'can show';
   const options = eligible
-    .map((w) => `“${w.title}” (${(intent.verb === 'remove-column' ? w.columns : w.availableFields).slice(0, 5).join(', ') || 'no fields declared'})`)
+    .map((w) => `“${w.title}” (${(shownOnly ? w.columns : w.availableFields).slice(0, 5).join(', ') || 'no fields declared'})`)
     .join('; ');
-  return `Nothing on this page ${where} “${field}”. ${eligible.length === 1 ? 'It has' : 'They have'}: ${options}.`;
+  /*
+    When the field is AVAILABLE to something and simply not shown, say so. Highlighting attaches to a
+    column binding, so the author's next move is a column rather than a rephrase — and a refusal that
+    sends them back to the wording of a sentence that was fine is a refusal that wastes their time.
+  */
+  const availableSomewhere = shownOnly
+    ? eligible.filter((w) => resolveField(field, w.availableFields).length > 0)
+    : [];
+  const hint = availableSomewhere.length
+    ? ` It is available to ${availableSomewhere.map((w) => `“${w.title}”`).join(', ')} — add it as a column first, then highlight it.`
+    : '';
+  return `Nothing on this page ${where} “${field}”. ${eligible.length === 1 ? 'It has' : 'They have'}: ${options}.${hint}`;
 }
 
 function askWhich(
@@ -784,7 +840,7 @@ function askWhich(
     componentId: s.componentId,
     label: labelOf(page.widgets.find((w) => w.componentId === s.componentId)!),
   }));
-  return { outcome: 'ambiguous', question: ambiguityQuestion(reference, candidates), candidates };
+  return { outcome: 'ambiguous', on: 'target', question: ambiguityQuestion(reference, candidates), candidates };
 }
 
 /**
@@ -900,6 +956,7 @@ function groundGrouping(intent: RefinementIntent, widget: RefineWidget): RefineO
   if (matches.length > 1) {
     return {
       outcome: 'ambiguous',
+      on: 'field',
       question: `“${asked}” could be ${matches.map((m) => `“${m}”`).join(' or ')}. Which did you mean?`,
       candidates: matches.map((m) => ({ componentId: widget.componentId, label: m })),
     };
@@ -922,18 +979,23 @@ function groundFieldVerb(intent: RefinementIntent, widget: RefineWidget): Refine
   if (!reference) return { outcome: 'refused', reason: 'Which field?' };
 
   /*
-    `remove-column` resolves against what is SHOWN; everything else against what is AVAILABLE. Removing
-    a column that is not there is a different mistake from adding one the data source does not carry,
-    and the two refusals should say different things.
+    `remove-column` and `highlight-rows` resolve against what is SHOWN; everything else against what is
+    AVAILABLE.
+
+    Removing a column that is not there is a different mistake from adding one the data source does not
+    carry, and the two refusals should say different things. Highlighting joins the first group because
+    a conditional format lives ON a column binding — resolving it against the wider set let grounding
+    accept a field the applier then refused, which is a disagreement the author sees as the feature
+    working and then not working.
   */
-  const pool = intent.verb === 'remove-column' ? widget.columns : widget.availableFields;
+  const shownOnly = intent.verb === 'remove-column' || intent.verb === 'highlight-rows';
+  const pool = shownOnly ? widget.columns : widget.availableFields;
   if (pool.length === 0) {
     return {
       outcome: 'refused',
-      reason:
-        intent.verb === 'remove-column'
-          ? `“${widget.title}” has no columns to remove.`
-          : `Nothing is known about what “${widget.title}” can show — its data source declares no fields.`,
+      reason: shownOnly
+        ? `“${widget.title}” has no columns to work with.`
+        : `Nothing is known about what “${widget.title}” can show — its data source declares no fields.`,
     };
   }
 
@@ -941,12 +1003,19 @@ function groundFieldVerb(intent: RefinementIntent, widget: RefineWidget): Refine
   if (matches.length === 0) {
     return {
       outcome: 'refused',
-      reason: `“${reference}” is not a field ${intent.verb === 'remove-column' ? `shown on` : `available to`} “${widget.title}”. Available: ${pool.slice(0, 8).join(', ')}${pool.length > 8 ? ', …' : ''}.`,
+      reason:
+        `“${reference}” is not a field ${shownOnly ? 'shown on' : 'available to'} “${widget.title}”. ` +
+        `${shownOnly ? 'Shown' : 'Available'}: ${pool.slice(0, 8).join(', ')}${pool.length > 8 ? ', …' : ''}.` +
+        // Highlighting attaches to a column binding, so the fix is a column rather than a rephrase.
+        (intent.verb === 'highlight-rows' && widget.availableFields.includes(reference)
+          ? ` It is available to this widget — add it as a column first, then highlight it.`
+          : ''),
     };
   }
   if (matches.length > 1) {
     return {
       outcome: 'ambiguous',
+      on: 'field',
       question: `“${reference}” could be ${matches.map((m) => `“${m}”`).join(' or ')}. Which did you mean?`,
       candidates: matches.map((m) => ({ componentId: widget.componentId, label: m })),
     };
@@ -1003,7 +1072,14 @@ function groundMove(intent: RefinementIntent, widget: RefineWidget, page: Refine
         componentId: s.componentId,
         label: labelOf(page.widgets.find((w) => w.componentId === s.componentId)!),
       }));
-      return { outcome: 'ambiguous', question: ambiguityQuestion(intent.relativeTo ?? '', candidates), candidates };
+      // The ANCHOR is the ambiguous half here, not the widget being moved — "move the chart above the
+      // grid" resolved its chart and found two grids. Answering must fill `relativeTo`.
+      return {
+        outcome: 'ambiguous',
+        on: 'relativeTo',
+        question: ambiguityQuestion(intent.relativeTo ?? '', candidates),
+        candidates,
+      };
     }
     if ('none' in other) {
       return { outcome: 'refused', reason: `Nothing on this page matches “${(intent.relativeTo ?? '').trim()}”.` };
@@ -1073,6 +1149,7 @@ function groundDrilldown(intent: RefinementIntent, widget: RefineWidget, page: R
   if (matches.length > 1) {
     return {
       outcome: 'ambiguous',
+      on: 'field',
       question: `“${asked}” could be ${matches.map((m) => `“${m}”`).join(' or ')}. Which did you mean?`,
       candidates: matches.map((m) => ({ componentId: widget.componentId, label: m })),
     };

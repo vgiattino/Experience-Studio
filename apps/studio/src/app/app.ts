@@ -72,6 +72,8 @@ import {
   JsonViewComponent,
   OutlineComponent,
   PaletteComponent,
+  RefinePanelComponent,
+  RefineService,
 } from '@opus/studio-ui';
 import type { ValidationReport } from '@opus/validator';
 
@@ -175,9 +177,10 @@ const PREVIEW_ICONS: Record<PreviewSize['id'], { name: string; size: number }> =
   changeDetection: ChangeDetectionStrategy.OnPush,
   // Provided here rather than at the root: an editing session belongs to an open document, and
   // state tier 2 is per-experience by design (§4.2). A second window opens a second session.
-  providers: [DefinitionStore, SelectionService, DragStateService, EditorService, AssistService],
+  providers: [DefinitionStore, SelectionService, DragStateService, EditorService, AssistService, RefineService],
   imports: [
     AssistPanelComponent,
+    RefinePanelComponent,
     CanvasComponent,
     CatalogWorkspaceComponent,
     HistoryPanelComponent,
@@ -357,6 +360,30 @@ const PREVIEW_ICONS: Record<PreviewSize['id'], { name: string; size: number }> =
                     @if (assist.open().length) {
                       <span class="opus-ai-badge">{{ assist.open().length }}</span>
                     }
+
+                    <!--
+                      The refinement control, next to the ★ and deliberately not merged with it. They
+                      answer different questions: ★ asks "what is this page missing?" and offers
+                      additions from the catalog; this asks "change this" and takes a sentence. One
+                      button for both would make the author guess which mode they were in.
+                    -->
+                    <button
+                      type="button"
+                      class="opus-ai-star"
+                      [attr.aria-pressed]="refineOpen()"
+                      [disabled]="!store.definition()"
+                      [title]="
+                        refineOpen()
+                          ? 'Hide the change panel'
+                          : 'Describe a change to this page in your own words'
+                      "
+                      (click)="toggleRefine()"
+                    >
+                      <opus-icon name="edit" [size]="15" />
+                    </button>
+                    @if (refine.count()) {
+                      <span class="opus-ai-badge">{{ refine.count() }}</span>
+                    }
                   </div>
                 </div>
                 <p class="opus-desc">{{ pageDescription() }}</p>
@@ -513,6 +540,12 @@ const PREVIEW_ICONS: Record<PreviewSize['id'], { name: string; size: number }> =
                 </div>
               }
 
+              @if (refineOpen()) {
+                <div class="assist-dock refine-dock">
+                  <opus-refine-panel (close)="refineOpen.set(false)" />
+                </div>
+              }
+
               <div class="stage opus-wb-tab-body">
                 <div class="canvas-dock">
                   @if (store.definition()) {
@@ -643,6 +676,15 @@ const PREVIEW_ICONS: Record<PreviewSize['id'], { name: string; size: number }> =
       four lines per row. And accepting a suggestion changes the canvas: the author should see the
       widget appear without the panel that proposed it having to move or close.
     */
+    /* The refinement dock is taller: it holds a transcript rather than a list of five rows. */
+    .refine-dock {
+      max-height: 22rem;
+      display: flex;
+    }
+    .refine-dock opus-refine-panel {
+      flex: 1;
+      min-height: 0;
+    }
     .assist-dock {
       padding: var(--opus-space-3) 20px;
       border-block-end: 1px solid var(--opus-border);
@@ -850,6 +892,7 @@ export class StudioApp {
   protected readonly selection = inject(SelectionService);
   protected readonly theme = inject(ThemeService);
   protected readonly assist = inject(AssistService);
+  protected readonly refine = inject(RefineService);
 
   protected readonly author: UserContext = AUTHOR;
   protected readonly previewSizes = PREVIEW_SIZES;
@@ -871,6 +914,13 @@ export class StudioApp {
   protected readonly showFindings = signal(false);
   protected readonly zoom = signal<number>(100);
   protected readonly assistOpen = signal(false);
+  protected readonly refineOpen = signal(false);
+
+  protected toggleRefine(): void {
+    const open = !this.refineOpen();
+    this.refineOpen.set(open);
+    if (open) this.assistOpen.set(false);
+  }
 
   /** Findings as a plain list, so the template never has to narrow an optional report. */
   protected readonly findings = computed(() => this.validation()?.findings ?? []);
@@ -979,6 +1029,8 @@ export class StudioApp {
   protected toggleAssist(): void {
     const open = !this.assistOpen();
     this.assistOpen.set(open);
+    // One dock at a time: two panels above a canvas leaves no canvas.
+    if (open) this.refineOpen.set(false);
     if (open && this.assist.status() === 'idle') void this.assist.suggest();
   }
 
@@ -1099,6 +1151,10 @@ export class StudioApp {
     // offer the author a measure that is missing from the page they just closed.
     this.assist.reset();
     this.assistOpen.set(false);
+    // The conversation belongs to the page it was about. Carrying it across would leave turns
+    // referring to widgets that are not there any more.
+    this.refine.reset();
+    this.refineOpen.set(false);
 
     const url = new URL(window.location.href);
     url.searchParams.set('page', listing.id);

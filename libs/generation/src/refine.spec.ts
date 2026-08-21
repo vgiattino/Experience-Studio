@@ -197,6 +197,9 @@ describe('§12 — AI-driven grid configuration', () => {
     expect(outcome.outcome).toBe('ambiguous');
     if (outcome.outcome === 'ambiguous') {
       expect(outcome.candidates.map((c) => c.label).sort()).toEqual(['issuer-id', 'issuer-name']);
+      // And it says WHICH half, so the answer fills `field` rather than being re-parsed out of a
+      // sentence that never mentioned a widget.
+      expect(outcome.on).toBe('field');
     }
   });
 
@@ -336,26 +339,36 @@ describe('§12 — AI-driven grid configuration', () => {
     expect(outcome.outcome).toBe('ambiguous');
   });
 
-  it('“Highlight rows that have business exceptions.” explains itself in §19’s register', () => {
+  it('“Highlight rows…” resolves against a field that is SHOWN, and explains itself in §19’s register', () => {
     /*
-      §12's own prompt. "business exceptions" is not a field name, so what is under test is that the
-      overlap match reaches `exception-count` and that the sentence produced is the one §19 writes:
-      "configured rows with unresolved exceptions to display as highlighted".
+      §12's own prompt, and the pool matters: a conditional format lives ON a column binding, so
+      highlighting resolves against what the widget shows rather than what its data source could
+      supply. Resolving against the wider set let grounding accept a field the applier then refused —
+      which the author experiences as the feature working and then not working.
     */
-    const outcome = ask('Highlight rows that have exceptions');
+    const outcome = ask('Highlight rows that have a sector');
     expect(outcome.outcome).toBe('resolved');
     if (outcome.outcome === 'resolved') {
-      expect(outcome.refinements[0]).toMatchObject({ verb: 'highlight-rows', field: 'exception-count' });
+      expect(outcome.refinements[0]).toMatchObject({ verb: 'highlight-rows', field: 'sector' });
       expect(outcome.explanation).toBe(
-        'Configured rows in “Securities” with a exception-count value to display as highlighted.',
+        'Configured rows in “Securities” with a sector value to display as highlighted.',
       );
+    }
+  });
+
+  it('refuses a highlight on a field that is available but not shown, and names the fix', () => {
+    // `exception-count` is on the data source and not on the grid. The fix is a column, not a rephrase.
+    const outcome = ask('Highlight rows that have exceptions');
+    expect(outcome.outcome).toBe('refused');
+    if (outcome.outcome === 'refused') {
+      expect(outcome.reason).toContain('add it as a column first');
     }
   });
 
   it('refuses a highlight on a field nothing carries, and says what is there', () => {
     const outcome = ask('Highlight rows with a coupon breach');
     expect(outcome.outcome).toBe('refused');
-    if (outcome.outcome === 'refused') expect(outcome.reason).toContain('Nothing on this page can show');
+    if (outcome.outcome === 'refused') expect(outcome.reason).toContain('Nothing on this page shows');
   });
 
   it('refuses a field the data source does not carry, and lists what it does', () => {
@@ -539,6 +552,8 @@ describe('resolving a reference to a widget', () => {
       expect(outcome.candidates.map((c) => c.componentId).sort()).toEqual(['class-chart', 'trend-chart']);
       expect(outcome.question).toContain('Which did you mean?');
       expect(outcome.question).toContain('Securities by Asset Class');
+      // The same shape as the field question, and distinguishable from it — this one fills `target`.
+      expect(outcome.on).toBe('target');
     }
   });
 

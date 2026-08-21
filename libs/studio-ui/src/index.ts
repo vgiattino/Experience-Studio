@@ -25,6 +25,8 @@ export {
   type AssistSuggestion,
 } from './assist.service';
 export { AssistPanelComponent } from './assist-panel.component';
+export { RefinePanelComponent } from './refine-panel.component';
+export { RefineService, type RefineTurn } from './refine.service';
 export {
   DragStateService,
   DRAG_MIME,

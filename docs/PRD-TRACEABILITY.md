@@ -21,21 +21,26 @@ the layers underneath is not re-derived here; it is cited, and the account itsel
 
 | Priority | FRs | Built | Partial | Absent |
 |---|---|---|---|---|
-| **P0** | FR-01…FR-19 less FR-06 | 4 | 8 | 6 |
+| **P0** | FR-01…FR-19 less FR-06 | 8 | 5 | 5 |
 | **P1** | FR-20…FR-24 | 3 | 1 | 1 |
 | **P2** | FR-25, FR-26 | 0 | 0 | 2 |
 
 FR-20, FR-21 and FR-24 moved from Absent to Built in the first change made under this PRD, because
 FR-20 is upstream of every P0 that modifies a page — see the section below on what had to come first.
+FR-08, FR-10 and FR-11 followed it out of Partial, and FR-09 out of Absent, in the two changes after.
 
-The distribution says something specific and it is not "much is missing". It is that **the platform
-beneath the requirement is largely built and the requirement itself largely is not.**
+What the P0 Partials had in common when this reconciliation was written is worth recording, because it
+was the whole shape of the gap: the *model* supported each one, the *renderer* honoured it, and **no
+conversational path reached it**. A grid's conditional formatting was in `binding.schema.json`; a sort
+was on the data source; a chart's mark was a manifest property. A person could set all three by hand in
+the builder's inspector. Nobody could say "highlight securities with unresolved exceptions" and have it
+happen — and saying it *is* the requirement. That path now exists, which is why four rows moved at once
+without a single new mutation being written: see
+[`CONVERSATIONAL-REFINEMENT.md`](./CONVERSATIONAL-REFINEMENT.md) §2.
 
-Every P0 marked Partial is partial in the same direction: the *model* supports it, the *renderer*
-honours it, and **no conversational path reaches it**. A grid's conditional formatting is in
-`binding.schema.json`; a sort is on the data source; a chart's mark is a manifest property. A person
-can set all three by hand in the builder's inspector. Nobody can say "highlight securities with
-unresolved exceptions" and have it happen — and saying it is the requirement.
+What is still Partial or Absent under P0 is a different shape, and it is honest to say so: those are
+**missing screens and a missing component** (§5.1's thirty, §6's eight, FR-15's source comparison),
+which is volume rather than architecture.
 
 The other shape worth naming: **§16's lifecycle was the largest genuinely-absent thing, and it is
 upstream of everything else** — which is why it was built first rather than in P1 order. Principle 2 is
@@ -72,11 +77,11 @@ have no component.
 |---|---|---|---|
 | FR-06 AI search | **Absent** | — | Nothing translates business language into filter criteria. The pieces exist and are unusually well-placed: `intake()` already extracts concepts and refuses out-of-scope requests, the catalog carries semantic types and synonyms, and the gateway enforces entitlements on every query — so §13's "without bypassing existing security" is free rather than hard. What is missing is the translation itself |
 | FR-07 AI page creation | **Built** | `libs/generation` — 8 stages, `POST /api/ai/generate`, verified 7 widgets over 2 entities in 883 ms with a Grounding tab showing what was offered and what was withheld | Note the priority inversion: this is the one AI requirement that is *finished*, and §30 prices ground-up creation **P2**. The prototype's front door leads here |
-| FR-08 AI page modification | **Partial** | The engine exists and is verified against the shipped standard pages: nine verbs, reference resolution, grounding, and §19's sentence per change — `libs/generation/src/refine.ts`, [`CONVERSATIONAL-REFINEMENT.md`](./CONVERSATIONAL-REFINEMENT.md). The §11/§12/§15 prompts resolve or refuse with a reason on the real Security Master Dashboard and Exception Management pages | **Not wired into the builder.** The engine returns proposals and nothing calls it, so from a user's seat FR-08 is still unavailable. That plus FR-09's conversation state is the next step. Also: one verb per turn ("add issuer and currency" is two), and `move-widget` reorders within a section rather than across the page |
-| FR-09 Conversational context | **Absent** | — | Each prompt is independent. Nothing holds the conversation, so §14's "start with a standard page and progressively describe changes" has no state to progress. §28's nine-turn walkthrough is nine unrelated requests |
-| FR-10 Grid configuration through AI | **Partial** | Columns, sort, grouping and conditional formatting are all in the vocabulary and all resolve on real pages. Grouping resolves against the component's declared **enum** rather than against data fields, which is what makes "group the queue by assignee" work when the field behind it is spelled `assigned-to` | Still no path from a user's seat until the builder calls it. `data.table` still declares no `groupBy`, so grouping refuses on a table and says which component does offer it — manifest-driven, so adding the property later needs no engine change |
-| FR-11 Visualization configuration through AI | **Partial** | `change-chart-type` and `move-widget` both resolve and explain themselves on real pages — "Changed “Coverage by asset class and review state” from a bar chart to a line chart." | **§11's own first example is impossible**: it asks for a pie chart and `analytics.chart` offers bar, line, area, point. Refused by name with the list, which is honest and is a component gap rather than an engine one. Chart *grouping* and a time window are named in §11 and not in the vocabulary yet |
-| FR-12 Navigation and drill-down through AI | **Partial** | §9's sentence resolves: "Activating a row in “Recently added instruments” now opens the security-overview page." The captured noun is treated as the row's *subject* rather than as a widget reference, which is what makes "double-clicks a security" land on the grid | Not wired into the builder. Parameter mapping for the destination is not part of the verb — the drill-down is set, and which parameter carries the row's key is still the builder's job |
+| FR-08 AI page modification | **Built** | Nine verbs, reference resolution, grounding and §19's sentence per change — `libs/generation/src/refine.ts` — reachable from the builder's ✎ button as a transcript that accepts or discards each proposal: `libs/studio-ui/src/refine.service.ts`, `refine-panel.component.ts`, [`CONVERSATIONAL-REFINEMENT.md`](./CONVERSATIONAL-REFINEMENT.md). An accepted refinement is **one patch tagged `origin: 'ai'`**, so undo reverses a sentence in one press and the history panel shows it beside hand edits | One verb per turn ("add issuer and currency" is two), and `move-widget` reorders within a section rather than across the page. `set-drilldown` resolves and cannot be applied from this builder — drill-down targets live on the experience, and the applier says so rather than reporting success |
+| FR-09 Conversational context | **Built** | `RefineService` holds the conversation: every turn keeps its prompt, its outcome and whether it was applied, answered or discarded, so §28's nine prompts are one session. §14's "progressively describe changes" works because each turn is **re-grounded in the page as it is now** — `pageViewFor` runs per turn, so an author who drags a widget between two prompts desynchronises nothing | The conversation is per open page and resets when the page changes, which is right for reference resolution and means a cross-page instruction has nowhere to live. No model is called: `interpret()` is rules, and a provider plugs in behind `REFINE_RESPONSE_SCHEMA` without touching resolution |
+| FR-10 Grid configuration through AI | **Built** | Columns, sort, grouping and conditional formatting all resolve on real pages and all land: `add-column`/`remove-column` edit the column binding, `sort-rows` sets the **data source's** sort so it survives paging, `group-rows` sets the component's declared enum — which is what makes "group the queue by assignee" work when the field behind it is spelled `assigned-to` | `data.table` still declares no `groupBy`, so grouping refuses on a table and names the component that does offer it — manifest-driven, so adding the property later needs no engine change. `highlight-rows` infers `> 0` for a **measure** and refuses an attribute by asking which value to look for, rather than inventing one |
+| FR-11 Visualization configuration through AI | **Built** | `change-chart-type` and `move-widget` resolve, explain themselves and land — "Changed “Coverage by asset class and review state” from a bar chart to a line chart." | **§11's own first example is impossible**: it asks for a pie chart and `analytics.chart` offers bar, line, area, point. Refused by name with the list, which is a component gap rather than an engine one. Chart *grouping* and a time window are named in §11 and not in the vocabulary yet |
+| FR-12 Navigation and drill-down through AI | **Partial** | §9's sentence resolves: "Activating a row in “Recently added instruments” now opens the security-overview page." The captured noun is treated as the row's *subject* rather than as a widget reference, which is what makes "double-clicks a security" land on the grid | **Resolves and cannot be applied.** Drill-down targets live on the experience and this builder edits one page, so the applier refuses with that reason instead of reporting a success — listed in `UNSUPPORTED` rather than silently absent. Parameter mapping for the destination is not part of the verb either |
 | FR-13 Detail experiences | **Partial** | `security-overview` and `party-overview` are real detail pages with parameters, and the drill-down that reaches them works | Not *creatable or configurable* by prompt. §10's detail-page composition (header, key attributes, current record, contributing sources, exceptions, history, audit) exists as one hand-built page, not as a pattern |
 | FR-14 Tabs and related data through AI | **Partial** | `tabs` containers are in the layout schema, static and data-driven, and render | No AI path. "Add a tab showing contributing sources" needs FR-15 as well as a verb |
 | FR-15 Source comparison | **Absent** | — | `securities.source-value` is in the catalog and bound on two pages as ordinary rows. There is **no side-by-side comparison component**, which §5.1 asks for in four places (Security, Party, Price, ESG Source Comparison), §10 asks for as a tab, and §28 asks for by prompt. This is the clearest missing *component* in the document |
@@ -141,20 +146,23 @@ The order that follows from the document rather than from convenience:
 
 1. ~~**FR-20 lineage**~~ **Done** — see [`STANDARD-LIFECYCLE.md`](./STANDARD-LIFECYCLE.md). FR-21 and
    FR-24 came with it: update detection, and a release that provably cannot touch client work.
-2. ~~**FR-08/10/11/12 the refinement vocabulary**~~ **Engine done** — see
+2. ~~**FR-08/10/11/12 the refinement vocabulary**~~ **Done** — see
    [`CONVERSATIONAL-REFINEMENT.md`](./CONVERSATIONAL-REFINEMENT.md). Nine verbs, reference resolution
    that asks rather than guesses, refusals that name what is available, and §19's sentence per change.
-3. **Wire it into the builder, with FR-09's conversation state.** The engine is complete and nothing
-   calls it, so none of §28's walkthrough is available from a user's seat yet. This is now the single
-   highest-value step in the document, and it is the builder revamp: library-first entry, a conversation
-   panel, accept/discard, and the lineage banner from §16.3.
-4. **FR-22 comparison** — P1. `detectDrift` is the precedent to follow, and §16.5's deferred *selective*
+3. ~~**FR-09, the conversation, wired into the builder**~~ **Done.** A ✎ button opens a transcript, each
+   turn proposes and explains, Apply produces one patch tagged `origin: 'ai'`, and answering a question
+   fills the one reference it asked about. §28's kind of session now runs from a user's seat.
+4. **The rest of the builder revamp (§26).** What is still missing is not the conversation but the
+   *frame* around it: library-first entry rather than a page list, the §16.3 lineage banner on the page
+   being edited, and the shift in framing from "page builder" to Levels 1–2 of §2. The conversation is
+   the hard half and it is done; this is layout and copy.
+5. **FR-22 comparison** — P1. `detectDrift` is the precedent to follow, and §16.5's deferred *selective*
    synchronisation is the constraint that matters: a comparison must be per-change rather than a single
    blob, or selective sync can never be built on it.
-5. **FR-23 sync and revert** — P1.
-6. **FR-15 source comparison** — the missing component, and it unblocks four named screens plus §28.
-7. **FR-06 AI search** — well-placed, as noted.
-8. **FR-01/02/03 the library** — the largest volume of work and the least architectural risk, which is
+6. **FR-23 sync and revert** — P1.
+7. **FR-15 source comparison** — the missing component, and it unblocks four named screens plus §28.
+8. **FR-06 AI search** — well-placed, as noted.
+9. **FR-01/02/03 the library** — the largest volume of work and the least architectural risk, which is
    why it is last in *sequence* and first in *product value*. §5.1's Price and ESG need catalog
    ingestion before they need pages.
 
