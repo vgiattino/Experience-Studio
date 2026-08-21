@@ -75,6 +75,16 @@ export const PALETTE: readonly PaletteEntry[] = [
       'A work queue, not a grid: ordered by severity then age, unassigned work first, and items past their ageing threshold marked.',
     generates: '“a triage queue”, “open breaks by severity”, “what needs working on”',
   },
+  {
+    type: 'business.source-comparison',
+    label: 'Source comparison',
+    category: 'business',
+    icon: 'compare',
+    description:
+      'The mastered value beside every contributing source’s value, one row per field and one column per source. It pivots the long form, so the reader does not have to.',
+    generates:
+      '“where did this value come from”, “put the current record and contributing source values side by side”, “which vendors disagree”',
+  },
 ];
 
 const CATEGORY_LABELS: Record<PaletteEntry['category'], string> = {

@@ -1,0 +1,219 @@
+{
+  "schemaVersion": "1.0",
+  "type": "business.source-comparison",
+  "version": "1.0.0",
+  "name": "Source Comparison",
+  "category": "business",
+  "description": "The mastered value and every contributing source's value for one record, side by side — one row per field, one column per source, with the winning contribution marked and disagreements flagged.",
+  "icon": "compare",
+  "generation": {
+    "purpose": "Answer 'where did this value come from and does anything disagree with it' for one record, by pivoting long-form contribution rows into a field-by-source matrix.",
+    "whenToUse": "On a detail page for a single mastered record, bound to a data source that returns LONG form — one row per (field, contributing source) — such as `securities.source-value` filtered to one security and NOT filtered by source. Bind `field` (becomes a row), `source` (becomes a column, in query order) and `value` (the cell) at minimum. Bind `current` as well and the mastered value leads the matrix, which is what makes it §28’s side-by-side comparison rather than a survey of vendors — and it is what makes \"every source agrees but the mastered value differs\" detectable, which is the case a steward most needs. `winner` marks the contribution that won, `agreement` carries the source’s own match code, `confidence` shows a score per cell.",
+    "whenNotToUse": "Do not use for a list of records: it shows one record's provenance and has no row per entity. Do not use it as a general grid over the same entity — `data.table` is right when the reader wants to scan or sort the raw contributions. Do not use it for an aggregate such as 'disagreements by source'; that is `analytics.chart`.",
+    "keyProperties": [
+      "emphasiseDisagreements",
+      "disagreementsOnly",
+      "showConfidence",
+      "currentLabel"
+    ],
+    "eligible": true,
+    "exampleConfig": {
+      "emphasiseDisagreements": true,
+      "showConfidence": true,
+      "currentLabel": "Golden",
+      "maxHeight": "480px"
+    }
+  },
+  "properties": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "emphasiseDisagreements": {
+        "description": "Mark fields whose sources do not agree with each other, or with the mastered value. On by default: a comparison that does not point at the disagreements leaves the reader to perform the comparison themselves.",
+        "type": "boolean",
+        "default": true
+      },
+      "disagreementsOnly": {
+        "description": "Start with only the disagreeing fields shown. Off by default, because the whole record is the context a steward reads a disagreement against.",
+        "type": "boolean",
+        "default": false
+      },
+      "showConfidence": {
+        "description": "Show each contribution's confidence score in its cell. Requires the `confidence` role to be bound.",
+        "type": "boolean",
+        "default": false
+      },
+      "currentLabel": {
+        "description": "What to call the mastered value. \"Current\" is the PRD's word; a tenant may say \"Golden\" or \"Published\".",
+        "type": "string",
+        "maxLength": 40,
+        "default": "Current"
+      },
+      "maxHeight": {
+        "description": "Scroll the matrix body beyond this height, keeping the source names visible.",
+        "type": "string",
+        "pattern": "^[0-9]+(px|rem|vh)$"
+      }
+    },
+    "additionalProperties": false
+  },
+  "dataRequirement": {
+    "shape": "tabular",
+    "roles": [
+      {
+        "role": "field",
+        "label": "Field",
+        "required": true,
+        "accepts": [
+          "attribute"
+        ],
+        "dataTypes": [
+          "string",
+          "identifier"
+        ]
+      },
+      {
+        "role": "source",
+        "label": "Contributing source",
+        "required": true,
+        "accepts": [
+          "attribute"
+        ],
+        "dataTypes": [
+          "string",
+          "identifier",
+          "enum"
+        ]
+      },
+      {
+        "role": "value",
+        "label": "Source value",
+        "required": true,
+        "accepts": [
+          "attribute",
+          "measure"
+        ]
+      },
+      {
+        "role": "current",
+        "label": "Mastered value",
+        "required": false,
+        "accepts": [
+          "attribute",
+          "measure"
+        ]
+      },
+      {
+        "role": "winner",
+        "label": "Became the mastered value",
+        "required": false,
+        "accepts": [
+          "attribute"
+        ],
+        "dataTypes": [
+          "boolean"
+        ]
+      },
+      {
+        "role": "agreement",
+        "label": "Match status",
+        "required": false,
+        "accepts": [
+          "attribute"
+        ],
+        "dataTypes": [
+          "string",
+          "enum"
+        ]
+      },
+      {
+        "role": "confidence",
+        "label": "Confidence",
+        "required": false,
+        "accepts": [
+          "attribute",
+          "measure"
+        ],
+        "dataTypes": [
+          "decimal",
+          "integer",
+          "percentage"
+        ]
+      }
+    ],
+    "maxRows": 2000
+  },
+  "events": {
+    "contributionActivated": {
+      "label": "Contribution activated",
+      "description": "Emitted when one source's cell is clicked or activated with Enter. Payload carries the field, the source, the value and the underlying row. It resolves nothing — choosing which source should win is a stewardship action the page binds.",
+      "payload": {}
+    },
+    "retryRequested": {
+      "label": "Retry requested",
+      "description": "Emitted from the error state.",
+      "payload": {}
+    }
+  },
+  "states": [
+    "ready",
+    "loading",
+    "empty",
+    "error",
+    "denied"
+  ],
+  "breakpoints": {
+    "xs": {
+      "supported": true,
+      "minColSpan": 12,
+      "behaviour": "scrollable",
+      "note": "The matrix scrolls sideways with the field name pinned. It deliberately does NOT stack: stacking a pivot destroys the one property it exists for, which is that values in a column are comparable at a glance."
+    },
+    "sm": {
+      "supported": true,
+      "minColSpan": 12,
+      "behaviour": "scrollable"
+    },
+    "md": {
+      "supported": true,
+      "minColSpan": 8,
+      "behaviour": "full"
+    },
+    "lg": {
+      "supported": true,
+      "minColSpan": 6,
+      "behaviour": "full"
+    },
+    "xl": {
+      "supported": true,
+      "minColSpan": 6,
+      "behaviour": "full"
+    }
+  },
+  "accessibility": {
+    "wcagLevel": "AA",
+    "keyboardContract": "The matrix is a table. Tab moves between contribution cells, Enter activates the focused cell. The field column and the source header are real `th` elements with scope, so a screen reader announces both coordinates of a cell.",
+    "requiredLabels": [
+      "title"
+    ],
+    "colourIndependent": true,
+    "notes": "A disagreeing row carries the words \"sources differ\" as well as an emphasis background, and a winning contribution carries the word \"mastered\" as well as weight — a coloured row is never the only signal. A source that supplied nothing reads \"not supplied\" rather than being an empty cell, which is a distinction assistive technology would otherwise lose entirely."
+  },
+  "capabilities": [],
+  "performance": {
+    "renderBudgetMs": 120,
+    "virtualized": false,
+    "skeleton": {
+      "minHeight": "220px",
+      "shape": "table"
+    }
+  },
+  "lifecycle": {
+    "stability": "experimental",
+    "since": "1.0.0"
+  },
+  "bundle": {
+    "libraryPath": "@opus/components/source-comparison",
+    "exportName": "SourceComparisonComponent"
+  }
+}

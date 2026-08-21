@@ -28,7 +28,7 @@ export interface RegistryEntry {
 }
 
 /** Registry version. Definitions pin this, so a component change cannot silently alter a live page. */
-export const REGISTRY_VERSION = '1.1.0';
+export const REGISTRY_VERSION = '1.2.0';
 
 const ENTRIES: Readonly<Record<ComponentTypeRef, RegistryEntry>> = {
   'analytics.kpi-card': {
@@ -71,6 +71,20 @@ const ENTRIES: Readonly<Record<ComponentTypeRef, RegistryEntry>> = {
       const m = await import('@opus/components/exception-queue');
       return {
         component: m.ExceptionQueueComponent,
+        manifest: m.manifest as unknown as ComponentManifest,
+      };
+    },
+  },
+  /*
+    FR-15, and the one entry in §7's list of common capabilities that had no component at all. Registered
+    like any other, which is the same claim `business.exception-queue` makes: carrying business behaviour
+    does not make a component a special case the framework has to know about.
+  */
+  'business.source-comparison': {
+    load: async () => {
+      const m = await import('@opus/components/source-comparison');
+      return {
+        component: m.SourceComparisonComponent,
         manifest: m.manifest as unknown as ComponentManifest,
       };
     },

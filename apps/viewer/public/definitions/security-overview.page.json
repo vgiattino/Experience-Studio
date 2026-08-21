@@ -327,6 +327,76 @@
       "loadPolicy": "eager",
       "cacheTtlHintSeconds": 300
     },
+    "all-source-values": {
+      "id": "all-source-values",
+      "name": "All Contributions",
+      "description": "Every contributing source value for this security, in long form — one row per (field, source). Deliberately NOT filtered by source: `source-comparison` is filtered to one vendor at a time because it serves a per-vendor tab, and a side-by-side comparison needs them all at once.",
+      "entity": "securities.source-value",
+      "kind": "list",
+      "select": {
+        "attributes": [
+          {
+            "attribute": "field-label",
+            "alias": "field-label",
+            "label": "Field"
+          },
+          {
+            "attribute": "source-system",
+            "alias": "source-system",
+            "label": "Source"
+          },
+          {
+            "attribute": "vendor-value",
+            "alias": "vendor-value",
+            "label": "Source Value"
+          },
+          {
+            "attribute": "golden-value",
+            "alias": "golden-value",
+            "label": "Current Value"
+          },
+          {
+            "attribute": "is-golden",
+            "alias": "is-golden",
+            "label": "Mastered"
+          },
+          {
+            "attribute": "match-status",
+            "alias": "match-status",
+            "label": "Agreement"
+          },
+          {
+            "attribute": "confidence",
+            "alias": "confidence",
+            "label": "Confidence"
+          }
+        ]
+      },
+      "filter": {
+        "all": [
+          {
+            "target": "security-id",
+            "operator": "eq",
+            "value": {
+              "$param": "security-id"
+            },
+            "skipWhenEmpty": false
+          }
+        ]
+      },
+      "sort": [
+        {
+          "field": "field-label",
+          "direction": "asc"
+        },
+        {
+          "field": "source-system",
+          "direction": "asc"
+        }
+      ],
+      "loadPolicy": "eager",
+      "cacheTtlHintSeconds": 120
+    },
     "source-comparison": {
       "id": "source-comparison",
       "name": "Vendor Comparison",
@@ -582,7 +652,7 @@
       "dataSource": "security-header",
       "config": {
         "variant": "body",
-        "body": "{assetClass} \u00b7 ISIN {isin} \u00b7 SEDOL {sedol} \u00b7 {currency} \u00b7 issued by {issuer} ({sector}, risk {country}). Review state: {review}.",
+        "body": "{assetClass} · ISIN {isin} · SEDOL {sedol} · {currency} · issued by {issuer} ({sector}, risk {country}). Review state: {review}.",
         "tokens": {
           "assetClass": {
             "$expr": "$data.security-header.asset-class"
@@ -785,6 +855,46 @@
           "title": "No mastered values",
           "message": "No source has contributed a winning value for this instrument yet."
         }
+      }
+    },
+    "source-matrix": {
+      "id": "source-matrix",
+      "type": "business.source-comparison",
+      "typeVersion": "1.0.0",
+      "title": "Current record and contributing sources",
+      "description": "§28's step 7, as a page: the mastered value beside every vendor's, one row per field. The per-vendor tabs below show one source in depth; this answers whether they agree.",
+      "dataSource": "all-source-values",
+      "bindings": {
+        "field": {
+          "field": "field-label"
+        },
+        "source": {
+          "field": "source-system"
+        },
+        "value": {
+          "field": "vendor-value"
+        },
+        "current": {
+          "field": "golden-value"
+        },
+        "winner": {
+          "field": "is-golden"
+        },
+        "agreement": {
+          "field": "match-status"
+        },
+        "confidence": {
+          "field": "confidence"
+        }
+      },
+      "config": {
+        "emphasiseDisagreements": true,
+        "showConfidence": true,
+        "currentLabel": "Golden",
+        "maxHeight": "440px"
+      },
+      "eventActions": {
+        "contributionActivated": "focus-source"
       }
     },
     "comparison-table": {
@@ -1062,6 +1172,30 @@
         },
         {
           "kind": "container",
+          "id": "comparison-panel",
+          "placement": {
+            "colStart": 1,
+            "colSpan": 12
+          },
+          "container": {
+            "type": "panel",
+            "title": "Side by side",
+            "variant": "bordered",
+            "children": [
+              {
+                "kind": "widget",
+                "id": "w-source-matrix",
+                "component": "source-matrix",
+                "placement": {
+                  "colStart": 1,
+                  "colSpan": 12
+                }
+              }
+            ]
+          }
+        },
+        {
+          "kind": "container",
           "id": "sources-panel",
           "placement": {
             "colStart": 1,
@@ -1275,9 +1409,19 @@
         ]
       },
       "confirm": {
-        "message": "Export this instrument\u2019s exceptions?",
+        "message": "Export this instrument’s exceptions?",
         "requiresReason": true
       }
+    },
+    "focus-source": {
+      "id": "focus-source",
+      "kind": "setFilter",
+      "label": "Show this source in detail",
+      "channel": "active-source",
+      "value": {
+        "$context": "$event.source"
+      },
+      "mode": "replace"
     }
   },
   "navigation": {
@@ -1337,7 +1481,7 @@
   },
   "performance": {
     "renderBudgetMs": 2500,
-    "maxEagerDataSources": 8
+    "maxEagerDataSources": 9
   },
   "version": {
     "schemaVersion": "1.0",

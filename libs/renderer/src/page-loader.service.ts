@@ -184,13 +184,23 @@ export class PageLoaderService {
       }
     }
 
-    // The definition pins a registry version. A mismatch is worth stating, because
-    // it is the condition under which an unknown component type can appear.
-    if (definition.version.pins.registryVersion !== REGISTRY_VERSION) {
+    /*
+      The definition pins a registry version, and the pin is satisfied by a COMPATIBLE runtime rather
+      than an identical one.
+
+      The condition worth reporting is the one where a page can name a component the runtime does not
+      have — which is a runtime *older* than the pin, or a different major. A runtime that has since
+      **added** components cannot break a page that never referenced them, and registering the first new
+      component in a year proved the point: an equality check turned a backward-compatible addition into
+      a skew problem logged on every load of every page, which is how a real signal becomes noise nobody
+      reads.
+    */
+    const pinned = definition.version.pins.registryVersion;
+    if (!registrySatisfies(pinned, REGISTRY_VERSION)) {
       this.telemetry.recordProblem({
         scope: 'loader',
         code: 'registryVersionSkew',
-        detail: `Definition pins registry ${definition.version.pins.registryVersion}; runtime has ${REGISTRY_VERSION}`,
+        detail: `Definition pins registry ${pinned}; runtime has ${REGISTRY_VERSION}`,
       });
     }
 
@@ -217,4 +227,31 @@ export class PageLoaderService {
 
   readonly schemaVersion = CURRENT_SCHEMA_VERSION;
   readonly registryVersion = REGISTRY_VERSION;
+}
+
+/**
+ * Whether a runtime registry satisfies a definition's pin.
+ *
+ * Semver's own meaning, applied to the thing it describes: a **minor** bump is a backward-compatible
+ * addition, so a page pinning 1.1.0 runs correctly on 1.2.0. What does not satisfy a pin is a runtime
+ * behind it — the page may name a component that did not exist yet — or a different major, which is
+ * where a component's contract may have changed under a page that still references it.
+ *
+ * An unreadable version on either side does not satisfy: reporting a skew nobody can parse is better
+ * than staying quiet about one, since the quiet answer is indistinguishable from agreement.
+ */
+export function registrySatisfies(pinned: string | undefined, runtime: string): boolean {
+  const pin = parseVersion(pinned);
+  const have = parseVersion(runtime);
+  if (!pin || !have) return false;
+  if (pin.major !== have.major) return false;
+  if (have.minor !== pin.minor) return have.minor > pin.minor;
+  // Same major and minor: a patch is a fix, and older or newer is compatible either way.
+  return true;
+}
+
+function parseVersion(value: string | undefined): { major: number; minor: number } | null {
+  const match = /^(\d+)\.(\d+)(?:\.\d+)?$/.exec((value ?? '').trim());
+  if (!match) return null;
+  return { major: Number(match[1]), minor: Number(match[2]) };
 }

@@ -21,7 +21,7 @@ the layers underneath is not re-derived here; it is cited, and the account itsel
 
 | Priority | FRs | Built | Partial | Absent |
 |---|---|---|---|---|
-| **P0** | FR-01…FR-19 less FR-06 | 8 | 5 | 5 |
+| **P0** | FR-01…FR-19 less FR-06 | 9 | 5 | 4 |
 | **P1** | FR-20…FR-24 | 5 | 0 | 0 |
 | **P2** | FR-25, FR-26 | 0 | 0 | 2 |
 
@@ -38,9 +38,10 @@ happen — and saying it *is* the requirement. That path now exists, which is wh
 without a single new mutation being written: see
 [`CONVERSATIONAL-REFINEMENT.md`](./CONVERSATIONAL-REFINEMENT.md) §2.
 
-What is still Partial or Absent under P0 is a different shape, and it is honest to say so: those are
-**missing screens and a missing component** (§5.1's thirty, §6's eight, FR-15's source comparison),
-which is volume rather than architecture.
+What is still Partial or Absent under P0 is a different shape, and it is honest to say so: it is almost
+entirely **missing screens** — §5.1 names thirty and four ship, §6 names eight and two do. That is volume
+rather than architecture. FR-15's source comparison was the one *architectural* hole left in that group
+and it is now closed, which is why §7's list of common capabilities no longer has an exception in it.
 
 The other shape worth naming: **§16's lifecycle was the largest genuinely-absent thing, and it is
 upstream of everything else** — which is why it was built first rather than in P1 order. Principle 2 is
@@ -58,7 +59,7 @@ changes, which the engine already supports.
 | FR | Status | Evidence | Gap |
 |---|---|---|---|
 | FR-01 Standard experience library | **Partial** | Nine page definitions ship in `apps/viewer/public/definitions/`, and `products/opus-edm.product.json` registers five of them as product-owned System Pages with an `override` policy. `GET /api/products` returns that library as a manifest, `GET /api/standards` returns what is *installed*, and the library screen now presents them **as product capabilities** — grouped by §2's three levels, with Use and Customize rather than a date-sorted list with an `origin: 'seed'` chip on it: `apps/experience-studio/src/app/library/library.component.ts` | The browsing surface exists; the **content** does not. §5.1 names thirty screens and four ship, so what is left in this row is volume, not architecture — see FR-02 and FR-03 |
-| FR-02 Master data experiences — Security, Party, Price, ESG | **Partial** | Security and Party are real and rendering over live data: `security-master-dashboard`, `security-master-operations`, `security-overview`, `party-overview`. `securities.source-value` is in the catalog and bound on two pages | **§5.1 names 30 screens; 4 exist.** Price and ESG have no pages *and no catalog entities* — the promoted catalog has no `price` or `esg` domain, so these are an ingestion gap before they are a UI gap. Security is missing Search, Data Quality, Exceptions, Source Comparison, History, Audit as distinct screens |
+| FR-02 Master data experiences — Security, Party, Price, ESG | **Partial** | Security and Party are real and rendering over live data: `security-master-dashboard`, `security-master-operations`, `security-overview`, `party-overview`. `securities.source-value` is bound three ways on `security-overview` — as KPI aggregates, as per-vendor tabs, and now as the FR-15 side-by-side matrix | **§5.1 names 30 screens; 4 exist.** Price and ESG have no pages *and no catalog entities* — the promoted catalog has no `price` or `esg` domain, so these are an ingestion gap before they are a UI gap. Security is missing Search, Data Quality, Exceptions, Source Comparison, History, Audit as distinct screens |
 | FR-03 Operational experiences | **Partial** | Exception Management ships and is the strongest screen in the set — `business.exception-queue` over 164 real rows with severity, ageing and ownership. File Processing ships as `processing-detail`. An operations dashboard ships | **§6 names 8; 2 exist.** Absent: SLA Management, Audit History, Process History, Reference Data Lookup, Housekeeping, IT/Operations Dashboard. Of those, Audit History has data behind it (the append-only audit log) and Housekeeping has none |
 | FR-04 Experience templates | **Partial** | `libs/generation/src/templates.ts` selects a template by intent and instantiates it; four business templates are registered on the product | Templates are *generation exemplars*, not the §20 patterns. §20 names seven patterns as ordered compositions ("Master Overview: Search → Filters → Grid → KPIs → Charts → Exceptions") and none of them exists as a named, domain-configurable artifact |
 | FR-05 Search and filtering | **Partial** | `input.filter-bar` with real channel wiring; filter and selection channels in the page schema; sort on the data source; the Data Gateway applies both server-side under the caller's entitlements | No configurable *search* component — the filter bar filters a loaded set. §5.1's "Security Search" screen has nothing to build on, and it is named in eight of the thirty master-data screens |
@@ -68,8 +69,9 @@ meets. One `experience.schema.json`, seven component manifests with declared dat
 breakpoint behaviour, one renderer with no per-page code, per-breakpoint layout, verified at 320/430/600/900/1350 px
 with zero horizontal overflow. §7's list — layout, navigation, headers, filters, grids, charts, tabs,
 cards, KPIs, status and exception indicators, drill-down, related records, actions — maps onto existing
-schema and components with one exception: **source comparison** (FR-15) has no component. §16.3's
-notification is no longer on that list — it is rendered on the variant it concerns, in the library.
+schema and components **with no exceptions left**. The last two were §16.3's notification, now rendered on
+the variant it concerns in the library, and **source comparison**, now `business.source-comparison` — the
+component that pivots long-form contributions into §28's side-by-side matrix.
 
 ---
 
@@ -86,7 +88,7 @@ notification is no longer on that list — it is rendered on the variant it conc
 | FR-12 Navigation and drill-down through AI | **Partial** | §9's sentence resolves: "Activating a row in “Recently added instruments” now opens the security-overview page." The captured noun is treated as the row's *subject* rather than as a widget reference, which is what makes "double-clicks a security" land on the grid | **Resolves and cannot be applied.** Drill-down targets live on the experience and this builder edits one page, so the applier refuses with that reason instead of reporting a success — listed in `UNSUPPORTED` rather than silently absent. Parameter mapping for the destination is not part of the verb either |
 | FR-13 Detail experiences | **Partial** | `security-overview` and `party-overview` are real detail pages with parameters, and the drill-down that reaches them works | Not *creatable or configurable* by prompt. §10's detail-page composition (header, key attributes, current record, contributing sources, exceptions, history, audit) exists as one hand-built page, not as a pattern |
 | FR-14 Tabs and related data through AI | **Partial** | `tabs` containers are in the layout schema, static and data-driven, and render | No AI path. "Add a tab showing contributing sources" needs FR-15 as well as a verb |
-| FR-15 Source comparison | **Absent** | — | `securities.source-value` is in the catalog and bound on two pages as ordinary rows. There is **no side-by-side comparison component**, which §5.1 asks for in four places (Security, Party, Price, ESG Source Comparison), §10 asks for as a tab, and §28 asks for by prompt. This is the clearest missing *component* in the document |
+| FR-15 Source comparison | **Built** | `business.source-comparison` — `libs/components/source-comparison/`, registered, in the palette, and bound on the shipped `security-overview` page. It **pivots**: the data is long form, one row per (field, contributing source), and the component turns it into §28's side by side — one row per field, one column per source, the mastered value leading. Verified on the real fixture: 9 fields × 5 sources, 8 disagreements found, in both themes | A **casing** difference reads as a disagreement (`ENERGY` vs `Energy` on the shipped data), which is correct for a comparison and would be wrong for a matching engine — normalisation is a mastering concern, not a display one. Adopting the sources' order from the query means a page that does not sort gets whatever the driver returns |
 
 ---
 
@@ -167,8 +169,11 @@ The order that follows from the document rather than from convenience:
    [`STANDARD-LIFECYCLE.md`](./STANDARD-LIFECYCLE.md) §9. Two defects came out of running a *selective*
    sync: the baseline advanced on a partial adoption, which made every un-adopted product change read as
    a client customisation; and two sides that made the same change read as a conflict no sync could clear.
-7. **FR-15 source comparison** — the missing component, and it unblocks four named screens plus §28.
-8. **FR-06 AI search** — well-placed, as noted.
+7. ~~**FR-15 source comparison**~~ **Done.** `business.source-comparison`, bound on the shipped
+   `security-overview` page. It also closed a hole it found on the way: the registry-pin check compared
+   versions for *equality*, so registering the first new component in a while turned a
+   backward-compatible addition into a skew problem logged on every load of every page.
+8. **FR-06 AI search** — well-placed, as noted. The last Absent P0 outside the library itself.
 9. **FR-01/02/03 the library** — the largest volume of work and the least architectural risk, which is
    why it is last in *sequence* and first in *product value*. §5.1's Price and ESG need catalog
    ingestion before they need pages.

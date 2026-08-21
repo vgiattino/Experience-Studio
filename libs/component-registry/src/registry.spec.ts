@@ -16,6 +16,8 @@ describe('component registry', () => {
       // The first of the PRD's Enterprise family (FR-30). `business` is the contract's name for that
       // family; the PRD calls it Enterprise, and the mismatch is recorded in PRD-TRACEABILITY.md.
       'business.exception-queue',
+      // FR-15, and the one entry in §7's list of common capabilities that had no component at all.
+      'business.source-comparison',
       'content.text',
       'data.table',
       // Added with the EDM business templates: search was the one journey the vocabulary could
